@@ -1,0 +1,140 @@
+{
+  "theme": "Dark",
+  "archetype": "5 (Luxury) mixed with 2 (Performance Pro) for Automotive edge",
+  "brand_name": "CarDost",
+  "colors": {
+    "background": "#0A0A0A",
+    "surface": "#141414",
+    "surface_glass": "bg-white/5 backdrop-blur-xl",
+    "primary_accent": "#EF4444",
+    "secondary_accent": "#A3A3A3",
+    "text_primary": "#FAFAFA",
+    "text_secondary": "#A3A3A3",
+    "border": "#262626",
+    "success": "#22C55E",
+    "warning": "#F59E0B"
+  },
+  "typography": {
+    "heading_font": "Outfit",
+    "body_font": "Manrope",
+    "h1": "text-4xl sm:text-5xl lg:text-6xl tracking-tighter font-black",
+    "h2": "text-2xl sm:text-3xl lg:text-4xl tracking-tight font-bold",
+    "h3": "text-xl sm:text-2xl tracking-tight font-semibold",
+    "body": "text-base leading-relaxed text-[#A3A3A3]",
+    "label": "text-sm uppercase tracking-[0.2em] font-medium"
+  },
+  "layout_spacing": {
+    "grid_mode": "Mode A (Tetris) for Storefront, Mode B (Control Room) for Admin Dashboard",
+    "container_padding": "p-6 md:p-12 lg:p-16",
+    "gap": "gap-8 md:gap-12"
+  },
+  "surfaces_and_borders": {
+    "product_card": "bg-[#141414] border border-[#262626] rounded-xl hover:-translate-y-1 hover:border-[#EF4444]/50 transition-all duration-300",
+    "glass_header": "bg-[#0A0A0A]/60 backdrop-blur-2xl border-b border-[#262626]",
+    "dashboard_card": "bg-[#141414] border border-[#262626] rounded-lg p-6"
+  },
+  "components_instructions": [
+    "Use Phosphor Icons or Lucide-React for crisp, scalable UI adornments.",
+    "Marketing/Storefront: Use pure HTML/Tailwind for hero and bento grids, heavily prioritizing negative space and asymmetrical layouts.",
+    "Interactive UI: Form elements, modals, dropdowns must use customized Shadcn UI.",
+    "Admin Dashboard: High density, Mode B 'Control Room' grid, clear data visualizations. Use solid surfaces, never glass here.",
+    "Buttons: Use #EF4444 for primary actions. Hover state must explicitly shift color and text (e.g. hover:bg-red-600 hover:text-white).",
+    "ALL interactive elements (buttons, inputs, links) and key informational elements MUST have data-testid attributes (e.g., data-testid='checkout-button', data-testid='product-card-1')."
+  ],
+  "image_urls": {
+    "hero": [
+      {
+        "url": "https://images.pexels.com/photos/9530906/pexels-photo-9530906.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Close-up of a car's dashboard and steering wheel at night, showcasing the illuminated speedometer and controls.",
+        "category": "hero_background"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1485463611174-f302f6a5c1c9?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzV8MHwxfHNlYXJjaHwzfHxjYXIlMjBpbnRlcmlvciUyMG5pZ2h0JTIwZGFzaGJvYXJkfGVufDB8fHx8MTc4MTg5ODA4OXww&ixlib=rb-4.1.0&q=85",
+        "description": "time lapse photography of man riding car",
+        "category": "hero_alternate"
+      }
+    ],
+    "products_stereos": [
+      {
+        "url": "https://images.pexels.com/photos/4141878/pexels-photo-4141878.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Close-up of a car dashboard with a digital screen and controls.",
+        "category": "product_stereo"
+      },
+      {
+        "url": "https://images.pexels.com/photos/28984412/pexels-photo-28984412.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Car dashboard showing an audio system display in a dimly lit interior, focusing on technology.",
+        "category": "product_stereo"
+      }
+    ],
+    "products_speakers": [
+      {
+        "url": "https://images.unsplash.com/photo-1608538770329-65941f62f9f8?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MTN8MHwxfHNlYXJjaHwxfHxjYXIlMjBhdWRpbyUyMHNwZWFrZXIlMjBtYWNyb3xlbnwwfHx8fDE3ODE4OTgwOTB8MA&ixlib=rb-4.1.0&q=85",
+        "description": "black and gray speaker on brown wooden table",
+        "category": "product_speaker"
+      },
+      {
+        "url": "https://images.pexels.com/photos/20703567/pexels-photo-20703567.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Close-up of Bang & Olufsen speaker in car interior, featuring stylish design.",
+        "category": "product_speaker"
+      }
+    ],
+    "products_amps": [
+      {
+        "url": "https://images.pexels.com/photos/13811121/pexels-photo-13811121.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Close-up of dual subwoofers in a car trunk with glowing lights.",
+        "category": "product_amp"
+      },
+      {
+        "url": "https://images.pexels.com/photos/13972228/pexels-photo-13972228.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Close-up of an intricate car audio and hydraulic setup with metal components.",
+        "category": "product_amp"
+      }
+    ],
+    "products_lights": [
+      {
+        "url": "https://images.pexels.com/photos/9754665/pexels-photo-9754665.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "A sleek car's illuminated tail light with water droplets at night, showcasing modern automotive design.",
+        "category": "product_led"
+      },
+      {
+        "url": "https://images.pexels.com/photos/14101380/pexels-photo-14101380.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "White Ford Fiesta ST with neon lights in a night parking lot setting.",
+        "category": "product_led"
+      }
+    ],
+    "products_dashcams": [
+      {
+        "url": "https://images.unsplash.com/photo-1574649341254-c3cf3421df77?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1ODh8MHwxfHNlYXJjaHwxfHxkYXNoJTIwY2FtJTIwaW5zaWRlJTIwY2FyfGVufDB8fHx8MTc4MTg5ODA5Nnww&ixlib=rb-4.1.0&q=85",
+        "description": "photo of black vehcile dashboard",
+        "category": "product_dashcam"
+      },
+      {
+        "url": "https://images.pexels.com/photos/1970816/pexels-photo-1970816.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Interior view of a car showing a mounted camera setup for filming or photography.",
+        "category": "product_dashcam"
+      }
+    ],
+    "products_perfumes": [
+      {
+        "url": "https://images.unsplash.com/photo-1778530207612-b46210636834?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1ODh8MHwxfHNlYXJjaHwxfHxjYXIlMjBwZXJmdW1lJTIwYWlyJTIwZnJlc2hlbmVyfGVufDB8fHx8MTc4MTg5ODA5Nnww&ixlib=rb-4.1.0&q=85",
+        "description": "A collection of ramos home and car fragrance products.",
+        "category": "product_perfume"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1778530207938-ab559649165a?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1ODh8MHwxfHNlYXJjaHwyfHxjYXIlMjBwZXJmdW1lJTIwYWlyJTIwZnJlc2hlbmVyfGVufDB8fHx8MTc4MTg5ODA5Nnww&ixlib=rb-4.1.0&q=85",
+        "description": "Small hanging diffuser bottle with wooden cap.",
+        "category": "product_perfume"
+      }
+    ]
+  },
+  "instructions_to_main_agent": [
+    "Ensure all text contrasting follows WCAG AA (APCA preferred). Overlay hero text should use text-shadow or a gradient background (e.g. from-black/80 to-transparent) to stand out.",
+    "Implement the 'Bento Grid' for the product categories. Avoid standard bootstrap columns; embrace overlapping and wide gaps.",
+    "Nav header must be persistent. Use bg-[#0A0A0A]/60 with backdrop-blur-xl and z-50 to ensure readable nav links.",
+    "Integrate Razorpay payment gateway correctly with guest and account-based checkout flow. Implement order history and customer auth.",
+    "The admin dashboard (Orders, Products CRUD, Users) should use a strictly functional layout with pure solid backgrounds (#141414), standard dense grids, and no glassmorphism to preserve data clarity.",
+    "Cart state should be manageable and visible across the storefront, with easy access to checkout.",
+    "Apply `data-testid` attributes exhaustively to all buttons, nav links, form inputs, lists, and summary texts to prevent test flakiness.",
+    "Make product image aspect ratios consistent in grids (e.g., aspect-square or aspect-video) with object-cover."
+  ]
+}
