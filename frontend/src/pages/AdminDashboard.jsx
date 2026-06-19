@@ -59,7 +59,9 @@ export default function AdminDashboard() {
       setDialogOpen(false);
       loadAll();
     } catch (e) {
-      toast.error(e.response?.data?.detail || "Save failed");
+      const d = e.response?.data?.detail;
+      const msg = Array.isArray(d) ? d.map((x) => x.msg).join(", ") : (typeof d === "string" ? d : "Save failed");
+      toast.error(msg);
     }
   };
 

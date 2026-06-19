@@ -41,6 +41,16 @@ export default function Checkout() {
     if (items.length === 0 && !successOrder) navigate("/cart");
   }, [items.length, navigate, successOrder]);
 
+  useEffect(() => {
+    if (user) {
+      setForm((f) => ({
+        ...f,
+        full_name: f.full_name || user.name || "",
+        email: f.email || user.email || "",
+      }));
+    }
+  }, [user]);
+
   const onChange = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
   const validate = () => {
@@ -98,7 +108,9 @@ export default function Checkout() {
       });
       rzp.open();
     } catch (e) {
-      toast.error(e.response?.data?.detail || "Order failed");
+      const d = e.response?.data?.detail;
+      const msg = Array.isArray(d) ? d.map((x) => x.msg).join(", ") : (typeof d === "string" ? d : "Order failed");
+      toast.error(msg);
       setProcessing(false);
     }
   };
