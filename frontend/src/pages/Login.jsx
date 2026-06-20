@@ -36,10 +36,10 @@ export default function Login() {
           <form onSubmit={submit} className="space-y-4">
             <div><Label className="text-xs uppercase font-bold text-neutral-700">Email *</Label><Input data-testid="login-email" type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="border-neutral-300 mt-1.5"/></div>
             <div><Label className="text-xs uppercase font-bold text-neutral-700">Password *</Label><Input data-testid="login-password" type="password" required value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className="border-neutral-300 mt-1.5"/></div>
-            <Button data-testid="login-submit" disabled={loading} type="submit" className="w-full bg-red-600 hover:bg-red-700 py-6 font-bold uppercase tracking-wider text-xs">{loading ? "Signing in..." : "Sign In"}</Button>
+            <Button data-testid="login-submit" disabled={loading} type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 py-6 font-bold uppercase tracking-wider text-xs">{loading ? "Signing in..." : "Sign In"}</Button>
           </form>
           <p className="text-sm text-neutral-600 text-center mt-6">
-            New here? <Link to="/signup" data-testid="signup-link" className="text-red-600 font-bold hover:underline">Create Account</Link>
+            New here? <Link to="/signup" data-testid="signup-link" className="text-indigo-600 font-bold hover:underline">Create Account</Link>
           </p>
         </div>
       </div>

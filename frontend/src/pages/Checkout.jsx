@@ -60,7 +60,7 @@ export default function Checkout() {
         key: data.razorpay_key_id, amount: data.amount, currency: data.currency, order_id: data.razorpay_order_id,
         name: "CarDost", description: "Order Payment",
         prefill: { name: form.full_name, email: form.email, contact: form.phone },
-        theme: { color: "#E1141C" },
+        theme: { color: "#4F46E5" },
         handler: async (resp) => {
           try {
             await api.post("/orders/verify", { order_id: data.order_id, razorpay_order_id: resp.razorpay_order_id, razorpay_payment_id: resp.razorpay_payment_id, razorpay_signature: resp.razorpay_signature });
@@ -94,9 +94,9 @@ export default function Checkout() {
           </div>
           <h1 className="font-display text-3xl font-bold uppercase mb-3">Order Placed!</h1>
           <p className="text-neutral-600 mb-2">Order ID: <span className="font-mono text-neutral-900 font-bold">{successOrder.order_id.slice(0, 8).toUpperCase()}</span></p>
-          <p className="text-neutral-600 mb-8">Amount paid: <span className="text-red-600 font-bold text-lg">{formatINR(successOrder.total)}</span></p>
+          <p className="text-neutral-600 mb-8">Amount paid: <span className="text-indigo-600 font-bold text-lg">{formatINR(successOrder.total)}</span></p>
           <div className="flex flex-wrap gap-3 justify-center">
-            <Button data-testid="view-order-btn" onClick={() => navigate(`/order/${successOrder.order_id}`)} className="bg-red-600 hover:bg-red-700 font-bold uppercase tracking-wider text-xs">View Order</Button>
+            <Button data-testid="view-order-btn" onClick={() => navigate(`/order/${successOrder.order_id}`)} className="bg-indigo-600 hover:bg-indigo-700 font-bold uppercase tracking-wider text-xs">View Order</Button>
             <Button data-testid="continue-shopping-btn" onClick={() => navigate("/shop")} variant="outline" className="border-neutral-300 font-bold uppercase tracking-wider text-xs">Continue Shopping</Button>
           </div>
         </div>
@@ -127,7 +127,7 @@ export default function Checkout() {
             </div>
             {!user && (
               <p className="text-xs text-neutral-500 pt-4 border-t border-neutral-200 mt-4">
-                Checking out as guest. <button onClick={() => navigate("/login")} className="text-red-600 font-bold hover:underline">Login</button> to track orders & earn loyalty points.
+                Checking out as guest. <button onClick={() => navigate("/login")} className="text-indigo-600 font-bold hover:underline">Login</button> to track orders & earn loyalty points.
               </p>
             )}
           </div>
@@ -150,9 +150,9 @@ export default function Checkout() {
           <div className="border-t border-neutral-200 mt-4 pt-4 space-y-2 text-sm">
             <div className="flex justify-between"><span className="text-neutral-600">Subtotal</span><span>{formatINR(subtotal)}</span></div>
             <div className="flex justify-between"><span className="text-neutral-600">Shipping</span><span className="text-green-600 font-bold">FREE</span></div>
-            <div className="flex justify-between font-display font-bold text-lg pt-3 border-t border-neutral-200"><span>Total</span><span data-testid="checkout-total" className="text-red-600">{formatINR(subtotal)}</span></div>
+            <div className="flex justify-between font-display font-bold text-lg pt-3 border-t border-neutral-200"><span>Total</span><span data-testid="checkout-total" className="text-indigo-600">{formatINR(subtotal)}</span></div>
           </div>
-          <Button data-testid="place-order-btn" disabled={processing} onClick={placeOrder} className="w-full mt-5 bg-red-600 hover:bg-red-700 font-bold uppercase tracking-wider text-sm py-6">
+          <Button data-testid="place-order-btn" disabled={processing} onClick={placeOrder} className="w-full mt-5 bg-indigo-600 hover:bg-indigo-700 font-bold uppercase tracking-wider text-sm py-6">
             <Lock className="w-4 h-4 mr-2"/> {processing ? "Processing..." : `Pay ${formatINR(subtotal)}`}
           </Button>
           <div className="text-[10px] text-neutral-500 text-center mt-3 flex items-center justify-center gap-1.5">
@@ -164,7 +164,7 @@ export default function Checkout() {
       <Dialog open={!!mockOrder} onOpenChange={(o) => !o && setMockOrder(null)}>
         <DialogContent className="bg-white" data-testid="mock-payment-dialog">
           <DialogHeader>
-            <DialogTitle className="font-display flex items-center gap-2 uppercase"><CreditCard className="w-5 h-5 text-red-600"/> Razorpay (Test Mode)</DialogTitle>
+            <DialogTitle className="font-display flex items-center gap-2 uppercase"><CreditCard className="w-5 h-5 text-indigo-600"/> Razorpay (Test Mode)</DialogTitle>
             <DialogDescription>
               Live Razorpay is disabled. This is a simulated payment for demo purposes. Replace TEST keys in backend/.env to enable real Razorpay checkout.
             </DialogDescription>
@@ -173,7 +173,7 @@ export default function Checkout() {
             <div className="flex justify-between"><span className="text-neutral-600">Amount</span><span className="font-bold">{formatINR(mockOrder?.total || 0)}</span></div>
             <div className="flex justify-between"><span className="text-neutral-600">Order ID</span><span className="font-mono text-xs">{mockOrder?.order_id?.slice(0,8)}</span></div>
           </div>
-          <Button data-testid="mock-pay-confirm" disabled={processing} onClick={confirmMockPayment} className="bg-red-600 hover:bg-red-700 font-bold uppercase tracking-wider text-xs">
+          <Button data-testid="mock-pay-confirm" disabled={processing} onClick={confirmMockPayment} className="bg-indigo-600 hover:bg-indigo-700 font-bold uppercase tracking-wider text-xs">
             {processing ? "Processing..." : "Simulate Successful Payment"}
           </Button>
         </DialogContent>

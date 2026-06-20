@@ -21,7 +21,7 @@ export default function Contact() {
     <div className="bg-white">
       <div className="bg-neutral-50 border-b border-neutral-200 py-10">
         <div className="max-w-7xl mx-auto px-6 text-center">
-          <div className="text-xs uppercase tracking-[0.3em] text-red-600 font-bold mb-2">Get In Touch</div>
+          <div className="text-xs uppercase tracking-[0.3em] text-indigo-600 font-bold mb-2">Get In Touch</div>
           <h1 className="font-display text-3xl lg:text-4xl font-bold uppercase">Contact Us</h1>
           <p className="text-sm text-neutral-500 mt-2 max-w-2xl mx-auto">Have questions about our products or installation? Our sound experts are here to help — 24/7.</p>
         </div>
@@ -37,13 +37,13 @@ export default function Contact() {
             { icon: Clock, label: "Hours", value: "Mon – Sun · 10 AM – 9 PM" },
           ].map((c, i) => (
             <a key={i} href={c.href} target={c.href?.startsWith("http") ? "_blank" : undefined} rel="noopener noreferrer"
-               className="bg-white border border-neutral-200 hover:border-red-500 rounded-md p-5 flex gap-4 transition group">
-              <div className="w-11 h-11 rounded-full bg-red-50 grid place-items-center text-red-600 shrink-0 group-hover:bg-red-600 group-hover:text-white transition">
+               className="bg-white border border-neutral-200 hover:border-indigo-500 rounded-md p-5 flex gap-4 transition group">
+              <div className="w-11 h-11 rounded-full bg-indigo-50 grid place-items-center text-indigo-600 shrink-0 group-hover:bg-indigo-600 group-hover:text-white transition">
                 <c.icon className="w-5 h-5"/>
               </div>
               <div>
                 <div className="text-[10px] uppercase tracking-[0.15em] text-neutral-500 font-bold mb-0.5">{c.label}</div>
-                <div className="font-semibold text-sm text-neutral-900 group-hover:text-red-600">{c.value}</div>
+                <div className="font-semibold text-sm text-neutral-900 group-hover:text-indigo-600">{c.value}</div>
               </div>
             </a>
           ))}
@@ -56,7 +56,7 @@ export default function Contact() {
           <div><Label className="text-xs uppercase font-bold text-neutral-700">Email *</Label><Input data-testid="contact-email" type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="border-neutral-300 mt-1.5"/></div>
           <div><Label className="text-xs uppercase font-bold text-neutral-700">Phone</Label><Input data-testid="contact-phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="border-neutral-300 mt-1.5"/></div>
           <div><Label className="text-xs uppercase font-bold text-neutral-700">Message *</Label><Textarea data-testid="contact-message" required rows={5} value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} className="border-neutral-300 mt-1.5"/></div>
-          <Button data-testid="contact-submit" disabled={loading} type="submit" className="w-full bg-red-600 hover:bg-red-700 py-6 font-bold uppercase tracking-wider text-xs">{loading ? "Sending..." : "Send Message"}</Button>
+          <Button data-testid="contact-submit" disabled={loading} type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 py-6 font-bold uppercase tracking-wider text-xs">{loading ? "Sending..." : "Send Message"}</Button>
         </form>
       </div>
     </div>

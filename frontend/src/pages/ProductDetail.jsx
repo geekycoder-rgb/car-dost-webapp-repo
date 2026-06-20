@@ -21,7 +21,7 @@ export default function ProductDetail() {
     <div className="bg-white">
       <div className="bg-neutral-50 border-b border-neutral-200">
         <div className="max-w-7xl mx-auto px-6 py-3 text-xs text-neutral-500">
-          <Link to="/" className="hover:text-red-600">Home</Link> / <Link to="/shop" className="hover:text-red-600">Shop</Link> / <Link to={`/shop?category=${product.category}`} className="hover:text-red-600">{product.category}</Link> / <span className="text-neutral-900">{product.name}</span>
+          <Link to="/" className="hover:text-indigo-600">Home</Link> / <Link to="/shop" className="hover:text-indigo-600">Shop</Link> / <Link to={`/shop?category=${product.category}`} className="hover:text-indigo-600">{product.category}</Link> / <span className="text-neutral-900">{product.name}</span>
         </div>
       </div>
 
@@ -31,7 +31,7 @@ export default function ProductDetail() {
             <img src={resolveImg(product.image)} alt={product.name} className="w-full aspect-square object-cover"/>
           </div>
           <div className="space-y-5">
-            {product.brand && <div className="text-xs uppercase tracking-[0.3em] text-red-600 font-bold">{product.brand}</div>}
+            {product.brand && <div className="text-xs uppercase tracking-[0.3em] text-indigo-600 font-bold">{product.brand}</div>}
             <h1 className="font-display text-2xl lg:text-4xl font-bold text-neutral-900 leading-tight">{product.name}</h1>
             <div className="flex items-center gap-3">
               <div className="flex text-yellow-500">
@@ -39,13 +39,13 @@ export default function ProductDetail() {
               </div>
               <span className="text-sm text-neutral-600">{product.rating} · 142 reviews</span>
             </div>
-            <div className="bg-red-50 border border-red-200 p-4 rounded-md">
+            <div className="bg-indigo-50 border border-indigo-200 p-4 rounded-md">
               <div className="flex items-baseline gap-3">
-                <span data-testid="product-price" className="font-display text-3xl lg:text-4xl font-bold text-red-600">{formatINR(product.price)}</span>
+                <span data-testid="product-price" className="font-display text-3xl lg:text-4xl font-bold text-indigo-600">{formatINR(product.price)}</span>
                 {product.original_price && (
                   <>
                     <span className="text-neutral-400 line-through">{formatINR(product.original_price)}</span>
-                    <span className="text-xs bg-red-600 text-white px-2 py-0.5 rounded font-bold">SAVE {off}%</span>
+                    <span className="text-xs bg-indigo-600 text-white px-2 py-0.5 rounded font-bold">SAVE {off}%</span>
                   </>
                 )}
               </div>
@@ -55,7 +55,7 @@ export default function ProductDetail() {
               {product.stock > 0 ? (
                 <span data-testid="stock-status" className="text-green-600 font-semibold flex items-center gap-1"><CheckCircle2 className="w-4 h-4"/> In Stock ({product.stock} available)</span>
               ) : (
-                <span data-testid="stock-status" className="text-red-600 font-semibold">● Out of Stock</span>
+                <span data-testid="stock-status" className="text-indigo-600 font-semibold">● Out of Stock</span>
               )}
             </div>
             <p className="text-neutral-600 leading-relaxed text-sm border-t border-neutral-200 pt-4">{product.description}</p>
@@ -77,27 +77,27 @@ export default function ProductDetail() {
             <button
               data-testid="buy-now-btn"
               onClick={() => { add(product, qty); navigate("/checkout"); }}
-              className="w-full bg-red-600 hover:bg-red-700 text-white font-bold uppercase tracking-wider text-sm py-3.5 rounded transition"
+              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold uppercase tracking-wider text-sm py-3.5 rounded transition"
             >
               Buy Now →
             </button>
 
             <div className="flex gap-4 text-xs pt-2 text-neutral-600">
-              <button className="flex items-center gap-1 hover:text-red-600"><Heart className="w-4 h-4"/> Wishlist</button>
-              <button className="flex items-center gap-1 hover:text-red-600"><Share2 className="w-4 h-4"/> Share</button>
+              <button className="flex items-center gap-1 hover:text-indigo-600"><Heart className="w-4 h-4"/> Wishlist</button>
+              <button className="flex items-center gap-1 hover:text-indigo-600"><Share2 className="w-4 h-4"/> Share</button>
             </div>
 
             <div className="grid grid-cols-3 gap-3 pt-5 border-t border-neutral-200">
               <div className="text-center">
-                <Truck className="w-5 h-5 mx-auto text-red-600 mb-2"/>
+                <Truck className="w-5 h-5 mx-auto text-indigo-600 mb-2"/>
                 <div className="text-xs text-neutral-700 font-semibold">Free Delivery</div>
               </div>
               <div className="text-center">
-                <Shield className="w-5 h-5 mx-auto text-red-600 mb-2"/>
+                <Shield className="w-5 h-5 mx-auto text-indigo-600 mb-2"/>
                 <div className="text-xs text-neutral-700 font-semibold">1Y Warranty</div>
               </div>
               <div className="text-center">
-                <RotateCcw className="w-5 h-5 mx-auto text-red-600 mb-2"/>
+                <RotateCcw className="w-5 h-5 mx-auto text-indigo-600 mb-2"/>
                 <div className="text-xs text-neutral-700 font-semibold">7-Day Return</div>
               </div>
             </div>

@@ -122,7 +122,7 @@ export default function AdminDashboard() {
               { icon: ShoppingCart, label: "Total Orders", val: stats.total_orders, color: "text-blue-600 bg-blue-50" },
               { icon: DollarSign, label: "Revenue", val: formatINR(stats.revenue), color: "text-green-600 bg-green-50" },
               { icon: Package, label: "Products", val: stats.products, color: "text-yellow-600 bg-yellow-50" },
-              { icon: Users, label: "Customers", val: stats.users, color: "text-red-600 bg-red-50" },
+              { icon: Users, label: "Customers", val: stats.users, color: "text-indigo-600 bg-indigo-50" },
             ].map((s, i) => (
               <div key={i} className="bg-white border border-neutral-200 rounded-md p-5">
                 <div className={`w-10 h-10 rounded-full grid place-items-center mb-3 ${s.color}`}><s.icon className="w-5 h-5"/></div>
@@ -151,7 +151,7 @@ export default function AdminDashboard() {
                   <Button data-testid="import-csv-btn" disabled={importing} onClick={() => csvInputRef.current?.click()} variant="outline" className="border-neutral-300 text-xs font-bold uppercase">
                     {importing ? <Loader2 className="w-4 h-4 mr-1 animate-spin"/> : <Upload className="w-4 h-4 mr-1"/>} Import CSV
                   </Button>
-                  <Button data-testid="add-product-btn" onClick={openCreate} className="bg-red-600 hover:bg-red-700 text-xs font-bold uppercase">
+                  <Button data-testid="add-product-btn" onClick={openCreate} className="bg-indigo-600 hover:bg-indigo-700 text-xs font-bold uppercase">
                     <Plus className="w-4 h-4 mr-1"/> Add Product
                   </Button>
                 </div>
@@ -186,7 +186,7 @@ export default function AdminDashboard() {
                       <TableCell>{p.stock}</TableCell>
                       <TableCell className="text-right">
                         <button data-testid={`edit-${p.id}`} onClick={() => openEdit(p)} className="p-2 hover:bg-neutral-100 rounded text-neutral-700"><Edit className="w-4 h-4"/></button>
-                        <button data-testid={`del-${p.id}`} onClick={() => del(p.id)} className="p-2 hover:bg-red-50 hover:text-red-600 rounded text-neutral-700"><Trash2 className="w-4 h-4"/></button>
+                        <button data-testid={`del-${p.id}`} onClick={() => del(p.id)} className="p-2 hover:bg-indigo-50 hover:text-indigo-600 rounded text-neutral-700"><Trash2 className="w-4 h-4"/></button>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -213,7 +213,7 @@ export default function AdminDashboard() {
                   {orders.map((o) => (
                     <TableRow key={o.id}>
                       <TableCell className="font-mono text-xs">
-                        <Link to={`/order/${o.id}`} data-testid={`admin-order-link-${o.id}`} className="text-red-600 hover:underline inline-flex items-center gap-1">
+                        <Link to={`/order/${o.id}`} data-testid={`admin-order-link-${o.id}`} className="text-indigo-600 hover:underline inline-flex items-center gap-1">
                           {o.id.slice(0, 8)} <ExternalLink className="w-3 h-3"/>
                         </Link>
                       </TableCell>
@@ -277,7 +277,7 @@ export default function AdminDashboard() {
             <div><Label>Stock</Label><Input type="number" value={form.stock} onChange={c("stock")} className="mt-1"/></div>
             <div><Label>Rating</Label><Input type="number" step="0.1" max="5" value={form.rating} onChange={c("rating")} className="mt-1"/></div>
           </div>
-          <Button data-testid="save-product" onClick={save} className="bg-red-600 hover:bg-red-700 font-bold uppercase tracking-wider text-xs">Save</Button>
+          <Button data-testid="save-product" onClick={save} className="bg-indigo-600 hover:bg-indigo-700 font-bold uppercase tracking-wider text-xs">Save</Button>
         </DialogContent>
       </Dialog>
     </div>

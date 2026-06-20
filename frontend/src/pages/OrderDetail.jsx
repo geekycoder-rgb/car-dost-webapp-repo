@@ -17,7 +17,7 @@ const STATUS_COLORS = {
   delivered: "bg-green-100 text-green-700 border-green-300",
   cancelled: "bg-neutral-200 text-neutral-600 border-neutral-300",
   created: "bg-yellow-100 text-yellow-700 border-yellow-300",
-  failed: "bg-red-100 text-red-700 border-red-300",
+  failed: "bg-indigo-100 text-indigo-700 border-indigo-300",
 };
 
 export default function OrderDetail() {
@@ -38,7 +38,7 @@ export default function OrderDetail() {
     <div className="bg-white">
       <div className="bg-neutral-50 border-b border-neutral-200">
         <div className="max-w-5xl mx-auto px-6 py-6">
-          <Link to="/my-orders" data-testid="back-link" className="text-xs text-neutral-500 hover:text-red-600 inline-flex items-center gap-1 mb-2">
+          <Link to="/my-orders" data-testid="back-link" className="text-xs text-neutral-500 hover:text-indigo-600 inline-flex items-center gap-1 mb-2">
             <ArrowLeft className="w-3 h-3"/> Back to orders
           </Link>
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -59,12 +59,12 @@ export default function OrderDetail() {
             <div className="text-xs uppercase tracking-[0.15em] font-bold text-neutral-700 mb-6">Tracking</div>
             <div className="flex justify-between relative">
               <div className="absolute top-5 left-5 right-5 h-0.5 bg-neutral-200"/>
-              <div className="absolute top-5 left-5 h-0.5 bg-red-600 transition-all" style={{ width: `${(currentIdx / (STATUS_FLOW.length - 1)) * (100 - 10)}%` }}/>
+              <div className="absolute top-5 left-5 h-0.5 bg-indigo-600 transition-all" style={{ width: `${(currentIdx / (STATUS_FLOW.length - 1)) * (100 - 10)}%` }}/>
               {STATUS_FLOW.map((s, i) => {
                 const Icon = s.icon; const done = i <= currentIdx;
                 return (
                   <div key={s.key} className="relative z-10 flex flex-col items-center gap-2 w-1/4">
-                    <div className={`w-10 h-10 rounded-full grid place-items-center border-2 ${done ? "bg-red-600 border-red-600 text-white" : "bg-white border-neutral-300 text-neutral-400"}`}>
+                    <div className={`w-10 h-10 rounded-full grid place-items-center border-2 ${done ? "bg-indigo-600 border-indigo-600 text-white" : "bg-white border-neutral-300 text-neutral-400"}`}>
                       <Icon className="w-4 h-4"/>
                     </div>
                     <div className={`text-[10px] uppercase tracking-wider text-center font-bold ${done ? "text-neutral-900" : "text-neutral-400"}`}>{s.label}</div>
@@ -84,14 +84,14 @@ export default function OrderDetail() {
         <div className="grid lg:grid-cols-3 gap-5">
           <div className="lg:col-span-2 bg-white border border-neutral-200 rounded-md p-6">
             <h2 className="font-display text-base font-bold uppercase mb-4 pb-3 border-b border-neutral-200 flex items-center gap-2">
-              <Package className="w-4 h-4 text-red-600"/> Items ({order.items.length})
+              <Package className="w-4 h-4 text-indigo-600"/> Items ({order.items.length})
             </h2>
             <div className="space-y-4">
               {order.items.map((i, idx) => (
                 <div key={idx} data-testid={`item-${idx}`} className="flex gap-4 pb-4 border-b border-neutral-100 last:border-0 last:pb-0">
                   <img src={resolveImg(i.image)} alt={i.name} className="w-20 h-20 object-cover rounded border border-neutral-100 shrink-0"/>
                   <div className="flex-1 min-w-0">
-                    <Link to={`/product/${i.product_id}`} className="font-semibold text-sm hover:text-red-600 line-clamp-2">{i.name}</Link>
+                    <Link to={`/product/${i.product_id}`} className="font-semibold text-sm hover:text-indigo-600 line-clamp-2">{i.name}</Link>
                     <div className="flex items-center justify-between mt-2 text-sm">
                       <span className="text-neutral-500 text-xs">Qty {i.quantity} × {formatINR(i.price)}</span>
                       <span className="font-bold">{formatINR(i.line_total)}</span>
@@ -104,7 +104,7 @@ export default function OrderDetail() {
               <div className="flex justify-between"><span className="text-neutral-600">Subtotal</span><span>{formatINR(subtotal)}</span></div>
               <div className="flex justify-between"><span className="text-neutral-600">Shipping</span><span className="text-green-600 font-bold">FREE</span></div>
               <div className="flex justify-between font-display font-bold text-lg pt-2 border-t border-neutral-200 mt-2">
-                <span>Total Paid</span><span data-testid="order-total" className="text-red-600">{formatINR(order.total)}</span>
+                <span>Total Paid</span><span data-testid="order-total" className="text-indigo-600">{formatINR(order.total)}</span>
               </div>
             </div>
           </div>
@@ -112,7 +112,7 @@ export default function OrderDetail() {
           <div className="space-y-4">
             <div className="bg-white border border-neutral-200 rounded-md p-5">
               <h3 className="font-display text-xs uppercase tracking-[0.15em] font-bold text-neutral-700 mb-3 flex items-center gap-2 pb-2 border-b border-neutral-200">
-                <MapPin className="w-3.5 h-3.5 text-red-600"/> Delivery Address
+                <MapPin className="w-3.5 h-3.5 text-indigo-600"/> Delivery Address
               </h3>
               <div className="text-sm space-y-1">
                 <div className="font-bold">{order.address.full_name}</div>
@@ -126,7 +126,7 @@ export default function OrderDetail() {
 
             <div className="bg-white border border-neutral-200 rounded-md p-5">
               <h3 className="font-display text-xs uppercase tracking-[0.15em] font-bold text-neutral-700 mb-3 flex items-center gap-2 pb-2 border-b border-neutral-200">
-                <CreditCard className="w-3.5 h-3.5 text-red-600"/> Payment
+                <CreditCard className="w-3.5 h-3.5 text-indigo-600"/> Payment
               </h3>
               <div className="text-sm space-y-2">
                 <div className="flex justify-between"><span className="text-neutral-600">Method</span><span>Razorpay {order.mock && <span className="text-[10px] text-yellow-600 font-bold">(TEST)</span>}</span></div>
@@ -139,7 +139,7 @@ export default function OrderDetail() {
               </div>
             </div>
 
-            <Link to="/contact" data-testid="need-help-link" className="block bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 rounded-md p-4 text-sm font-bold uppercase tracking-wider text-center transition">
+            <Link to="/contact" data-testid="need-help-link" className="block bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-600 rounded-md p-4 text-sm font-bold uppercase tracking-wider text-center transition">
               Need help with this order?
             </Link>
           </div>

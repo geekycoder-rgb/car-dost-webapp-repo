@@ -44,7 +44,7 @@ export default function Layout({ children }) {
   return (
     <div className="min-h-screen bg-white text-neutral-900">
       {/* Promo marquee */}
-      <div className="bg-[#1A1A1A] text-white overflow-hidden border-b border-red-600">
+      <div className="bg-[#0F172A] text-white overflow-hidden border-b border-indigo-600">
         <div className="flex animate-marquee whitespace-nowrap py-2">
           {[...PROMO_ITEMS, ...PROMO_ITEMS, ...PROMO_ITEMS].map((p, i) => (
             <span key={i} className="text-xs font-medium px-8 inline-flex items-center">{p}</span>
@@ -53,24 +53,24 @@ export default function Layout({ children }) {
       </div>
 
       {/* Utility bar */}
-      <div className="hidden md:block bg-[#1A1A1A] text-white border-t border-neutral-800">
+      <div className="hidden md:block bg-[#0F172A] text-white border-t border-neutral-800">
         <div className="max-w-7xl mx-auto px-6 py-2 flex justify-between text-xs">
           <div className="flex gap-6">
-            <a href="tel:+919063278724" className="flex items-center gap-2 hover:text-red-400 transition"><Phone className="w-3.5 h-3.5"/>+91 90632 78724</a>
-            <a href="mailto:Autobotscarstudio@gmail.com" className="flex items-center gap-2 hover:text-red-400 transition"><Mail className="w-3.5 h-3.5"/>Autobotscarstudio@gmail.com</a>
+            <a href="tel:+919063278724" className="flex items-center gap-2 hover:text-indigo-400 transition"><Phone className="w-3.5 h-3.5"/>+91 90632 78724</a>
+            <a href="mailto:Autobotscarstudio@gmail.com" className="flex items-center gap-2 hover:text-indigo-400 transition"><Mail className="w-3.5 h-3.5"/>Autobotscarstudio@gmail.com</a>
           </div>
           <div className="flex gap-5">
             {user ? (
-              <button data-testid="utility-logout" onClick={() => { logout(); navigate("/"); }} className="flex items-center gap-1.5 hover:text-red-400 transition">
+              <button data-testid="utility-logout" onClick={() => { logout(); navigate("/"); }} className="flex items-center gap-1.5 hover:text-indigo-400 transition">
                 <User className="w-3.5 h-3.5"/> Hi, {user.name.split(" ")[0]} · Logout
               </button>
             ) : (
-              <Link to="/login" data-testid="utility-login" className="flex items-center gap-1.5 hover:text-red-400 transition">
+              <Link to="/login" data-testid="utility-login" className="flex items-center gap-1.5 hover:text-indigo-400 transition">
                 <User className="w-3.5 h-3.5"/> Login / Sign Up
               </Link>
             )}
             {user?.role === "admin" && (
-              <Link to="/admin" className="text-red-400 hover:text-red-300">Admin</Link>
+              <Link to="/admin" className="text-indigo-400 hover:text-indigo-300">Admin</Link>
             )}
           </div>
         </div>
@@ -81,46 +81,46 @@ export default function Layout({ children }) {
         <div className="max-w-7xl mx-auto px-4 lg:px-6 py-4 flex items-center justify-between gap-4 lg:gap-8">
           <Link to="/" className="flex items-center gap-3 shrink-0" data-testid="logo-link">
             <div className="relative">
-              <div className="w-12 h-12 bg-white border-2 border-red-600 rounded grid place-items-center font-anton text-red-600 text-2xl">C</div>
+              <div className="w-12 h-12 bg-white border-2 border-indigo-600 rounded grid place-items-center font-anton text-indigo-600 text-2xl">C</div>
             </div>
             <div className="leading-none">
               <div className="font-anton text-2xl lg:text-3xl tracking-wide text-neutral-900">
-                CAR<span className="text-red-600">DOST</span>
+                CAR<span className="text-indigo-600">DOST</span>
               </div>
               <div className="text-[10px] uppercase tracking-[0.25em] text-neutral-500 mt-0.5">Accessories & More</div>
             </div>
           </Link>
 
           <div className="hidden md:flex flex-1 max-w-xl items-center gap-3">
-            <span className="text-red-600 font-bold text-sm uppercase tracking-wide whitespace-nowrap hidden lg:inline">What are you looking for?</span>
+            <span className="text-indigo-600 font-bold text-sm uppercase tracking-wide whitespace-nowrap hidden lg:inline">What are you looking for?</span>
             <form onSubmit={submitSearch} className="flex-1 relative">
               <Input
                 data-testid="header-search"
                 placeholder="Search for stereos, speakers, accessories..."
                 value={searchQ}
                 onChange={(e) => setSearchQ(e.target.value)}
-                className="h-11 pr-12 border-2 border-neutral-300 focus:border-red-600 text-sm rounded-md"
+                className="h-11 pr-12 border-2 border-neutral-300 focus:border-indigo-600 text-sm rounded-md"
               />
-              <button type="submit" className="absolute right-0 top-0 h-11 w-11 grid place-items-center bg-red-600 hover:bg-red-700 text-white rounded-r-md transition">
+              <button type="submit" className="absolute right-0 top-0 h-11 w-11 grid place-items-center bg-indigo-600 hover:bg-indigo-700 text-white rounded-r-md transition">
                 <Search className="w-4 h-4"/>
               </button>
             </form>
           </div>
 
           <div className="flex items-center gap-2 lg:gap-4 shrink-0">
-            <button className="hidden md:grid place-items-center p-2 text-neutral-700 hover:text-red-600 transition">
+            <button className="hidden md:grid place-items-center p-2 text-neutral-700 hover:text-indigo-600 transition">
               <Heart className="w-5 h-5"/>
             </button>
-            <Link to="/cart" data-testid="cart-btn" className="relative p-2 text-neutral-700 hover:text-red-600 transition">
+            <Link to="/cart" data-testid="cart-btn" className="relative p-2 text-neutral-700 hover:text-indigo-600 transition">
               <ShoppingCart className="w-5 h-5"/>
               {count > 0 && (
-                <span data-testid="cart-count" className="absolute -top-0.5 -right-0.5 bg-red-600 text-white text-[10px] font-bold w-5 h-5 rounded-full grid place-items-center">{count}</span>
+                <span data-testid="cart-count" className="absolute -top-0.5 -right-0.5 bg-indigo-600 text-white text-[10px] font-bold w-5 h-5 rounded-full grid place-items-center">{count}</span>
               )}
             </Link>
             {user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button data-testid="user-menu-trigger" className="hidden md:grid place-items-center p-2 text-neutral-700 hover:text-red-600">
+                  <button data-testid="user-menu-trigger" className="hidden md:grid place-items-center p-2 text-neutral-700 hover:text-indigo-600">
                     <User className="w-5 h-5"/>
                   </button>
                 </DropdownMenuTrigger>
@@ -150,9 +150,9 @@ export default function Layout({ children }) {
               placeholder="Search products..."
               value={searchQ}
               onChange={(e) => setSearchQ(e.target.value)}
-              className="h-10 pr-10 border-2 border-neutral-300 focus:border-red-600 rounded-md"
+              className="h-10 pr-10 border-2 border-neutral-300 focus:border-indigo-600 rounded-md"
             />
-            <button type="submit" className="absolute right-0 top-0 h-10 w-10 grid place-items-center bg-red-600 text-white rounded-r-md">
+            <button type="submit" className="absolute right-0 top-0 h-10 w-10 grid place-items-center bg-indigo-600 text-white rounded-r-md">
               <Search className="w-4 h-4"/>
             </button>
           </form>
@@ -160,7 +160,7 @@ export default function Layout({ children }) {
       </header>
 
       {/* Dark main nav */}
-      <nav className="hidden lg:block bg-[#1A1A1A] text-white border-t border-neutral-800">
+      <nav className="hidden lg:block bg-[#0F172A] text-white border-t border-neutral-800">
         <div className="max-w-7xl mx-auto px-6">
           <div className="flex items-center justify-center gap-1">
             {navLinks.map((l) => (
@@ -171,12 +171,12 @@ export default function Layout({ children }) {
                 data-testid={`nav-${l.label.toLowerCase().replace(/ /g, "-")}`}
                 className={({ isActive }) =>
                   `relative px-5 py-3.5 text-xs font-bold uppercase tracking-wider transition group whitespace-nowrap ${
-                    isActive ? "text-red-500" : "text-white hover:text-red-500"
+                    isActive ? "text-indigo-500" : "text-white hover:text-indigo-500"
                   }`
                 }
               >
                 {l.label}
-                <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-0 group-hover:w-full h-0.5 bg-red-500 transition-all"/>
+                <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-0 group-hover:w-full h-0.5 bg-indigo-500 transition-all"/>
               </NavLink>
             ))}
           </div>
@@ -185,22 +185,22 @@ export default function Layout({ children }) {
 
       {/* Mobile nav drawer */}
       {mobileOpen && (
-        <div className="lg:hidden bg-[#1A1A1A] text-white">
+        <div className="lg:hidden bg-[#0F172A] text-white">
           <div className="px-4 py-2 flex flex-col">
             {navLinks.map((l) => (
-              <Link key={l.to} to={l.to} onClick={() => setMobileOpen(false)} className="px-3 py-3 text-sm font-bold uppercase tracking-wider border-b border-neutral-800 hover:text-red-500">
+              <Link key={l.to} to={l.to} onClick={() => setMobileOpen(false)} className="px-3 py-3 text-sm font-bold uppercase tracking-wider border-b border-neutral-800 hover:text-indigo-500">
                 {l.label}
               </Link>
             ))}
             {!user && (
-              <Link to="/login" onClick={() => setMobileOpen(false)} className="px-3 py-3 text-sm font-bold uppercase text-red-500">Login / Sign Up</Link>
+              <Link to="/login" onClick={() => setMobileOpen(false)} className="px-3 py-3 text-sm font-bold uppercase text-indigo-500">Login / Sign Up</Link>
             )}
             {user && (
               <>
                 <Link to={user.role === "admin" ? "/admin" : "/my-orders"} onClick={() => setMobileOpen(false)} className="px-3 py-3 text-sm font-bold uppercase border-b border-neutral-800">
                   {user.role === "admin" ? "Admin Dashboard" : "My Orders"}
                 </Link>
-                <button onClick={() => { logout(); setMobileOpen(false); navigate("/"); }} className="px-3 py-3 text-left text-sm font-bold uppercase text-red-500">Logout</button>
+                <button onClick={() => { logout(); setMobileOpen(false); navigate("/"); }} className="px-3 py-3 text-left text-sm font-bold uppercase text-indigo-500">Logout</button>
               </>
             )}
           </div>
@@ -210,49 +210,49 @@ export default function Layout({ children }) {
       <main className="min-h-[60vh]">{children}</main>
 
       {/* Footer */}
-      <footer className="mt-20 bg-[#1A1A1A] text-white">
+      <footer className="mt-20 bg-[#0F172A] text-white">
         <div className="max-w-7xl mx-auto px-6 py-14 grid md:grid-cols-2 lg:grid-cols-4 gap-10">
           <div>
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 bg-white rounded grid place-items-center font-anton text-red-600 text-2xl border-2 border-red-600">C</div>
-              <div className="font-anton text-2xl">CAR<span className="text-red-500">DOST</span></div>
+              <div className="w-12 h-12 bg-white rounded grid place-items-center font-anton text-indigo-600 text-2xl border-2 border-indigo-600">C</div>
+              <div className="font-anton text-2xl">CAR<span className="text-indigo-500">DOST</span></div>
             </div>
             <p className="text-sm text-neutral-400 leading-relaxed mb-4">
               India&apos;s trusted destination for premium car audio, Android stereos, speakers and accessories. Best prices guaranteed.
             </p>
             <div className="space-y-1.5 text-xs text-neutral-400">
-              <a href="tel:+919063278724" className="flex gap-2 items-center hover:text-red-400"><Phone className="w-3.5 h-3.5"/>+91 90632 78724</a>
-              <a href="mailto:Autobotscarstudio@gmail.com" className="flex gap-2 items-center hover:text-red-400 break-all"><Mail className="w-3.5 h-3.5"/>Autobotscarstudio@gmail.com</a>
+              <a href="tel:+919063278724" className="flex gap-2 items-center hover:text-indigo-400"><Phone className="w-3.5 h-3.5"/>+91 90632 78724</a>
+              <a href="mailto:Autobotscarstudio@gmail.com" className="flex gap-2 items-center hover:text-indigo-400 break-all"><Mail className="w-3.5 h-3.5"/>Autobotscarstudio@gmail.com</a>
             </div>
           </div>
           <div>
-            <div className="font-display text-base font-bold uppercase tracking-wider mb-4 text-red-500">Shop</div>
+            <div className="font-display text-base font-bold uppercase tracking-wider mb-4 text-indigo-500">Shop</div>
             <ul className="space-y-2 text-sm text-neutral-300">
-              <li><Link to="/shop?category=android-stereos" className="hover:text-red-400">Android Stereos</Link></li>
-              <li><Link to="/shop?category=speakers" className="hover:text-red-400">Speakers</Link></li>
-              <li><Link to="/shop?category=amplifiers" className="hover:text-red-400">Amplifiers</Link></li>
-              <li><Link to="/shop?category=dash-cameras" className="hover:text-red-400">Dash Cameras</Link></li>
-              <li><Link to="/shop?category=led-lights" className="hover:text-red-400">LED Lights</Link></li>
-              <li><Link to="/shop?category=perfumes" className="hover:text-red-400">Air Fresheners</Link></li>
-              <li><Link to="/shop?category=accessories" className="hover:text-red-400">Accessories</Link></li>
+              <li><Link to="/shop?category=android-stereos" className="hover:text-indigo-400">Android Stereos</Link></li>
+              <li><Link to="/shop?category=speakers" className="hover:text-indigo-400">Speakers</Link></li>
+              <li><Link to="/shop?category=amplifiers" className="hover:text-indigo-400">Amplifiers</Link></li>
+              <li><Link to="/shop?category=dash-cameras" className="hover:text-indigo-400">Dash Cameras</Link></li>
+              <li><Link to="/shop?category=led-lights" className="hover:text-indigo-400">LED Lights</Link></li>
+              <li><Link to="/shop?category=perfumes" className="hover:text-indigo-400">Air Fresheners</Link></li>
+              <li><Link to="/shop?category=accessories" className="hover:text-indigo-400">Accessories</Link></li>
             </ul>
           </div>
           <div>
-            <div className="font-display text-base font-bold uppercase tracking-wider mb-4 text-red-500">Customer Care</div>
+            <div className="font-display text-base font-bold uppercase tracking-wider mb-4 text-indigo-500">Customer Care</div>
             <ul className="space-y-2 text-sm text-neutral-300">
-              <li><Link to="/contact" className="hover:text-red-400">Contact Us</Link></li>
-              <li><Link to="/my-orders" className="hover:text-red-400">Track Order</Link></li>
-              <li><Link to="/contact" className="hover:text-red-400">Return Policy</Link></li>
-              <li><Link to="/contact" className="hover:text-red-400">Shipping Info</Link></li>
-              <li><Link to="/contact" className="hover:text-red-400">FAQ</Link></li>
+              <li><Link to="/contact" className="hover:text-indigo-400">Contact Us</Link></li>
+              <li><Link to="/my-orders" className="hover:text-indigo-400">Track Order</Link></li>
+              <li><Link to="/contact" className="hover:text-indigo-400">Return Policy</Link></li>
+              <li><Link to="/contact" className="hover:text-indigo-400">Shipping Info</Link></li>
+              <li><Link to="/contact" className="hover:text-indigo-400">FAQ</Link></li>
             </ul>
           </div>
           <div>
-            <div className="font-display text-base font-bold uppercase tracking-wider mb-4 text-red-500">Stay Connected</div>
+            <div className="font-display text-base font-bold uppercase tracking-wider mb-4 text-indigo-500">Stay Connected</div>
             <p className="text-xs text-neutral-400 mb-3">Subscribe for exclusive deals & launches.</p>
             <form className="flex gap-2 mb-5">
               <Input type="email" placeholder="Your email" className="bg-neutral-900 border-neutral-700 text-white h-10 text-sm" data-testid="newsletter-input"/>
-              <Button type="button" className="bg-red-600 hover:bg-red-700 h-10 px-4 text-xs font-bold">JOIN</Button>
+              <Button type="button" className="bg-indigo-600 hover:bg-indigo-700 h-10 px-4 text-xs font-bold">JOIN</Button>
             </form>
             <div className="flex gap-2 text-[10px] text-neutral-400">
               <span className="bg-neutral-800 px-2 py-1 rounded">VISA</span>
@@ -279,15 +279,15 @@ export default function Layout({ children }) {
 
       {/* Mobile bottom nav */}
       <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-neutral-200 grid grid-cols-4 z-40">
-        <Link to="/" className="flex flex-col items-center py-2.5 text-[10px] text-neutral-700 hover:text-red-600" data-testid="mob-home">
+        <Link to="/" className="flex flex-col items-center py-2.5 text-[10px] text-neutral-700 hover:text-indigo-600" data-testid="mob-home">
           <HomeIcon className="w-5 h-5 mb-0.5"/> HOME
         </Link>
-        <Link to="/shop" className="flex flex-col items-center py-2.5 text-[10px] text-neutral-700 hover:text-red-600" data-testid="mob-shop">
+        <Link to="/shop" className="flex flex-col items-center py-2.5 text-[10px] text-neutral-700 hover:text-indigo-600" data-testid="mob-shop">
           <Grid className="w-5 h-5 mb-0.5"/> CATEGORY
         </Link>
-        <Link to="/cart" className="relative flex flex-col items-center py-2.5 text-[10px] text-neutral-700 hover:text-red-600" data-testid="mob-cart">
+        <Link to="/cart" className="relative flex flex-col items-center py-2.5 text-[10px] text-neutral-700 hover:text-indigo-600" data-testid="mob-cart">
           <ShoppingCart className="w-5 h-5 mb-0.5"/> CART
-          {count > 0 && <span className="absolute top-1 right-6 bg-red-600 text-white text-[9px] font-bold w-4 h-4 rounded-full grid place-items-center">{count}</span>}
+          {count > 0 && <span className="absolute top-1 right-6 bg-indigo-600 text-white text-[9px] font-bold w-4 h-4 rounded-full grid place-items-center">{count}</span>}
         </Link>
         <a href="https://wa.me/919063278724" target="_blank" rel="noopener noreferrer" className="flex flex-col items-center py-2.5 text-[10px] text-neutral-700 hover:text-green-600" data-testid="mob-whatsapp">
           <MessageCircle className="w-5 h-5 mb-0.5"/> WHATSAPP

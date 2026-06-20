@@ -11,7 +11,7 @@ const STATUS_COLORS = {
   paid: "bg-emerald-100 text-emerald-700",
   cancelled: "bg-neutral-200 text-neutral-600",
   created: "bg-yellow-100 text-yellow-700",
-  failed: "bg-red-100 text-red-700",
+  failed: "bg-indigo-100 text-indigo-700",
 };
 
 export default function MyOrders() {
@@ -40,7 +40,7 @@ export default function MyOrders() {
         ) : (
           <div className="space-y-3">
             {orders.map((o) => (
-              <Link key={o.id} to={`/order/${o.id}`} data-testid={`order-${o.id}`} className="block bg-white border border-neutral-200 hover:border-red-500 hover:shadow-md transition rounded-md p-5 group">
+              <Link key={o.id} to={`/order/${o.id}`} data-testid={`order-${o.id}`} className="block bg-white border border-neutral-200 hover:border-indigo-500 hover:shadow-md transition rounded-md p-5 group">
                 <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
                   <div>
                     <div className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold">Order ID</div>
@@ -52,11 +52,11 @@ export default function MyOrders() {
                   </div>
                   <div>
                     <div className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold">Total</div>
-                    <div className="font-bold text-red-600">{formatINR(o.total)}</div>
+                    <div className="font-bold text-indigo-600">{formatINR(o.total)}</div>
                   </div>
                   <div className="flex items-center gap-3">
                     <span data-testid={`order-status-${o.id}`} className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${STATUS_COLORS[o.status] || "bg-neutral-100 text-neutral-600"}`}>{o.status}</span>
-                    <ChevronRight className="w-5 h-5 text-neutral-300 group-hover:text-red-500 group-hover:translate-x-1 transition"/>
+                    <ChevronRight className="w-5 h-5 text-neutral-300 group-hover:text-indigo-500 group-hover:translate-x-1 transition"/>
                   </div>
                 </div>
                 <div className="border-t border-neutral-200 pt-3 space-y-1">

@@ -30,6 +30,7 @@ ADMIN_PASSWORD = os.environ['ADMIN_PASSWORD']
 RAZORPAY_KEY_ID = os.environ['RAZORPAY_KEY_ID']
 RAZORPAY_KEY_SECRET = os.environ['RAZORPAY_KEY_SECRET']
 MOCK_PAYMENT = os.environ.get('MOCK_PAYMENT', 'true').lower() == 'true'
+RAZORPAY_WEBHOOK_SECRET = os.environ.get('RAZORPAY_WEBHOOK_SECRET', '')
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
 STORAGE_URL = "https://integrations.emergentagent.com/objstore/api/v1/storage"
 APP_NAME = "cardost"
@@ -481,6 +482,65 @@ async def verify_payment(req: VerifyPaymentReq):
     return {"ok": True, "status": "paid", "order_id": req.order_id}
 
 ALLOWED_STATUSES = ["paid", "processing", "shipped", "delivered", "cancelled"]
+
+# ============ Razorpay Webhook ============
+from fastapi import Request
+
+@api_router.post("/razorpay/webhook")
+async def razorpay_webhook(request: Request, x_razorpay_signature: Optional[str] = Header(None)):
+    body = await request.body()
+    if not RAZORPAY_WEBHOOK_SECRET:
+        logger.error("Webhook received but RAZORPAY_WEBHOOK_SECRET not configured")
+        raise HTTPException(503, "Webhook secret not configured")
+    if not x_razorpay_signature:
+        raise HTTPException(400, "Missing signature")
+    expected = hmac.new(RAZORPAY_WEBHOOK_SECRET.encode(), body, hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(expected, x_razorpay_signature):
+        logger.warning("Webhook signature mismatch")
+        raise HTTPException(400, "Invalid signature")
+
+    import json as _json
+    try:
+        event = _json.loads(body)
+    except Exception:
+        raise HTTPException(400, "Invalid JSON")
+
+    event_type = event.get("event")
+    payment = event.get("payload", {}).get("payment", {}).get("entity", {}) or {}
+    rzp_order_id = payment.get("order_id")
+    rzp_payment_id = payment.get("id")
+    logger.info(f"Razorpay webhook: {event_type} order={rzp_order_id} payment={rzp_payment_id}")
+
+    if not rzp_order_id:
+        return {"ok": True, "handled": False}
+
+    order = await db.orders.find_one({"razorpay_order_id": rzp_order_id}, {"_id": 0})
+    if not order:
+        return {"ok": True, "handled": False, "reason": "order not found"}
+
+    # Idempotent
+    if order.get("status") == "paid" and event_type in ("payment.captured", "payment.authorized"):
+        return {"ok": True, "handled": True, "already_paid": True}
+
+    if event_type in ("payment.captured", "payment.authorized"):
+        for it in order["items"]:
+            await db.products.update_one({"id": it["product_id"]}, {"$inc": {"stock": -it["quantity"]}})
+        await db.orders.update_one(
+            {"id": order["id"]},
+            {"$set": {
+                "status": "paid",
+                "razorpay_payment_id": rzp_payment_id,
+                "paid_at": datetime.now(timezone.utc).isoformat(),
+                "webhook_event": event_type
+            }}
+        )
+    elif event_type == "payment.failed":
+        await db.orders.update_one(
+            {"id": order["id"]},
+            {"$set": {"status": "failed", "webhook_event": event_type, "failure_reason": payment.get("error_description")}}
+        )
+
+    return {"ok": True, "handled": True, "event": event_type}
 
 class OrderStatusUpdate(BaseModel):
     status: str

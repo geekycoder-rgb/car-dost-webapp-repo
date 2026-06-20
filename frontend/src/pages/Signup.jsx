@@ -37,10 +37,10 @@ export default function Signup() {
             <div><Label className="text-xs uppercase font-bold text-neutral-700">Email *</Label><Input data-testid="signup-email" type="email" required value={form.email} onChange={c("email")} className="border-neutral-300 mt-1.5"/></div>
             <div><Label className="text-xs uppercase font-bold text-neutral-700">Phone</Label><Input data-testid="signup-phone" value={form.phone} onChange={c("phone")} className="border-neutral-300 mt-1.5"/></div>
             <div><Label className="text-xs uppercase font-bold text-neutral-700">Password *</Label><Input data-testid="signup-password" type="password" required minLength={6} value={form.password} onChange={c("password")} className="border-neutral-300 mt-1.5"/></div>
-            <Button data-testid="signup-submit" disabled={loading} type="submit" className="w-full bg-red-600 hover:bg-red-700 py-6 font-bold uppercase tracking-wider text-xs">{loading ? "Creating..." : "Create Account"}</Button>
+            <Button data-testid="signup-submit" disabled={loading} type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 py-6 font-bold uppercase tracking-wider text-xs">{loading ? "Creating..." : "Create Account"}</Button>
           </form>
           <p className="text-sm text-neutral-600 text-center mt-6">
-            Have an account? <Link to="/login" className="text-red-600 font-bold hover:underline">Sign In</Link>
+            Have an account? <Link to="/login" className="text-indigo-600 font-bold hover:underline">Sign In</Link>
           </p>
         </div>
       </div>

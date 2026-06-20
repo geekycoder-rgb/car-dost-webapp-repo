@@ -5,28 +5,21 @@
 @tailwind utilities;
 
 :root {
-  --bg: #FFFFFF;
-  --surface: #F7F7F7;
-  --surface-2: #FAFAFA;
-  --border: #E5E5E5;
-  --text: #1A1A1A;
-  --text-dim: #6B6B6B;
-  --primary: #E1141C;
-  --primary-hover: #B30F16;
-  --header: #1A1A1A;
+  --bg: #FAFAF9;          /* warm off-white */
+  --surface: #F5F5F4;     /* stone-100 */
+  --surface-2: #FFFFFF;
+  --border: #E7E5E4;      /* stone-200 */
+  --text: #0C0A09;        /* stone-950 */
+  --text-dim: #57534E;    /* stone-600 */
+  --primary: #4F46E5;     /* indigo-600 */
+  --primary-hover: #4338CA;
+  --header: #0F172A;      /* slate-900 */
+  --accent-amber: #F59E0B;
 }
 
-* {
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
+* { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
 
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font-family: 'Poppins', -apple-system, sans-serif;
-}
+body { margin: 0; background: var(--bg); color: var(--text); font-family: 'Poppins', -apple-system, sans-serif; }
 
 .font-display { font-family: 'Oswald', sans-serif; letter-spacing: 0.01em; }
 .font-anton { font-family: 'Anton', sans-serif; letter-spacing: 0.02em; }
@@ -34,32 +27,32 @@ body {
 ::selection { background: var(--primary); color: #fff; }
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-track { background: #f3f3f3; }
-::-webkit-scrollbar-thumb { background: #d4d4d4; border-radius: 4px; }
+::-webkit-scrollbar-track { background: #f3f3f1; }
+::-webkit-scrollbar-thumb { background: #d6d3d1; border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--primary); }
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 10%;
+    --background: 60 9% 98%;
+    --foreground: 24 10% 5%;
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 10%;
+    --card-foreground: 24 10% 5%;
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 10%;
-    --primary: 0 84% 48%;
+    --popover-foreground: 24 10% 5%;
+    --primary: 244 75% 58%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 0 0% 96%;
-    --secondary-foreground: 0 0% 10%;
-    --muted: 0 0% 96%;
-    --muted-foreground: 0 0% 42%;
-    --accent: 0 84% 48%;
+    --secondary: 60 5% 96%;
+    --secondary-foreground: 24 10% 5%;
+    --muted: 60 5% 96%;
+    --muted-foreground: 25 5% 35%;
+    --accent: 244 75% 58%;
     --accent-foreground: 0 0% 100%;
-    --destructive: 0 84% 48%;
+    --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
-    --border: 0 0% 90%;
-    --input: 0 0% 90%;
-    --ring: 0 84% 48%;
-    --radius: 0.5rem;
+    --border: 20 6% 90%;
+    --input: 20 6% 90%;
+    --ring: 244 75% 58%;
+    --radius: 0.625rem;
   }
 }
 
@@ -68,7 +61,46 @@ body {
   body { @apply bg-background text-foreground; }
 }
 
-/* Marquee animation */
+/* Modern mesh-style gradient backgrounds */
+.mesh-indigo {
+  background:
+    radial-gradient(at 20% 30%, rgba(99,102,241,0.7) 0%, transparent 50%),
+    radial-gradient(at 80% 20%, rgba(236,72,153,0.5) 0%, transparent 50%),
+    radial-gradient(at 70% 80%, rgba(56,189,248,0.5) 0%, transparent 50%),
+    linear-gradient(135deg, #1E1B4B 0%, #0F172A 100%);
+}
+.mesh-amber {
+  background:
+    radial-gradient(at 70% 30%, rgba(251,191,36,0.6) 0%, transparent 55%),
+    radial-gradient(at 30% 80%, rgba(244,114,182,0.45) 0%, transparent 55%),
+    linear-gradient(135deg, #18181B 0%, #3F3F46 100%);
+}
+.mesh-emerald {
+  background:
+    radial-gradient(at 30% 50%, rgba(16,185,129,0.55) 0%, transparent 55%),
+    radial-gradient(at 90% 80%, rgba(99,102,241,0.55) 0%, transparent 50%),
+    linear-gradient(135deg, #064E3B 0%, #0F172A 100%);
+}
+.mesh-stereo {
+  background:
+    radial-gradient(at 90% 20%, rgba(167,139,250,0.5) 0%, transparent 50%),
+    radial-gradient(at 10% 90%, rgba(56,189,248,0.5) 0%, transparent 55%),
+    linear-gradient(120deg, #0F172A 0%, #1E1B4B 100%);
+}
+.mesh-speakers {
+  background:
+    radial-gradient(at 80% 30%, rgba(244,114,182,0.55) 0%, transparent 55%),
+    radial-gradient(at 20% 70%, rgba(251,191,36,0.4) 0%, transparent 55%),
+    linear-gradient(120deg, #18181B 0%, #4C1D95 100%);
+}
+
+.glass {
+  background: rgba(255,255,255,0.06);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+/* Marquee */
 @keyframes marquee {
   0% { transform: translateX(0); }
   100% { transform: translateX(-50%); }
