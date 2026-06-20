@@ -13,3 +13,5 @@ api.interceptors.request.use((config) => {
 
 export const formatINR = (n) =>
   new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n || 0);
+
+export const resolveImg = (url) => (url && url.startsWith("/api/") ? `${BACKEND_URL}${url}` : url);

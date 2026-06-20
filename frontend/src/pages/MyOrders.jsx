@@ -41,8 +41,13 @@ export default function MyOrders() {
                   <div className="font-bold">{formatINR(o.total)}</div>
                 </div>
                 <div>
-                  <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
-                    o.status === "paid" ? "bg-green-500/10 text-green-400" : "bg-yellow-500/10 text-yellow-400"
+                  <span data-testid={`order-status-${o.id}`} className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
+                    o.status === "delivered" ? "bg-green-500/10 text-green-400" :
+                    o.status === "shipped" ? "bg-blue-500/10 text-blue-400" :
+                    o.status === "processing" ? "bg-purple-500/10 text-purple-400" :
+                    o.status === "paid" ? "bg-emerald-500/10 text-emerald-400" :
+                    o.status === "cancelled" ? "bg-neutral-500/10 text-neutral-400" :
+                    "bg-yellow-500/10 text-yellow-400"
                   }`}>{o.status}</span>
                 </div>
               </div>

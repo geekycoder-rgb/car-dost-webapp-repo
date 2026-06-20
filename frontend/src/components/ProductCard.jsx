@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { Star, ShoppingCart } from "lucide-react";
-import { formatINR } from "@/lib/api";
+import { formatINR, resolveImg } from "@/lib/api";
 import { useCart } from "@/context/CartContext";
 import { toast } from "sonner";
 
@@ -11,7 +11,7 @@ export default function ProductCard({ product, idx = 0 }) {
   return (
     <div data-testid={`product-card-${product.id}`} className="group bg-[#141414] border border-[#262626] rounded-xl overflow-hidden hover:-translate-y-1 hover:border-red-500/50 transition-all duration-300">
       <Link to={`/product/${product.id}`} className="block relative aspect-square overflow-hidden bg-black">
-        <img src={product.image} alt={product.name} loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"/>
+        <img src={resolveImg(product.image)} alt={product.name} loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"/>
         {off > 0 && (
           <span className="absolute top-3 left-3 bg-red-500 text-white text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded">
             -{off}%

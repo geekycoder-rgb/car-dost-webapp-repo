@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
-import { api, formatINR } from "@/lib/api";
+import { api, formatINR, resolveImg } from "@/lib/api";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -174,7 +174,7 @@ export default function Checkout() {
           <div className="space-y-3 max-h-64 overflow-y-auto">
             {items.map((i) => (
               <div key={i.id} className="flex gap-3 text-sm">
-                <img src={i.image} className="w-12 h-12 object-cover rounded" alt=""/>
+                <img src={resolveImg(i.image)} className="w-12 h-12 object-cover rounded" alt=""/>
                 <div className="flex-1 min-w-0">
                   <div className="line-clamp-1 font-medium">{i.name}</div>
                   <div className="text-neutral-500 text-xs">Qty: {i.qty}</div>

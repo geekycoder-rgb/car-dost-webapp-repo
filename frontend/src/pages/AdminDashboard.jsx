@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
-import { api, formatINR } from "@/lib/api";
+import { api, formatINR, API } from "@/lib/api";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,8 +10,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
-import { Plus, Edit, Trash2, ShoppingCart, Package, DollarSign, Users } from "lucide-react";
+import { Plus, Edit, Trash2, ShoppingCart, Package, DollarSign, Users, Upload, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+
+const BACKEND = process.env.REACT_APP_BACKEND_URL;
+const resolveImg = (url) => (url && url.startsWith("/api/") ? `${BACKEND}${url}` : url);
 
 const EMPTY_P = { name: "", description: "", price: "", original_price: "", category: "android-stereos", brand: "", image: "", stock: 50, rating: 4.5, featured: false };
 
@@ -24,6 +27,8 @@ export default function AdminDashboard() {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY_P);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef(null);
 
   const loadAll = () => {
     api.get("/admin/stats").then((r) => setStats(r.data)).catch(() => {});
@@ -70,6 +75,37 @@ export default function AdminDashboard() {
     await api.delete(`/admin/products/${id}`);
     toast.success("Deleted");
     loadAll();
+  };
+
+  const uploadImage = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { toast.error("Max 5MB"); return; }
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const { data } = await api.post("/admin/upload", fd, { headers: { "Content-Type": "multipart/form-data" } });
+      setForm((f) => ({ ...f, image: data.url }));
+      toast.success("Image uploaded");
+    } catch (err) {
+      const d = err.response?.data?.detail;
+      toast.error(typeof d === "string" ? d : "Upload failed");
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const updateOrderStatus = async (oid, status) => {
+    try {
+      await api.patch(`/admin/orders/${oid}/status`, { status });
+      toast.success(`Order marked ${status}`);
+      loadAll();
+    } catch (err) {
+      const d = err.response?.data?.detail;
+      toast.error(typeof d === "string" ? d : "Update failed");
+    }
   };
 
   const c = (k) => (e) => setForm({ ...form, [k]: e.target.value });
@@ -124,7 +160,7 @@ export default function AdminDashboard() {
                   <TableRow key={p.id} className="border-[#262626]">
                     <TableCell>
                       <div className="flex gap-3 items-center">
-                        <img src={p.image} className="w-10 h-10 rounded object-cover" alt=""/>
+                        <img src={resolveImg(p.image)} className="w-10 h-10 rounded object-cover" alt=""/>
                         <span className="font-medium line-clamp-1 max-w-xs">{p.name}</span>
                       </div>
                     </TableCell>
@@ -196,7 +232,19 @@ export default function AdminDashboard() {
               </Select>
             </div>
             <div><Label>Brand</Label><Input value={form.brand} onChange={c("brand")} className="bg-[#0A0A0A] border-[#262626] mt-1"/></div>
-            <div className="col-span-2"><Label>Image URL</Label><Input value={form.image} onChange={c("image")} className="bg-[#0A0A0A] border-[#262626] mt-1"/></div>
+            <div className="col-span-2">
+              <Label>Product Image</Label>
+              <div className="mt-1 flex gap-3">
+                <Input data-testid="p-image-url" placeholder="Paste URL or upload below" value={form.image} onChange={c("image")} className="bg-[#0A0A0A] border-[#262626] flex-1"/>
+                <input ref={fileInputRef} data-testid="p-image-file" type="file" accept="image/*" onChange={uploadImage} className="hidden"/>
+                <Button type="button" disabled={uploading} onClick={() => fileInputRef.current?.click()} variant="outline" className="border-[#262626] bg-[#0A0A0A] hover:bg-[#1a1a1a]">
+                  {uploading ? <Loader2 className="w-4 h-4 animate-spin"/> : <><Upload className="w-4 h-4 mr-1"/>Upload</>}
+                </Button>
+              </div>
+              {form.image && (
+                <img src={resolveImg(form.image)} alt="" className="mt-3 w-32 h-32 object-cover rounded border border-[#262626]"/>
+              )}
+            </div>
             <div><Label>Stock</Label><Input type="number" value={form.stock} onChange={c("stock")} className="bg-[#0A0A0A] border-[#262626] mt-1"/></div>
             <div><Label>Rating</Label><Input type="number" step="0.1" max="5" value={form.rating} onChange={c("rating")} className="bg-[#0A0A0A] border-[#262626] mt-1"/></div>
           </div>

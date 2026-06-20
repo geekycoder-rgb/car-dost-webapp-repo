@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, status
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, UploadFile, File, Response, Header, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -11,6 +11,7 @@ import hashlib
 import jwt
 import bcrypt
 import razorpay
+import requests
 from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional
@@ -29,6 +30,10 @@ ADMIN_PASSWORD = os.environ['ADMIN_PASSWORD']
 RAZORPAY_KEY_ID = os.environ['RAZORPAY_KEY_ID']
 RAZORPAY_KEY_SECRET = os.environ['RAZORPAY_KEY_SECRET']
 MOCK_PAYMENT = os.environ.get('MOCK_PAYMENT', 'true').lower() == 'true'
+EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
+STORAGE_URL = "https://integrations.emergentagent.com/objstore/api/v1/storage"
+APP_NAME = "cardost"
+storage_key: Optional[str] = None
 
 try:
     rzp_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET)) if not MOCK_PAYMENT else None
@@ -38,6 +43,12 @@ except Exception:
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
 security = HTTPBearer(auto_error=False)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 # ============ Models ============
 class SignupReq(BaseModel):
@@ -210,6 +221,97 @@ async def delete_product(pid: str, _=Depends(get_admin)):
     await db.products.delete_one({"id": pid})
     return {"ok": True}
 
+# ============ File Upload (Emergent Object Storage) ============
+def init_storage():
+    global storage_key
+    if storage_key:
+        return storage_key
+    resp = requests.post(f"{STORAGE_URL}/init", json={"emergent_key": EMERGENT_LLM_KEY}, timeout=30)
+    resp.raise_for_status()
+    storage_key = resp.json()["storage_key"]
+    return storage_key
+
+def put_object(path: str, data: bytes, content_type: str) -> dict:
+    key = init_storage()
+    resp = requests.put(
+        f"{STORAGE_URL}/objects/{path}",
+        headers={"X-Storage-Key": key, "Content-Type": content_type},
+        data=data, timeout=120
+    )
+    if resp.status_code == 403:
+        # refresh key once and retry
+        global storage_key
+        storage_key = None
+        key = init_storage()
+        resp = requests.put(
+            f"{STORAGE_URL}/objects/{path}",
+            headers={"X-Storage-Key": key, "Content-Type": content_type},
+            data=data, timeout=120
+        )
+    resp.raise_for_status()
+    return resp.json()
+
+def get_object(path: str):
+    key = init_storage()
+    resp = requests.get(
+        f"{STORAGE_URL}/objects/{path}",
+        headers={"X-Storage-Key": key}, timeout=60
+    )
+    if resp.status_code == 403:
+        global storage_key
+        storage_key = None
+        key = init_storage()
+        resp = requests.get(
+            f"{STORAGE_URL}/objects/{path}",
+            headers={"X-Storage-Key": key}, timeout=60
+        )
+    resp.raise_for_status()
+    return resp.content, resp.headers.get("Content-Type", "application/octet-stream")
+
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+MAX_UPLOAD_BYTES = 5 * 1024 * 1024  # 5MB
+
+@api_router.post("/admin/upload")
+async def upload_image(file: UploadFile = File(...), user=Depends(get_admin)):
+    if file.content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(400, "Only JPG/PNG/WEBP/GIF allowed")
+    data = await file.read()
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise HTTPException(400, "Max file size is 5MB")
+    ext = (file.filename.rsplit(".", 1)[-1] if "." in (file.filename or "") else "bin").lower()
+    file_id = str(uuid.uuid4())
+    path = f"{APP_NAME}/products/{file_id}.{ext}"
+    try:
+        result = put_object(path, data, file.content_type)
+    except Exception as e:
+        logger.error(f"Upload failed: {e}")
+        raise HTTPException(500, "Upload failed")
+    await db.files.insert_one({
+        "id": file_id,
+        "storage_path": result["path"],
+        "original_filename": file.filename,
+        "content_type": file.content_type,
+        "size": len(data),
+        "uploaded_by": user["uid"],
+        "is_deleted": False,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+    # Public URL via our backend
+    public_url = f"/api/files/{result['path']}"
+    return {"url": public_url, "path": result["path"], "size": len(data)}
+
+@api_router.get("/files/{path:path}")
+async def serve_file(path: str):
+    record = await db.files.find_one({"storage_path": path, "is_deleted": False}, {"_id": 0})
+    if not record:
+        raise HTTPException(404, "File not found")
+    try:
+        data, ct = get_object(path)
+    except Exception as e:
+        logger.error(f"File fetch failed: {e}")
+        raise HTTPException(500, "File fetch failed")
+    return Response(content=data, media_type=record.get("content_type") or ct, headers={"Cache-Control": "public, max-age=86400"})
+
 # ============ Orders / Payment ============
 @api_router.post("/orders/create")
 async def create_order(req: CreateOrderReq, creds: Optional[HTTPAuthorizationCredentials] = Depends(security)):
@@ -222,13 +324,17 @@ async def create_order(req: CreateOrderReq, creds: Optional[HTTPAuthorizationCre
         except jwt.PyJWTError:
             pass
 
-    # Compute total from DB prices (trust server, not client)
+    # Compute total from DB prices (trust server, not client) + check stock
     items_detail = []
     total = 0.0
     for item in req.items:
+        if item.quantity <= 0:
+            raise HTTPException(400, "Invalid quantity")
         p = await db.products.find_one({"id": item.product_id}, {"_id": 0})
         if not p:
             raise HTTPException(400, f"Product {item.product_id} not found")
+        if p.get("stock", 0) < item.quantity:
+            raise HTTPException(400, f"Insufficient stock for {p['name']}. Only {p.get('stock', 0)} left.")
         line_total = p["price"] * item.quantity
         total += line_total
         items_detail.append({
@@ -292,7 +398,16 @@ async def verify_payment(req: VerifyPaymentReq):
     if not order:
         raise HTTPException(404, "Order not found")
 
+    async def decrement_stock():
+        for it in order["items"]:
+            await db.products.update_one(
+                {"id": it["product_id"]},
+                {"$inc": {"stock": -it["quantity"]}}
+            )
+
     if MOCK_PAYMENT or order.get("mock"):
+        if order.get("status") != "paid":
+            await decrement_stock()
         await db.orders.update_one(
             {"id": req.order_id},
             {"$set": {
@@ -312,6 +427,8 @@ async def verify_payment(req: VerifyPaymentReq):
         await db.orders.update_one({"id": req.order_id}, {"$set": {"status": "failed"}})
         raise HTTPException(400, "Invalid signature")
 
+    if order.get("status") != "paid":
+        await decrement_stock()
     await db.orders.update_one(
         {"id": req.order_id},
         {"$set": {
@@ -321,6 +438,29 @@ async def verify_payment(req: VerifyPaymentReq):
         }}
     )
     return {"ok": True, "status": "paid", "order_id": req.order_id}
+
+ALLOWED_STATUSES = ["paid", "processing", "shipped", "delivered", "cancelled"]
+
+class OrderStatusUpdate(BaseModel):
+    status: str
+
+@api_router.patch("/admin/orders/{oid}/status")
+async def update_order_status(oid: str, body: OrderStatusUpdate, _=Depends(get_admin)):
+    if body.status not in ALLOWED_STATUSES:
+        raise HTTPException(400, f"Status must be one of {ALLOWED_STATUSES}")
+    order = await db.orders.find_one({"id": oid}, {"_id": 0})
+    if not order:
+        raise HTTPException(404, "Order not found")
+    # If cancelling a previously-paid order, restock items
+    if body.status == "cancelled" and order.get("status") in ("paid", "processing", "shipped"):
+        for it in order["items"]:
+            await db.products.update_one(
+                {"id": it["product_id"]},
+                {"$inc": {"stock": it["quantity"]}}
+            )
+    update = {"status": body.status, f"{body.status}_at": datetime.now(timezone.utc).isoformat()}
+    await db.orders.update_one({"id": oid}, {"$set": update})
+    return {"ok": True, "status": body.status}
 
 @api_router.get("/orders/{oid}")
 async def get_order(oid: str):
@@ -402,6 +542,12 @@ SEED_PRODUCTS = [
 
 @app.on_event("startup")
 async def startup_event():
+    # Init object storage
+    try:
+        init_storage()
+        logger.info("Storage initialized")
+    except Exception as e:
+        logger.warning(f"Storage init failed (uploads may not work): {e}")
     # Seed admin
     admin = await db.users.find_one({"email": ADMIN_EMAIL})
     if not admin:
@@ -432,12 +578,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

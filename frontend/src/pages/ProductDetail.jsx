@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { api, formatINR } from "@/lib/api";
+import { api, formatINR, resolveImg } from "@/lib/api";
 import { Star, Plus, Minus, ShoppingCart, Truck, Shield, RotateCcw, ArrowRight } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { toast } from "sonner";
@@ -25,7 +25,7 @@ export default function ProductDetail() {
       <Link to="/shop" className="text-sm text-neutral-500 hover:text-red-400 mb-6 inline-block">← Back to shop</Link>
       <div className="grid md:grid-cols-2 gap-12">
         <div className="bg-[#141414] border border-[#262626] rounded-2xl overflow-hidden">
-          <img src={product.image} alt={product.name} className="w-full aspect-square object-cover"/>
+          <img src={resolveImg(product.image)} alt={product.name} className="w-full aspect-square object-cover"/>
         </div>
         <div className="space-y-6">
           {product.brand && <div className="text-xs uppercase tracking-[0.3em] text-red-500">{product.brand}</div>}
@@ -43,6 +43,13 @@ export default function ProductDetail() {
                 <span className="text-neutral-500 line-through">{formatINR(product.original_price)}</span>
                 <span className="text-xs bg-red-500 text-white px-2 py-0.5 rounded font-bold">-{off}%</span>
               </>
+            )}
+          </div>
+          <div className="text-sm">
+            {product.stock > 0 ? (
+              <span data-testid="stock-status" className="text-green-400">● In Stock ({product.stock} available)</span>
+            ) : (
+              <span data-testid="stock-status" className="text-red-400">● Out of Stock</span>
             )}
           </div>
           <p className="text-neutral-400 leading-relaxed">{product.description}</p>

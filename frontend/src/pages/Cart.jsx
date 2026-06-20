@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useCart } from "@/context/CartContext";
-import { formatINR } from "@/lib/api";
+import { formatINR, resolveImg } from "@/lib/api";
 import { Trash2, Plus, Minus, ShoppingBag, ArrowRight } from "lucide-react";
 
 export default function Cart() {
@@ -27,7 +27,7 @@ export default function Cart() {
         <div className="lg:col-span-2 space-y-3">
           {items.map((i) => (
             <div key={i.id} data-testid={`cart-item-${i.id}`} className="bg-[#141414] border border-[#262626] rounded-xl p-4 flex gap-4">
-              <img src={i.image} alt={i.name} className="w-24 h-24 object-cover rounded-lg"/>
+              <img src={resolveImg(i.image)} alt={i.name} className="w-24 h-24 object-cover rounded-lg"/>
               <div className="flex-1 min-w-0">
                 <h3 className="font-display font-semibold line-clamp-2">{i.name}</h3>
                 <div className="text-red-500 font-bold mt-1">{formatINR(i.price)}</div>
