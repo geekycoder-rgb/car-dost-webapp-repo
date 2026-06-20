@@ -1,168 +1,299 @@
 import { Link, NavLink, useNavigate } from "react-router-dom";
-import { ShoppingCart, User, LogOut, Menu, X, Phone, Mail, MapPin } from "lucide-react";
+import { ShoppingCart, User, LogOut, Menu, X, Phone, Mail, Search, Heart, Home as HomeIcon, Grid, MessageCircle, ChevronDown } from "lucide-react";
 import { useState } from "react";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel
 } from "@/components/ui/dropdown-menu";
+
+const PROMO_ITEMS = [
+  "🎉 Extra 5% on Prepaid Orders",
+  "🚚 Cash On Delivery Available Now",
+  "🔥 Buy one get 5% off — Use code SAVE5",
+  "🛠️ FREE Pro Installation Booking",
+  "⚡ Same-day shipping across India",
+];
 
 export default function Layout({ children }) {
   const { count } = useCart();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [searchQ, setSearchQ] = useState("");
 
   const navLinks = [
     { to: "/", label: "Home" },
-    { to: "/shop", label: "Shop" },
-    { to: "/shop?category=android-stereos", label: "Stereos" },
+    { to: "/shop?category=android-stereos", label: "Android Stereos" },
     { to: "/shop?category=speakers", label: "Speakers" },
+    { to: "/shop?category=amplifiers", label: "Amplifiers" },
+    { to: "/shop?category=dash-cameras", label: "Dash Cams" },
+    { to: "/shop?category=led-lights", label: "LED Lights" },
+    { to: "/shop?category=perfumes", label: "Perfumes" },
+    { to: "/shop?category=accessories", label: "Accessories" },
     { to: "/contact", label: "Contact" },
   ];
 
+  const submitSearch = (e) => {
+    e.preventDefault();
+    if (searchQ.trim()) navigate(`/shop?q=${encodeURIComponent(searchQ.trim())}`);
+  };
+
   return (
-    <div className="min-h-screen bg-[#0A0A0A] text-white">
-      {/* Top bar */}
-      <div className="hidden md:block bg-[#0A0A0A] border-b border-[#1a1a1a] text-xs text-neutral-400">
-        <div className="max-w-7xl mx-auto px-6 py-2 flex justify-between">
-          <div className="flex gap-6">
-            <span className="flex items-center gap-2"><Phone className="w-3 h-3 text-red-500"/>+91 90632 78724</span>
-            <span className="flex items-center gap-2"><Mail className="w-3 h-3 text-red-500"/>Autobotscarstudio@gmail.com</span>
-          </div>
-          <span>Free shipping across India • COD available</span>
+    <div className="min-h-screen bg-white text-neutral-900">
+      {/* Promo marquee */}
+      <div className="bg-[#1A1A1A] text-white overflow-hidden border-b border-red-600">
+        <div className="flex animate-marquee whitespace-nowrap py-2">
+          {[...PROMO_ITEMS, ...PROMO_ITEMS, ...PROMO_ITEMS].map((p, i) => (
+            <span key={i} className="text-xs font-medium px-8 inline-flex items-center">{p}</span>
+          ))}
         </div>
       </div>
 
-      {/* Header */}
-      <header className="sticky top-0 z-50 bg-[#0A0A0A]/80 backdrop-blur-xl border-b border-[#262626]">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between gap-6">
-          <Link to="/" className="flex items-center gap-2 group" data-testid="logo-link">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-red-500 to-red-700 grid place-items-center font-black text-white text-lg group-hover:scale-110 transition">C</div>
-            <div className="leading-tight">
-              <div className="font-display text-xl font-black tracking-tighter">CarDost</div>
-              <div className="text-[10px] uppercase tracking-[0.3em] text-neutral-500">Car Audio Studio</div>
+      {/* Utility bar */}
+      <div className="hidden md:block bg-[#1A1A1A] text-white border-t border-neutral-800">
+        <div className="max-w-7xl mx-auto px-6 py-2 flex justify-between text-xs">
+          <div className="flex gap-6">
+            <a href="tel:+919063278724" className="flex items-center gap-2 hover:text-red-400 transition"><Phone className="w-3.5 h-3.5"/>+91 90632 78724</a>
+            <a href="mailto:Autobotscarstudio@gmail.com" className="flex items-center gap-2 hover:text-red-400 transition"><Mail className="w-3.5 h-3.5"/>Autobotscarstudio@gmail.com</a>
+          </div>
+          <div className="flex gap-5">
+            {user ? (
+              <button data-testid="utility-logout" onClick={() => { logout(); navigate("/"); }} className="flex items-center gap-1.5 hover:text-red-400 transition">
+                <User className="w-3.5 h-3.5"/> Hi, {user.name.split(" ")[0]} · Logout
+              </button>
+            ) : (
+              <Link to="/login" data-testid="utility-login" className="flex items-center gap-1.5 hover:text-red-400 transition">
+                <User className="w-3.5 h-3.5"/> Login / Sign Up
+              </Link>
+            )}
+            {user?.role === "admin" && (
+              <Link to="/admin" className="text-red-400 hover:text-red-300">Admin</Link>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Main header — white with logo + search */}
+      <header className="bg-white border-b border-neutral-200">
+        <div className="max-w-7xl mx-auto px-4 lg:px-6 py-4 flex items-center justify-between gap-4 lg:gap-8">
+          <Link to="/" className="flex items-center gap-3 shrink-0" data-testid="logo-link">
+            <div className="relative">
+              <div className="w-12 h-12 bg-white border-2 border-red-600 rounded grid place-items-center font-anton text-red-600 text-2xl">C</div>
+            </div>
+            <div className="leading-none">
+              <div className="font-anton text-2xl lg:text-3xl tracking-wide text-neutral-900">
+                CAR<span className="text-red-600">DOST</span>
+              </div>
+              <div className="text-[10px] uppercase tracking-[0.25em] text-neutral-500 mt-0.5">Accessories & More</div>
             </div>
           </Link>
 
-          <nav className="hidden lg:flex items-center gap-1">
-            {navLinks.map((l) => (
-              <NavLink
-                key={l.to}
-                to={l.to}
-                end={l.to === "/"}
-                data-testid={`nav-${l.label.toLowerCase()}`}
-                className={({ isActive }) =>
-                  `px-4 py-2 text-sm font-medium uppercase tracking-wider transition rounded-md ${
-                    isActive ? "text-white bg-white/5" : "text-neutral-400 hover:text-white"
-                  }`
-                }
-              >
-                {l.label}
-              </NavLink>
-            ))}
-          </nav>
+          <div className="hidden md:flex flex-1 max-w-xl items-center gap-3">
+            <span className="text-red-600 font-bold text-sm uppercase tracking-wide whitespace-nowrap hidden lg:inline">What are you looking for?</span>
+            <form onSubmit={submitSearch} className="flex-1 relative">
+              <Input
+                data-testid="header-search"
+                placeholder="Search for stereos, speakers, accessories..."
+                value={searchQ}
+                onChange={(e) => setSearchQ(e.target.value)}
+                className="h-11 pr-12 border-2 border-neutral-300 focus:border-red-600 text-sm rounded-md"
+              />
+              <button type="submit" className="absolute right-0 top-0 h-11 w-11 grid place-items-center bg-red-600 hover:bg-red-700 text-white rounded-r-md transition">
+                <Search className="w-4 h-4"/>
+              </button>
+            </form>
+          </div>
 
-          <div className="flex items-center gap-2">
-            <Link to="/cart" data-testid="cart-btn" className="relative p-2.5 rounded-lg hover:bg-white/5 transition">
-              <ShoppingCart className="w-5 h-5" />
+          <div className="flex items-center gap-2 lg:gap-4 shrink-0">
+            <button className="hidden md:grid place-items-center p-2 text-neutral-700 hover:text-red-600 transition">
+              <Heart className="w-5 h-5"/>
+            </button>
+            <Link to="/cart" data-testid="cart-btn" className="relative p-2 text-neutral-700 hover:text-red-600 transition">
+              <ShoppingCart className="w-5 h-5"/>
               {count > 0 && (
-                <span data-testid="cart-count" className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-5 h-5 rounded-full grid place-items-center">
-                  {count}
-                </span>
+                <span data-testid="cart-count" className="absolute -top-0.5 -right-0.5 bg-red-600 text-white text-[10px] font-bold w-5 h-5 rounded-full grid place-items-center">{count}</span>
               )}
             </Link>
-
             {user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button data-testid="user-menu-trigger" className="p-2.5 rounded-lg hover:bg-white/5 transition">
+                  <button data-testid="user-menu-trigger" className="hidden md:grid place-items-center p-2 text-neutral-700 hover:text-red-600">
                     <User className="w-5 h-5"/>
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent className="bg-[#141414] border-[#262626] text-white">
+                <DropdownMenuContent>
                   <DropdownMenuLabel>Hi, {user.name}</DropdownMenuLabel>
-                  <DropdownMenuSeparator className="bg-[#262626]"/>
+                  <DropdownMenuSeparator/>
                   {user.role === "admin" ? (
                     <DropdownMenuItem data-testid="menu-admin" onClick={() => navigate("/admin")}>Admin Dashboard</DropdownMenuItem>
                   ) : (
                     <DropdownMenuItem data-testid="menu-orders" onClick={() => navigate("/my-orders")}>My Orders</DropdownMenuItem>
                   )}
-                  <DropdownMenuItem data-testid="menu-logout" onClick={() => { logout(); navigate("/"); }}>
-                    <LogOut className="w-4 h-4 mr-2"/> Logout
-                  </DropdownMenuItem>
+                  <DropdownMenuItem data-testid="menu-logout" onClick={() => { logout(); navigate("/"); }}><LogOut className="w-4 h-4 mr-2"/> Logout</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-            ) : (
-              <Button data-testid="login-btn-header" onClick={() => navigate("/login")} className="bg-red-500 hover:bg-red-600 text-white rounded-lg">
-                Login
-              </Button>
-            )}
-
-            <button className="lg:hidden p-2.5" onClick={() => setMobileOpen(!mobileOpen)} data-testid="mobile-menu-toggle">
+            ) : null}
+            <button className="lg:hidden p-2 text-neutral-700" onClick={() => setMobileOpen(!mobileOpen)} data-testid="mobile-menu-toggle">
               {mobileOpen ? <X className="w-5 h-5"/> : <Menu className="w-5 h-5"/>}
             </button>
           </div>
         </div>
 
-        {mobileOpen && (
-          <div className="lg:hidden border-t border-[#262626] bg-[#0A0A0A]">
-            <div className="px-6 py-4 flex flex-col gap-1">
-              {navLinks.map((l) => (
-                <Link key={l.to} to={l.to} onClick={() => setMobileOpen(false)}
-                  className="px-3 py-2.5 text-sm text-neutral-300 hover:text-white hover:bg-white/5 rounded">
-                  {l.label}
-                </Link>
-              ))}
-            </div>
-          </div>
-        )}
+        {/* Mobile search bar */}
+        <div className="md:hidden px-4 pb-3">
+          <form onSubmit={submitSearch} className="relative">
+            <Input
+              data-testid="mobile-search"
+              placeholder="Search products..."
+              value={searchQ}
+              onChange={(e) => setSearchQ(e.target.value)}
+              className="h-10 pr-10 border-2 border-neutral-300 focus:border-red-600 rounded-md"
+            />
+            <button type="submit" className="absolute right-0 top-0 h-10 w-10 grid place-items-center bg-red-600 text-white rounded-r-md">
+              <Search className="w-4 h-4"/>
+            </button>
+          </form>
+        </div>
       </header>
+
+      {/* Dark main nav */}
+      <nav className="hidden lg:block bg-[#1A1A1A] text-white border-t border-neutral-800">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="flex items-center justify-center gap-1">
+            {navLinks.map((l) => (
+              <NavLink
+                key={l.to}
+                to={l.to}
+                end={l.to === "/"}
+                data-testid={`nav-${l.label.toLowerCase().replace(/ /g, "-")}`}
+                className={({ isActive }) =>
+                  `relative px-5 py-3.5 text-xs font-bold uppercase tracking-wider transition group whitespace-nowrap ${
+                    isActive ? "text-red-500" : "text-white hover:text-red-500"
+                  }`
+                }
+              >
+                {l.label}
+                <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-0 group-hover:w-full h-0.5 bg-red-500 transition-all"/>
+              </NavLink>
+            ))}
+          </div>
+        </div>
+      </nav>
+
+      {/* Mobile nav drawer */}
+      {mobileOpen && (
+        <div className="lg:hidden bg-[#1A1A1A] text-white">
+          <div className="px-4 py-2 flex flex-col">
+            {navLinks.map((l) => (
+              <Link key={l.to} to={l.to} onClick={() => setMobileOpen(false)} className="px-3 py-3 text-sm font-bold uppercase tracking-wider border-b border-neutral-800 hover:text-red-500">
+                {l.label}
+              </Link>
+            ))}
+            {!user && (
+              <Link to="/login" onClick={() => setMobileOpen(false)} className="px-3 py-3 text-sm font-bold uppercase text-red-500">Login / Sign Up</Link>
+            )}
+            {user && (
+              <>
+                <Link to={user.role === "admin" ? "/admin" : "/my-orders"} onClick={() => setMobileOpen(false)} className="px-3 py-3 text-sm font-bold uppercase border-b border-neutral-800">
+                  {user.role === "admin" ? "Admin Dashboard" : "My Orders"}
+                </Link>
+                <button onClick={() => { logout(); setMobileOpen(false); navigate("/"); }} className="px-3 py-3 text-left text-sm font-bold uppercase text-red-500">Logout</button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       <main className="min-h-[60vh]">{children}</main>
 
-      <footer className="mt-32 bg-[#0A0A0A] border-t border-[#262626]">
-        <div className="max-w-7xl mx-auto px-6 py-16 grid md:grid-cols-4 gap-10">
+      {/* Footer */}
+      <footer className="mt-20 bg-[#1A1A1A] text-white">
+        <div className="max-w-7xl mx-auto px-6 py-14 grid md:grid-cols-2 lg:grid-cols-4 gap-10">
           <div>
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-red-500 to-red-700 grid place-items-center font-black">C</div>
-              <span className="font-display text-2xl font-black">CarDost</span>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-white rounded grid place-items-center font-anton text-red-600 text-2xl border-2 border-red-600">C</div>
+              <div className="font-anton text-2xl">CAR<span className="text-red-500">DOST</span></div>
             </div>
-            <p className="text-sm text-neutral-400 leading-relaxed">
-              Premium car audio, Android stereos & accessories. Engineered for drivers who demand more from every drive.
+            <p className="text-sm text-neutral-400 leading-relaxed mb-4">
+              India&apos;s trusted destination for premium car audio, Android stereos, speakers and accessories. Best prices guaranteed.
             </p>
+            <div className="space-y-1.5 text-xs text-neutral-400">
+              <a href="tel:+919063278724" className="flex gap-2 items-center hover:text-red-400"><Phone className="w-3.5 h-3.5"/>+91 90632 78724</a>
+              <a href="mailto:Autobotscarstudio@gmail.com" className="flex gap-2 items-center hover:text-red-400 break-all"><Mail className="w-3.5 h-3.5"/>Autobotscarstudio@gmail.com</a>
+            </div>
           </div>
           <div>
-            <div className="text-xs uppercase tracking-[0.2em] text-neutral-500 mb-4">Shop</div>
-            <ul className="space-y-2 text-sm text-neutral-400">
+            <div className="font-display text-base font-bold uppercase tracking-wider mb-4 text-red-500">Shop</div>
+            <ul className="space-y-2 text-sm text-neutral-300">
               <li><Link to="/shop?category=android-stereos" className="hover:text-red-400">Android Stereos</Link></li>
               <li><Link to="/shop?category=speakers" className="hover:text-red-400">Speakers</Link></li>
               <li><Link to="/shop?category=amplifiers" className="hover:text-red-400">Amplifiers</Link></li>
               <li><Link to="/shop?category=dash-cameras" className="hover:text-red-400">Dash Cameras</Link></li>
               <li><Link to="/shop?category=led-lights" className="hover:text-red-400">LED Lights</Link></li>
+              <li><Link to="/shop?category=perfumes" className="hover:text-red-400">Air Fresheners</Link></li>
+              <li><Link to="/shop?category=accessories" className="hover:text-red-400">Accessories</Link></li>
             </ul>
           </div>
           <div>
-            <div className="text-xs uppercase tracking-[0.2em] text-neutral-500 mb-4">Company</div>
-            <ul className="space-y-2 text-sm text-neutral-400">
-              <li><Link to="/contact" className="hover:text-red-400">Contact</Link></li>
-              <li><Link to="/shop" className="hover:text-red-400">All Products</Link></li>
+            <div className="font-display text-base font-bold uppercase tracking-wider mb-4 text-red-500">Customer Care</div>
+            <ul className="space-y-2 text-sm text-neutral-300">
+              <li><Link to="/contact" className="hover:text-red-400">Contact Us</Link></li>
+              <li><Link to="/my-orders" className="hover:text-red-400">Track Order</Link></li>
+              <li><Link to="/contact" className="hover:text-red-400">Return Policy</Link></li>
+              <li><Link to="/contact" className="hover:text-red-400">Shipping Info</Link></li>
+              <li><Link to="/contact" className="hover:text-red-400">FAQ</Link></li>
             </ul>
           </div>
           <div>
-            <div className="text-xs uppercase tracking-[0.2em] text-neutral-500 mb-4">Contact</div>
-            <ul className="space-y-3 text-sm text-neutral-400">
-              <li className="flex gap-2"><Phone className="w-4 h-4 text-red-500 shrink-0 mt-0.5"/>+91 90632 78724</li>
-              <li className="flex gap-2"><Mail className="w-4 h-4 text-red-500 shrink-0 mt-0.5"/>Autobotscarstudio@gmail.com</li>
-              <li className="flex gap-2"><MapPin className="w-4 h-4 text-red-500 shrink-0 mt-0.5"/>India</li>
-            </ul>
+            <div className="font-display text-base font-bold uppercase tracking-wider mb-4 text-red-500">Stay Connected</div>
+            <p className="text-xs text-neutral-400 mb-3">Subscribe for exclusive deals & launches.</p>
+            <form className="flex gap-2 mb-5">
+              <Input type="email" placeholder="Your email" className="bg-neutral-900 border-neutral-700 text-white h-10 text-sm" data-testid="newsletter-input"/>
+              <Button type="button" className="bg-red-600 hover:bg-red-700 h-10 px-4 text-xs font-bold">JOIN</Button>
+            </form>
+            <div className="flex gap-2 text-[10px] text-neutral-400">
+              <span className="bg-neutral-800 px-2 py-1 rounded">VISA</span>
+              <span className="bg-neutral-800 px-2 py-1 rounded">MC</span>
+              <span className="bg-neutral-800 px-2 py-1 rounded">UPI</span>
+              <span className="bg-neutral-800 px-2 py-1 rounded">COD</span>
+              <span className="bg-neutral-800 px-2 py-1 rounded">RAZORPAY</span>
+            </div>
           </div>
         </div>
-        <div className="border-t border-[#262626] px-6 py-6 text-xs text-neutral-500 text-center">
-          © 2026 CarDost. All rights reserved. • Engineered with passion for car audio.
+        <div className="border-t border-neutral-800">
+          <div className="max-w-7xl mx-auto px-6 py-5 flex flex-col sm:flex-row justify-between gap-2 text-xs text-neutral-500">
+            <div>© 2026 CarDost. All rights reserved.</div>
+            <div>Made with ❤️ in India · Secure checkout by Razorpay</div>
+          </div>
         </div>
       </footer>
+
+      {/* Floating WhatsApp */}
+      <a href="https://wa.me/919063278724?text=Hello%20CarDost%2C%20I%27d%20like%20to%20enquire" target="_blank" rel="noopener noreferrer" data-testid="whatsapp-fab"
+         className="fixed bottom-20 lg:bottom-6 right-4 lg:right-6 z-50 w-14 h-14 rounded-full bg-green-500 hover:bg-green-600 grid place-items-center shadow-lg animate-float">
+        <MessageCircle className="w-7 h-7 text-white fill-white"/>
+      </a>
+
+      {/* Mobile bottom nav */}
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-neutral-200 grid grid-cols-4 z-40">
+        <Link to="/" className="flex flex-col items-center py-2.5 text-[10px] text-neutral-700 hover:text-red-600" data-testid="mob-home">
+          <HomeIcon className="w-5 h-5 mb-0.5"/> HOME
+        </Link>
+        <Link to="/shop" className="flex flex-col items-center py-2.5 text-[10px] text-neutral-700 hover:text-red-600" data-testid="mob-shop">
+          <Grid className="w-5 h-5 mb-0.5"/> CATEGORY
+        </Link>
+        <Link to="/cart" className="relative flex flex-col items-center py-2.5 text-[10px] text-neutral-700 hover:text-red-600" data-testid="mob-cart">
+          <ShoppingCart className="w-5 h-5 mb-0.5"/> CART
+          {count > 0 && <span className="absolute top-1 right-6 bg-red-600 text-white text-[9px] font-bold w-4 h-4 rounded-full grid place-items-center">{count}</span>}
+        </Link>
+        <a href="https://wa.me/919063278724" target="_blank" rel="noopener noreferrer" className="flex flex-col items-center py-2.5 text-[10px] text-neutral-700 hover:text-green-600" data-testid="mob-whatsapp">
+          <MessageCircle className="w-5 h-5 mb-0.5"/> WHATSAPP
+        </a>
+      </div>
+      <div className="lg:hidden h-14"/>
     </div>
   );
 }

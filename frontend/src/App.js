@@ -39,7 +39,7 @@ export default function App() {
                 <Route path="/contact" element={<Contact />} />
               </Routes>
             </Layout>
-            <Toaster position="top-right" theme="dark" toastOptions={{ style: { background: "#141414", border: "1px solid #262626", color: "#fff" } }}/>
+            <Toaster position="top-right" theme="light" richColors/>
           </CartProvider>
         </AuthProvider>
       </BrowserRouter>

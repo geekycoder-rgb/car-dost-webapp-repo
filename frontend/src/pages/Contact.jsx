@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Phone, Mail, MapPin } from "lucide-react";
+import { Phone, Mail, MapPin, MessageCircle, Clock } from "lucide-react";
 import { toast } from "sonner";
 
 export default function Contact() {
@@ -12,55 +12,51 @@ export default function Contact() {
   const [loading, setLoading] = useState(false);
 
   const submit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      await api.post("/contact", form);
-      toast.success("Message sent! We'll reach out soon.");
-      setForm({ name: "", email: "", phone: "", message: "" });
-    } catch {
-      toast.error("Failed to send");
-    } finally {
-      setLoading(false);
-    }
+    e.preventDefault(); setLoading(true);
+    try { await api.post("/contact", form); toast.success("Message sent! We'll reach out soon."); setForm({ name: "", email: "", phone: "", message: "" }); }
+    catch { toast.error("Failed to send"); } finally { setLoading(false); }
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-16">
-      <div className="text-xs uppercase tracking-[0.3em] text-red-500 mb-3">Get in Touch</div>
-      <h1 className="font-display text-4xl lg:text-6xl font-black tracking-tighter mb-12">Contact Us</h1>
-      <div className="grid lg:grid-cols-2 gap-12">
-        <div className="space-y-6">
-          <div className="bg-[#141414] border border-[#262626] rounded-xl p-6 flex gap-4">
-            <Phone className="w-6 h-6 text-red-500"/>
-            <div>
-              <div className="text-xs uppercase tracking-wider text-neutral-500 mb-1">Phone</div>
-              <a href="tel:+919063278724" className="font-display text-xl font-bold hover:text-red-400">+91 90632 78724</a>
-            </div>
-          </div>
-          <div className="bg-[#141414] border border-[#262626] rounded-xl p-6 flex gap-4">
-            <Mail className="w-6 h-6 text-red-500"/>
-            <div>
-              <div className="text-xs uppercase tracking-wider text-neutral-500 mb-1">Email</div>
-              <a href="mailto:Autobotscarstudio@gmail.com" className="font-display text-base font-bold hover:text-red-400 break-all">Autobotscarstudio@gmail.com</a>
-            </div>
-          </div>
-          <div className="bg-[#141414] border border-[#262626] rounded-xl p-6 flex gap-4">
-            <MapPin className="w-6 h-6 text-red-500"/>
-            <div>
-              <div className="text-xs uppercase tracking-wider text-neutral-500 mb-1">Studio</div>
-              <div className="font-display text-base font-bold">Autobots Car Studio, India</div>
-              <div className="text-sm text-neutral-400 mt-1">Open Mon–Sun, 10AM – 9PM</div>
-            </div>
-          </div>
+    <div className="bg-white">
+      <div className="bg-neutral-50 border-b border-neutral-200 py-10">
+        <div className="max-w-7xl mx-auto px-6 text-center">
+          <div className="text-xs uppercase tracking-[0.3em] text-red-600 font-bold mb-2">Get In Touch</div>
+          <h1 className="font-display text-3xl lg:text-4xl font-bold uppercase">Contact Us</h1>
+          <p className="text-sm text-neutral-500 mt-2 max-w-2xl mx-auto">Have questions about our products or installation? Our sound experts are here to help — 24/7.</p>
         </div>
-        <form onSubmit={submit} className="bg-[#141414] border border-[#262626] rounded-xl p-8 space-y-4">
-          <h2 className="font-display text-2xl font-bold mb-2">Send a message</h2>
-          <div><Label>Name</Label><Input data-testid="contact-name" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="bg-[#0A0A0A] border-[#262626] mt-1"/></div>
-          <div><Label>Email</Label><Input data-testid="contact-email" type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="bg-[#0A0A0A] border-[#262626] mt-1"/></div>
-          <div><Label>Phone</Label><Input data-testid="contact-phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="bg-[#0A0A0A] border-[#262626] mt-1"/></div>
-          <div><Label>Message</Label><Textarea data-testid="contact-message" required rows={5} value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} className="bg-[#0A0A0A] border-[#262626] mt-1"/></div>
-          <Button data-testid="contact-submit" disabled={loading} type="submit" className="w-full bg-red-500 hover:bg-red-600 py-6">{loading ? "Sending..." : "Send Message"}</Button>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-6 py-14 grid lg:grid-cols-2 gap-10">
+        <div className="space-y-4">
+          {[
+            { icon: Phone, label: "Phone", value: "+91 90632 78724", href: "tel:+919063278724" },
+            { icon: Mail, label: "Email", value: "Autobotscarstudio@gmail.com", href: "mailto:Autobotscarstudio@gmail.com" },
+            { icon: MessageCircle, label: "WhatsApp", value: "Chat with us instantly", href: "https://wa.me/919063278724" },
+            { icon: MapPin, label: "Studio", value: "Autobots Car Studio, India" },
+            { icon: Clock, label: "Hours", value: "Mon – Sun · 10 AM – 9 PM" },
+          ].map((c, i) => (
+            <a key={i} href={c.href} target={c.href?.startsWith("http") ? "_blank" : undefined} rel="noopener noreferrer"
+               className="bg-white border border-neutral-200 hover:border-red-500 rounded-md p-5 flex gap-4 transition group">
+              <div className="w-11 h-11 rounded-full bg-red-50 grid place-items-center text-red-600 shrink-0 group-hover:bg-red-600 group-hover:text-white transition">
+                <c.icon className="w-5 h-5"/>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-[0.15em] text-neutral-500 font-bold mb-0.5">{c.label}</div>
+                <div className="font-semibold text-sm text-neutral-900 group-hover:text-red-600">{c.value}</div>
+              </div>
+            </a>
+          ))}
+        </div>
+
+        <form onSubmit={submit} className="bg-white border border-neutral-200 rounded-md p-8 space-y-4 h-fit">
+          <h2 className="font-display text-xl font-bold uppercase mb-1">Send a Message</h2>
+          <p className="text-xs text-neutral-500 mb-4">We typically reply within a few hours.</p>
+          <div><Label className="text-xs uppercase font-bold text-neutral-700">Name *</Label><Input data-testid="contact-name" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="border-neutral-300 mt-1.5"/></div>
+          <div><Label className="text-xs uppercase font-bold text-neutral-700">Email *</Label><Input data-testid="contact-email" type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="border-neutral-300 mt-1.5"/></div>
+          <div><Label className="text-xs uppercase font-bold text-neutral-700">Phone</Label><Input data-testid="contact-phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="border-neutral-300 mt-1.5"/></div>
+          <div><Label className="text-xs uppercase font-bold text-neutral-700">Message *</Label><Textarea data-testid="contact-message" required rows={5} value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} className="border-neutral-300 mt-1.5"/></div>
+          <Button data-testid="contact-submit" disabled={loading} type="submit" className="w-full bg-red-600 hover:bg-red-700 py-6 font-bold uppercase tracking-wider text-xs">{loading ? "Sending..." : "Send Message"}</Button>
         </form>
       </div>
     </div>
