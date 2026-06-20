@@ -15,6 +15,9 @@ import MyOrders from "@/pages/MyOrders";
 import AdminLogin from "@/pages/AdminLogin";
 import AdminDashboard from "@/pages/AdminDashboard";
 import OrderDetail from "@/pages/OrderDetail";
+import Reviews from "@/pages/Reviews";
+import About from "@/pages/About";
+import FAQ from "@/pages/FAQ";
 import Contact from "@/pages/Contact";
 
 export default function App() {
@@ -34,6 +37,9 @@ export default function App() {
                 <Route path="/signup" element={<Signup />} />
                 <Route path="/my-orders" element={<MyOrders />} />
                 <Route path="/order/:id" element={<OrderDetail />} />
+                <Route path="/reviews" element={<Reviews />} />
+                <Route path="/about" element={<About />} />
+                <Route path="/faq" element={<FAQ />} />
                 <Route path="/admin/login" element={<AdminLogin />} />
                 <Route path="/admin" element={<AdminDashboard />} />
                 <Route path="/contact" element={<Contact />} />

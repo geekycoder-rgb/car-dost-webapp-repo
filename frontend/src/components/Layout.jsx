@@ -30,9 +30,9 @@ export default function Layout({ children }) {
     { to: "/shop?category=speakers", label: "Speakers" },
     { to: "/shop?category=amplifiers", label: "Amplifiers" },
     { to: "/shop?category=dash-cameras", label: "Dash Cams" },
-    { to: "/shop?category=led-lights", label: "LED Lights" },
-    { to: "/shop?category=perfumes", label: "Perfumes" },
-    { to: "/shop?category=accessories", label: "Accessories" },
+    { to: "/reviews", label: "Reviews" },
+    { to: "/about", label: "About" },
+    { to: "/faq", label: "FAQ" },
     { to: "/contact", label: "Contact" },
   ];
 
@@ -240,11 +240,13 @@ export default function Layout({ children }) {
           <div>
             <div className="font-display text-base font-bold uppercase tracking-wider mb-4 text-indigo-500">Customer Care</div>
             <ul className="space-y-2 text-sm text-neutral-300">
+              <li><Link to="/about" className="hover:text-indigo-400">About Us</Link></li>
+              <li><Link to="/reviews" className="hover:text-indigo-400">Reviews</Link></li>
+              <li><Link to="/faq" className="hover:text-indigo-400">FAQ</Link></li>
               <li><Link to="/contact" className="hover:text-indigo-400">Contact Us</Link></li>
               <li><Link to="/my-orders" className="hover:text-indigo-400">Track Order</Link></li>
-              <li><Link to="/contact" className="hover:text-indigo-400">Return Policy</Link></li>
-              <li><Link to="/contact" className="hover:text-indigo-400">Shipping Info</Link></li>
-              <li><Link to="/contact" className="hover:text-indigo-400">FAQ</Link></li>
+              <li><Link to="/faq" className="hover:text-indigo-400">Return Policy</Link></li>
+              <li><Link to="/faq" className="hover:text-indigo-400">Shipping Info</Link></li>
             </ul>
           </div>
           <div>

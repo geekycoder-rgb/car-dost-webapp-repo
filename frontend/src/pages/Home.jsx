@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "@/lib/api";
 import ProductCard from "@/components/ProductCard";
-import { ChevronLeft, ChevronRight, Truck, Shield, Headphones, Award, Package, RotateCcw, ChevronDown } from "lucide-react";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import ReviewsBanner from "@/components/ReviewsBanner";
+import { ChevronLeft, ChevronRight, Truck, Shield, Headphones, RotateCcw } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
 const HERO_SLIDES = [
@@ -232,6 +232,9 @@ export default function Home() {
         </section>
       )}
 
+      {/* CUSTOMER REVIEWS BANNER */}
+      <ReviewsBanner/>
+
       {/* BRAND STRIP */}
       <section className="bg-neutral-50 border-y border-neutral-200 py-10">
         <div className="max-w-7xl mx-auto px-6">
@@ -252,13 +255,16 @@ export default function Home() {
         <div className="grid lg:grid-cols-2 gap-10 items-center">
           <div>
             <div className="text-xs uppercase tracking-[0.3em] text-indigo-600 font-bold mb-3">About CarDost</div>
-            <h2 className="font-display text-3xl lg:text-4xl font-bold uppercase mb-4">India&apos;s Premium <span className="text-indigo-600">Car Audio Studio</span></h2>
-            <p className="text-neutral-600 leading-relaxed mb-3 text-sm">
+            <h2 className="font-display text-3xl lg:text-4xl font-bold text-stone-950 mb-4">India&apos;s Premium <span className="text-indigo-600">Car Audio Studio</span></h2>
+            <p className="text-stone-600 leading-relaxed mb-3 text-sm">
               CarDost has been established to deliver India&apos;s finest car audio and accessory shopping experience. Trusted by thousands of drivers across the country for premium quality, expert installation, and best prices guaranteed.
             </p>
-            <p className="text-neutral-600 leading-relaxed text-sm">
+            <p className="text-stone-600 leading-relaxed text-sm mb-5">
               Every product on CarDost is hand-picked by our audio engineers — from flagship Android stereos with CarPlay to subwoofers that shake the streets. Drive Loud. Drive Smart.
             </p>
+            <Link to="/about" data-testid="read-about-link" className="inline-flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-indigo-600 hover:text-indigo-700">
+              Read Our Full Story →
+            </Link>
           </div>
           <div className="grid grid-cols-2 gap-4">
             {[
@@ -267,30 +273,35 @@ export default function Home() {
               { stat: "10,000+", label: "Happy Customers" },
               { stat: "100%", label: "Trusted Quality" },
             ].map((s, i) => (
-              <div key={i} className="text-center p-6 bg-neutral-50 rounded-md border border-neutral-200">
+              <div key={i} className="text-center p-6 bg-stone-50 rounded-2xl border border-stone-200">
                 <div className="font-anton text-4xl text-indigo-600 mb-1">{s.stat}</div>
-                <div className="text-xs uppercase tracking-wider font-bold text-neutral-700">{s.label}</div>
+                <div className="text-xs uppercase tracking-wider font-bold text-stone-700">{s.label}</div>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* FAQ */}
-      <section className="bg-neutral-50 border-y border-neutral-200">
+      {/* FAQ Teaser */}
+      <section className="bg-stone-50 border-y border-stone-200">
         <div className="max-w-3xl mx-auto px-6 py-16">
           <div className="text-center mb-10">
             <div className="text-xs uppercase tracking-[0.3em] text-indigo-600 font-bold mb-3">Help Center</div>
-            <h2 className="font-display text-3xl lg:text-4xl font-bold uppercase">Frequently Asked Questions</h2>
+            <h2 className="font-display text-3xl lg:text-4xl font-bold text-stone-950">Frequently Asked Questions</h2>
           </div>
           <Accordion type="single" collapsible className="space-y-3">
-            {FAQS.map((f, i) => (
-              <AccordionItem key={i} value={`item-${i}`} className="bg-white border border-neutral-200 rounded-md px-5 [&[data-state=open]]:border-indigo-500">
-                <AccordionTrigger data-testid={`faq-${i}`} className="text-left font-semibold text-sm hover:no-underline py-4 text-neutral-900">{f.q}</AccordionTrigger>
-                <AccordionContent className="text-sm text-neutral-600 leading-relaxed pb-4">{f.a}</AccordionContent>
+            {FAQS.slice(0, 3).map((f, i) => (
+              <AccordionItem key={i} value={`item-${i}`} className="bg-white border border-stone-200 rounded-2xl px-5 [&[data-state=open]]:border-indigo-400 [&[data-state=open]]:shadow-sm">
+                <AccordionTrigger data-testid={`faq-${i}`} className="text-left font-semibold text-sm hover:no-underline py-4 text-stone-950">{f.q}</AccordionTrigger>
+                <AccordionContent className="text-sm text-stone-600 leading-relaxed pb-4">{f.a}</AccordionContent>
               </AccordionItem>
             ))}
           </Accordion>
+          <div className="text-center mt-8">
+            <Link to="/faq" data-testid="all-faqs-link" className="inline-flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-indigo-600 hover:text-indigo-700">
+              View All FAQs →
+            </Link>
+          </div>
         </div>
       </section>
 
