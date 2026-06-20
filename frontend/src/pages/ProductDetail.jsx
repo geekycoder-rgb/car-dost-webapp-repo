@@ -4,6 +4,7 @@ import { api, formatINR, resolveImg } from "@/lib/api";
 import { Star, Plus, Minus, ShoppingCart, Truck, Shield, RotateCcw, Heart, Share2, CheckCircle2 } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { toast } from "sonner";
+import ProductReviews from "@/components/ProductReviews";
 
 export default function ProductDetail() {
   const { id } = useParams();
@@ -11,11 +12,15 @@ export default function ProductDetail() {
   const { add } = useCart();
   const [product, setProduct] = useState(null);
   const [qty, setQty] = useState(1);
+  const [activeImg, setActiveImg] = useState(null);
 
-  useEffect(() => { api.get(`/products/${id}`).then((r) => setProduct(r.data)).catch(() => navigate("/shop")); }, [id, navigate]);
+  useEffect(() => {
+    api.get(`/products/${id}`).then((r) => { setProduct(r.data); setActiveImg(r.data.image); }).catch(() => navigate("/shop"));
+  }, [id, navigate]);
 
-  if (!product) return <div className="max-w-7xl mx-auto px-6 py-20 text-neutral-500">Loading...</div>;
+  if (!product) return <div className="max-w-7xl mx-auto px-6 py-20 text-stone-500">Loading...</div>;
   const off = product.original_price ? Math.round(100 - (product.price / product.original_price) * 100) : 0;
+  const gallery = [product.image, ...(product.gallery || [])].filter(Boolean);
 
   return (
     <div className="bg-white">
@@ -27,8 +32,38 @@ export default function ProductDetail() {
 
       <div className="max-w-7xl mx-auto px-6 py-10">
         <div className="grid md:grid-cols-2 gap-10">
-          <div className="bg-neutral-50 border border-neutral-200 rounded-md overflow-hidden">
-            <img src={resolveImg(product.image)} alt={product.name} className="w-full aspect-square object-cover"/>
+          <div className="space-y-3">
+            <div className="bg-stone-50 border border-stone-200 rounded-2xl overflow-hidden">
+              <img src={resolveImg(activeImg || product.image)} alt={product.name} className="w-full aspect-square object-cover"/>
+            </div>
+            {gallery.length > 1 && (
+              <div className="grid grid-cols-5 gap-2">
+                {gallery.map((img, i) => (
+                  <button key={i} onClick={() => setActiveImg(img)} data-testid={`gallery-${i}`}
+                          className={`aspect-square rounded-lg overflow-hidden border-2 transition ${activeImg === img ? "border-indigo-600" : "border-stone-200 hover:border-stone-400"}`}>
+                    <img src={resolveImg(img)} alt="" className="w-full h-full object-cover"/>
+                  </button>
+                ))}
+              </div>
+            )}
+            {(product.car_brands?.length > 0 || product.years?.length > 0) && (
+              <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4">
+                <div className="text-[10px] uppercase tracking-wider font-bold text-indigo-700 mb-2">Compatible With</div>
+                {product.car_brands?.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {product.car_brands.map((b) => <span key={b} className="text-[11px] bg-white border border-indigo-200 px-2 py-0.5 rounded font-medium">{b}</span>)}
+                  </div>
+                )}
+                {product.car_models?.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {product.car_models.map((m) => <span key={m} className="text-[11px] bg-white border border-stone-200 px-2 py-0.5 rounded text-stone-700">{m}</span>)}
+                  </div>
+                )}
+                {product.years?.length > 0 && (
+                  <div className="text-[11px] text-stone-600">Years: {[...product.years].sort().join(", ")}</div>
+                )}
+              </div>
+            )}
           </div>
           <div className="space-y-5">
             {product.brand && <div className="text-xs uppercase tracking-[0.3em] text-indigo-600 font-bold">{product.brand}</div>}
@@ -103,6 +138,8 @@ export default function ProductDetail() {
             </div>
           </div>
         </div>
+
+        <ProductReviews productId={product.id}/>
       </div>
     </div>
   );

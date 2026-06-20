@@ -10,10 +10,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
-import { Plus, Edit, Trash2, ShoppingCart, Package, DollarSign, Users, Upload, Loader2, FileText, ExternalLink } from "lucide-react";
+import { Plus, Edit, Trash2, ShoppingCart, Package, DollarSign, Users, Upload, Loader2, FileText, ExternalLink, X, Settings as SettingsIcon } from "lucide-react";
 import { toast } from "sonner";
+import AdminSettings from "@/components/AdminSettings";
 
-const EMPTY_P = { name: "", description: "", price: "", original_price: "", category: "android-stereos", brand: "", image: "", stock: 50, rating: 4.5, featured: false };
+const EMPTY_P = { name: "", description: "", price: "", original_price: "", category: "android-stereos", brand: "", image: "", gallery: [], stock: 50, rating: 4.5, featured: false, discount_percent: 0, discount_flat: 0, gst_percent: 18, tags: [], car_brands: [], car_models: [], years: [] };
 
 export default function AdminDashboard() {
   const { user, loading } = useAuth();
@@ -29,13 +30,34 @@ export default function AdminDashboard() {
   const csvInputRef = useRef(null);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
+  const [carBrands, setCarBrands] = useState([]);
+  const [carModelsByBrand, setCarModelsByBrand] = useState({});
+  const [yearList, setYearList] = useState([]);
+  const [tagInput, setTagInput] = useState("");
+  const galleryRef = useRef(null);
 
   const loadAll = () => {
     api.get("/admin/stats").then((r) => setStats(r.data)).catch(() => {});
     api.get("/products").then((r) => setProducts(r.data));
     api.get("/admin/orders").then((r) => setOrders(r.data)).catch(() => {});
     api.get("/categories").then((r) => setCats(r.data));
+    api.get("/catalog/car-brands").then((r) => setCarBrands(r.data));
+    api.get("/catalog/years").then((r) => setYearList(r.data));
   };
+
+  // Load models when car_brands change in form
+  useEffect(() => {
+    if (form.car_brands?.length > 0) {
+      api.get("/catalog/car-models", { params: { brand: form.car_brands.join(",") } })
+        .then((r) => {
+          const byBrand = {};
+          r.data.forEach((m) => { (byBrand[m.brand] = byBrand[m.brand] || []).push(m.model); });
+          setCarModelsByBrand(byBrand);
+        });
+    } else {
+      setCarModelsByBrand({});
+    }
+  }, [form.car_brands]);
 
   useEffect(() => { if (user?.role === "admin") loadAll(); }, [user]);
 
@@ -53,6 +75,14 @@ export default function AdminDashboard() {
         original_price: form.original_price ? parseFloat(form.original_price) : null,
         stock: parseInt(form.stock),
         rating: parseFloat(form.rating),
+        discount_percent: parseFloat(form.discount_percent || 0),
+        discount_flat: parseFloat(form.discount_flat || 0),
+        gst_percent: parseInt(form.gst_percent || 18),
+        gallery: form.gallery || [],
+        tags: form.tags || [],
+        car_brands: form.car_brands || [],
+        car_models: form.car_models || [],
+        years: (form.years || []).map((y) => parseInt(y)),
       };
       if (editing) { await api.put(`/admin/products/${editing.id}`, payload); toast.success("Product updated"); }
       else { await api.post("/admin/products", payload); toast.success("Product created"); }
@@ -68,16 +98,44 @@ export default function AdminDashboard() {
     await api.delete(`/admin/products/${id}`); toast.success("Deleted"); loadAll();
   };
 
-  const uploadImage = async (e) => {
-    const file = e.target.files?.[0]; if (!file) return;
-    if (file.size > 5 * 1024 * 1024) { toast.error("Max 5MB"); return; }
+  const uploadImage = async (e, targetField = "image") => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
     setUploading(true);
     try {
-      const fd = new FormData(); fd.append("file", file);
-      const { data } = await api.post("/admin/upload", fd, { headers: { "Content-Type": "multipart/form-data" } });
-      setForm((f) => ({ ...f, image: data.url })); toast.success("Image uploaded");
-    } catch (err) { const d = err.response?.data?.detail; toast.error(typeof d === "string" ? d : "Upload failed"); }
-    finally { setUploading(false); if (fileInputRef.current) fileInputRef.current.value = ""; }
+      const uploaded = [];
+      for (const file of files) {
+        if (file.size > 5 * 1024 * 1024) { toast.error(`${file.name}: max 5MB`); continue; }
+        const fd = new FormData(); fd.append("file", file);
+        const { data } = await api.post("/admin/upload", fd, { headers: { "Content-Type": "multipart/form-data" } });
+        uploaded.push(data.url);
+      }
+      if (targetField === "image" && uploaded.length > 0) {
+        setForm((f) => ({ ...f, image: uploaded[0], gallery: [...(f.gallery || []), ...uploaded.slice(1)] }));
+      } else if (targetField === "gallery") {
+        setForm((f) => ({ ...f, gallery: [...(f.gallery || []), ...uploaded] }));
+      }
+      toast.success(`${uploaded.length} image(s) uploaded`);
+    } catch (err) {
+      const d = err.response?.data?.detail;
+      toast.error(typeof d === "string" ? d : "Upload failed");
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      if (galleryRef.current) galleryRef.current.value = "";
+    }
+  };
+
+  const toggleArrItem = (key, val) => setForm((f) => {
+    const arr = f[key] || [];
+    return { ...f, [key]: arr.includes(val) ? arr.filter((x) => x !== val) : [...arr, val] };
+  });
+
+  const addTag = () => {
+    const t = tagInput.trim();
+    if (!t) return;
+    if (!(form.tags || []).includes(t)) setForm({ ...form, tags: [...(form.tags || []), t] });
+    setTagInput("");
   };
 
   const updateOrderStatus = async (oid, status) => {
@@ -134,9 +192,10 @@ export default function AdminDashboard() {
         )}
 
         <Tabs defaultValue="products">
-          <TabsList className="bg-white border border-neutral-200">
+          <TabsList className="bg-white border border-stone-200">
             <TabsTrigger value="products" data-testid="tab-products">Products</TabsTrigger>
             <TabsTrigger value="orders" data-testid="tab-orders">Orders</TabsTrigger>
+            <TabsTrigger value="settings" data-testid="tab-settings"><SettingsIcon className="w-4 h-4 mr-1.5"/> Integrations</TabsTrigger>
           </TabsList>
 
           <TabsContent value="products">
@@ -244,40 +303,167 @@ export default function AdminDashboard() {
               </Table>
             </div>
           </TabsContent>
+
+          <TabsContent value="settings">
+            <AdminSettings/>
+          </TabsContent>
         </Tabs>
       </div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="bg-white max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle className="font-display uppercase">{editing ? "Edit" : "New"} Product</DialogTitle></DialogHeader>
+        <DialogContent className="bg-white max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle className="font-display text-xl">{editing ? "Edit" : "New"} Product</DialogTitle></DialogHeader>
           <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2"><Label>Name</Label><Input data-testid="p-name" value={form.name} onChange={c("name")} className="mt-1"/></div>
-            <div className="col-span-2"><Label>Description</Label><Textarea value={form.description} onChange={c("description")} className="mt-1"/></div>
-            <div><Label>Price (₹)</Label><Input type="number" value={form.price} onChange={c("price")} className="mt-1"/></div>
-            <div><Label>Original Price (₹)</Label><Input type="number" value={form.original_price} onChange={c("original_price")} className="mt-1"/></div>
+            <div className="col-span-2"><Label className="text-xs uppercase font-bold">Name *</Label><Input data-testid="p-name" value={form.name} onChange={c("name")} className="mt-1"/></div>
+            <div className="col-span-2"><Label className="text-xs uppercase font-bold">Description *</Label><Textarea rows={5} value={form.description} onChange={c("description")} className="mt-1" placeholder="Markdown allowed. Use **bold**, line breaks, lists, etc."/></div>
+            <div><Label className="text-xs uppercase font-bold">Price (₹) *</Label><Input type="number" value={form.price} onChange={c("price")} className="mt-1"/></div>
+            <div><Label className="text-xs uppercase font-bold">Original / MRP (₹)</Label><Input type="number" value={form.original_price} onChange={c("original_price")} className="mt-1"/></div>
+            <div><Label className="text-xs uppercase font-bold">Discount %</Label><Input type="number" step="0.1" max="100" value={form.discount_percent} onChange={c("discount_percent")} className="mt-1"/></div>
+            <div><Label className="text-xs uppercase font-bold">Discount Flat (₹)</Label><Input type="number" value={form.discount_flat} onChange={c("discount_flat")} className="mt-1"/></div>
             <div>
-              <Label>Category</Label>
+              <Label className="text-xs uppercase font-bold">GST / Tax %</Label>
+              <Select value={String(form.gst_percent)} onValueChange={(v) => setForm({ ...form, gst_percent: parseInt(v) })}>
+                <SelectTrigger className="mt-1"><SelectValue/></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="0">0% (Exempt)</SelectItem>
+                  <SelectItem value="5">5%</SelectItem>
+                  <SelectItem value="12">12%</SelectItem>
+                  <SelectItem value="18">18%</SelectItem>
+                  <SelectItem value="28">28%</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs uppercase font-bold">Category *</Label>
               <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
                 <SelectTrigger className="mt-1"><SelectValue/></SelectTrigger>
                 <SelectContent>{cats.map((c) => <SelectItem key={c.slug} value={c.slug}>{c.name}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            <div><Label>Brand</Label><Input value={form.brand} onChange={c("brand")} className="mt-1"/></div>
+            <div><Label className="text-xs uppercase font-bold">Brand</Label><Input value={form.brand || ""} onChange={c("brand")} className="mt-1" placeholder="Sony, JBL, Pioneer..."/></div>
+            <div><Label className="text-xs uppercase font-bold">Stock</Label><Input type="number" value={form.stock} onChange={c("stock")} className="mt-1"/></div>
+
+            {/* Tags */}
             <div className="col-span-2">
-              <Label>Product Image</Label>
-              <div className="mt-1 flex gap-3">
-                <Input data-testid="p-image-url" placeholder="Paste URL or upload below" value={form.image} onChange={c("image")} className="flex-1"/>
-                <input ref={fileInputRef} data-testid="p-image-file" type="file" accept="image/*" onChange={uploadImage} className="hidden"/>
+              <Label className="text-xs uppercase font-bold">Tags / Custom Categories</Label>
+              <div className="flex gap-2 mt-1">
+                <Input data-testid="tag-input" value={tagInput} onChange={(e) => setTagInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addTag())} placeholder="Type and press Enter (e.g. 'bestseller', 'new-arrival')" className="flex-1"/>
+                <Button type="button" onClick={addTag} variant="outline" className="border-stone-300">Add</Button>
+              </div>
+              {(form.tags || []).length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {form.tags.map((t) => (
+                    <span key={t} className="inline-flex items-center gap-1 bg-indigo-50 text-indigo-700 text-xs px-2 py-1 rounded-full border border-indigo-200">
+                      {t}
+                      <button onClick={() => setForm({ ...form, tags: form.tags.filter((x) => x !== t) })} className="hover:text-indigo-900"><X className="w-3 h-3"/></button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Main image */}
+            <div className="col-span-2">
+              <Label className="text-xs uppercase font-bold">Main Product Image *</Label>
+              <div className="mt-1 flex gap-2">
+                <Input data-testid="p-image-url" placeholder="Paste URL or upload" value={form.image} onChange={c("image")} className="flex-1"/>
+                <input ref={fileInputRef} data-testid="p-image-file" type="file" accept="image/*" onChange={(e) => uploadImage(e, "image")} className="hidden"/>
                 <Button type="button" disabled={uploading} onClick={() => fileInputRef.current?.click()} variant="outline">
                   {uploading ? <Loader2 className="w-4 h-4 animate-spin"/> : <><Upload className="w-4 h-4 mr-1"/>Upload</>}
                 </Button>
               </div>
-              {form.image && <img src={resolveImg(form.image)} alt="" className="mt-3 w-32 h-32 object-cover rounded border"/>}
+              {form.image && <img src={resolveImg(form.image)} alt="" className="mt-3 w-28 h-28 object-cover rounded-lg border border-stone-200"/>}
             </div>
-            <div><Label>Stock</Label><Input type="number" value={form.stock} onChange={c("stock")} className="mt-1"/></div>
-            <div><Label>Rating</Label><Input type="number" step="0.1" max="5" value={form.rating} onChange={c("rating")} className="mt-1"/></div>
+
+            {/* Gallery (multi) */}
+            <div className="col-span-2">
+              <Label className="text-xs uppercase font-bold">Gallery (Additional Photos)</Label>
+              <div className="mt-1">
+                <input ref={galleryRef} type="file" accept="image/*" multiple onChange={(e) => uploadImage(e, "gallery")} className="hidden"/>
+                <Button type="button" disabled={uploading} onClick={() => galleryRef.current?.click()} variant="outline" className="w-full border-dashed border-stone-300 py-6 text-stone-500 hover:text-stone-900">
+                  <Upload className="w-4 h-4 mr-2"/> Upload multiple gallery images
+                </Button>
+              </div>
+              {(form.gallery || []).length > 0 && (
+                <div className="grid grid-cols-5 gap-2 mt-3">
+                  {form.gallery.map((g, i) => (
+                    <div key={i} className="relative aspect-square">
+                      <img src={resolveImg(g)} alt="" className="w-full h-full object-cover rounded-lg border border-stone-200"/>
+                      <button onClick={() => setForm({ ...form, gallery: form.gallery.filter((_, idx) => idx !== i) })} className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-stone-900 text-white rounded-full grid place-items-center hover:bg-rose-600">
+                        <X className="w-3 h-3"/>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Car Brands */}
+            <div className="col-span-2 border-t border-stone-200 pt-4">
+              <Label className="text-xs uppercase font-bold">Vehicle Compatibility — Car Brands</Label>
+              <div className="flex flex-wrap gap-1.5 mt-2 max-h-32 overflow-y-auto p-2 bg-stone-50 rounded border border-stone-200">
+                {carBrands.map((b) => {
+                  const sel = (form.car_brands || []).includes(b.name);
+                  return (
+                    <button key={b.name} type="button" data-testid={`cb-${b.name}`} onClick={() => toggleArrItem("car_brands", b.name)}
+                            className={`text-xs px-3 py-1.5 rounded-full transition ${sel ? "bg-indigo-600 text-white" : "bg-white border border-stone-300 text-stone-700 hover:border-indigo-400"}`}>
+                      {b.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Car Models (dependent) */}
+            {(form.car_brands || []).length > 0 && (
+              <div className="col-span-2">
+                <Label className="text-xs uppercase font-bold">Car Models (based on selected brands)</Label>
+                <div className="space-y-2 mt-2">
+                  {form.car_brands.map((b) => (
+                    <div key={b}>
+                      <div className="text-[10px] uppercase tracking-wider text-indigo-600 font-bold mb-1.5">{b}</div>
+                      <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-2 bg-stone-50 rounded border border-stone-200">
+                        {(carModelsByBrand[b] || []).map((m) => {
+                          const sel = (form.car_models || []).includes(m);
+                          return (
+                            <button key={m} type="button" onClick={() => toggleArrItem("car_models", m)}
+                                    className={`text-xs px-2.5 py-1 rounded transition ${sel ? "bg-emerald-600 text-white" : "bg-white border border-stone-300 text-stone-700 hover:border-emerald-400"}`}>
+                              {m}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Years */}
+            <div className="col-span-2">
+              <Label className="text-xs uppercase font-bold">Manufacturing Years</Label>
+              <div className="flex flex-wrap gap-1.5 mt-2 max-h-32 overflow-y-auto p-2 bg-stone-50 rounded border border-stone-200">
+                {yearList.map((y) => {
+                  const sel = (form.years || []).includes(y);
+                  return (
+                    <button key={y} type="button" onClick={() => toggleArrItem("years", y)}
+                            className={`text-xs px-2.5 py-1 rounded transition ${sel ? "bg-amber-500 text-white" : "bg-white border border-stone-300 text-stone-700 hover:border-amber-400"}`}>
+                      {y}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="text-[10px] text-stone-500 mt-1">Selected: {(form.years || []).length} year(s)</div>
+            </div>
+
+            <div className="col-span-2 flex items-center gap-3 pt-2 border-t border-stone-200">
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={!!form.featured} onChange={(e) => setForm({ ...form, featured: e.target.checked })}/>
+                Featured (shown on homepage)
+              </label>
+            </div>
           </div>
-          <Button data-testid="save-product" onClick={save} className="bg-indigo-600 hover:bg-indigo-700 font-bold uppercase tracking-wider text-xs">Save</Button>
+          <Button data-testid="save-product" onClick={save} className="bg-indigo-600 hover:bg-indigo-700 font-bold uppercase tracking-wider text-xs">Save Product</Button>
         </DialogContent>
       </Dialog>
     </div>

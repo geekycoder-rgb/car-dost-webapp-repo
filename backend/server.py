@@ -70,12 +70,33 @@ class ProductIn(BaseModel):
     category: str
     brand: Optional[str] = None
     image: str
+    gallery: List[str] = []
     stock: int = 50
     rating: float = 4.5
     featured: bool = False
+    discount_percent: float = 0
+    discount_flat: float = 0
+    gst_percent: int = 18
+    tags: List[str] = []
+    car_brands: List[str] = []
+    car_models: List[str] = []
+    years: List[int] = []
 
 class Product(ProductIn):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    review_count: int = 0
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class ReviewIn(BaseModel):
+    name: str
+    rating: int
+    title: str
+    comment: str
+
+class Review(ReviewIn):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    product_id: str
+    is_approved: bool = True
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 class CartItem(BaseModel):
@@ -172,6 +193,225 @@ async def me(user=Depends(get_current_user)):
         raise HTTPException(404, "Not found")
     return u
 
+# ============ Settings (Admin-controlled config) ============
+DEFAULT_SETTINGS = {
+    "razorpay_key_id": "",
+    "razorpay_key_secret": "",
+    "razorpay_webhook_secret": "",
+    "mock_payment": False,
+    "shiprocket_email": "",
+    "shiprocket_password": "",
+    "shiprocket_channel_id": "",
+    "shiprocket_pickup_location": "Primary",
+    "shiprocket_enabled": False,
+    "store_name": "CarDost",
+    "support_email": "Autobotscarstudio@gmail.com",
+    "support_phone": "+919063278724",
+}
+
+async def get_settings_doc():
+    s = await db.settings.find_one({"id": "global"}, {"_id": 0})
+    if not s:
+        s = {"id": "global", **DEFAULT_SETTINGS}
+        await db.settings.insert_one(s)
+    # Backfill any missing keys
+    for k, v in DEFAULT_SETTINGS.items():
+        if k not in s:
+            s[k] = v
+    return s
+
+def get_active_razorpay_creds(settings: dict):
+    kid = settings.get("razorpay_key_id") or RAZORPAY_KEY_ID
+    ksec = settings.get("razorpay_key_secret") or RAZORPAY_KEY_SECRET
+    mock = settings.get("mock_payment", False) if settings.get("razorpay_key_id") else MOCK_PAYMENT
+    return kid, ksec, mock
+
+def get_active_webhook_secret(settings: dict):
+    return settings.get("razorpay_webhook_secret") or RAZORPAY_WEBHOOK_SECRET
+
+class SettingsUpdate(BaseModel):
+    razorpay_key_id: Optional[str] = None
+    razorpay_key_secret: Optional[str] = None
+    razorpay_webhook_secret: Optional[str] = None
+    mock_payment: Optional[bool] = None
+    shiprocket_email: Optional[str] = None
+    shiprocket_password: Optional[str] = None
+    shiprocket_channel_id: Optional[str] = None
+    shiprocket_pickup_location: Optional[str] = None
+    shiprocket_enabled: Optional[bool] = None
+    store_name: Optional[str] = None
+    support_email: Optional[str] = None
+    support_phone: Optional[str] = None
+
+@api_router.get("/admin/settings")
+async def admin_get_settings(_=Depends(get_admin)):
+    s = await get_settings_doc()
+    # Mask secrets in response
+    def mask(v): return ("•" * 6 + v[-4:]) if v and len(v) > 6 else ""
+    s["razorpay_key_secret_masked"] = mask(s.get("razorpay_key_secret", ""))
+    s["razorpay_webhook_secret_masked"] = mask(s.get("razorpay_webhook_secret", ""))
+    s["shiprocket_password_masked"] = mask(s.get("shiprocket_password", ""))
+    s.pop("razorpay_key_secret", None)
+    s.pop("razorpay_webhook_secret", None)
+    s.pop("shiprocket_password", None)
+    return s
+
+@api_router.put("/admin/settings")
+async def admin_update_settings(body: SettingsUpdate, _=Depends(get_admin)):
+    update = {k: v for k, v in body.model_dump().items() if v is not None}
+    if update:
+        await db.settings.update_one({"id": "global"}, {"$set": update}, upsert=True)
+    return {"ok": True}
+
+@api_router.get("/settings/public")
+async def public_settings():
+    s = await get_settings_doc()
+    return {
+        "store_name": s.get("store_name"),
+        "support_email": s.get("support_email"),
+        "support_phone": s.get("support_phone"),
+    }
+
+# ============ Shiprocket Integration ============
+SHIPROCKET_BASE = "https://apiv2.shiprocket.in/v1/external"
+_shiprocket_token = {"token": None, "expires_at": None}
+
+async def shiprocket_login(email: str, password: str) -> Optional[str]:
+    if not email or not password:
+        return None
+    if _shiprocket_token["token"] and _shiprocket_token["expires_at"] and _shiprocket_token["expires_at"] > datetime.now(timezone.utc):
+        return _shiprocket_token["token"]
+    try:
+        r = requests.post(f"{SHIPROCKET_BASE}/auth/login", json={"email": email, "password": password}, timeout=20)
+        r.raise_for_status()
+        token = r.json().get("token")
+        if token:
+            _shiprocket_token["token"] = token
+            _shiprocket_token["expires_at"] = datetime.now(timezone.utc) + timedelta(days=8)
+        return token
+    except Exception as e:
+        logger.error(f"Shiprocket login failed: {e}")
+        return None
+
+async def shiprocket_create_order(order: dict) -> dict:
+    settings = await get_settings_doc()
+    if not settings.get("shiprocket_enabled"):
+        return {"skipped": True, "reason": "shiprocket disabled"}
+    token = await shiprocket_login(settings.get("shiprocket_email", ""), settings.get("shiprocket_password", ""))
+    if not token:
+        return {"error": "auth failed"}
+    addr = order["address"]
+    items = order["items"]
+    total_weight = max(0.5, len(items) * 0.5)  # rough estimate kg
+    payload = {
+        "order_id": order["id"][:30],
+        "order_date": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M"),
+        "pickup_location": settings.get("shiprocket_pickup_location") or "Primary",
+        "channel_id": settings.get("shiprocket_channel_id") or "",
+        "billing_customer_name": addr["full_name"],
+        "billing_last_name": "",
+        "billing_address": addr["line1"],
+        "billing_address_2": addr.get("line2") or "",
+        "billing_city": addr["city"],
+        "billing_pincode": addr["pincode"],
+        "billing_state": addr["state"],
+        "billing_country": "India",
+        "billing_email": addr["email"],
+        "billing_phone": addr["phone"],
+        "shipping_is_billing": True,
+        "order_items": [{
+            "name": i["name"][:60],
+            "sku": i["product_id"][:30],
+            "units": i["quantity"],
+            "selling_price": i["price"],
+            "discount": "",
+            "tax": "",
+            "hsn": 851829
+        } for i in items],
+        "payment_method": "Prepaid",
+        "sub_total": order["total"],
+        "length": 30, "breadth": 20, "height": 10, "weight": total_weight,
+    }
+    try:
+        r = requests.post(f"{SHIPROCKET_BASE}/orders/create/adhoc",
+                          json=payload, headers={"Authorization": f"Bearer {token}"}, timeout=30)
+        data = r.json() if r.headers.get("content-type", "").startswith("application/json") else {"raw": r.text}
+        if r.status_code >= 400:
+            logger.error(f"Shiprocket order create error: {data}")
+            return {"error": data}
+        return data
+    except Exception as e:
+        logger.error(f"Shiprocket request failed: {e}")
+        return {"error": str(e)}
+
+async def trigger_shiprocket(order_doc: dict):
+    """Fire-and-forget shiprocket order creation; updates order doc with shiprocket response."""
+    try:
+        result = await shiprocket_create_order(order_doc)
+        await db.orders.update_one(
+            {"id": order_doc["id"]},
+            {"$set": {"shiprocket": result, "shiprocket_at": datetime.now(timezone.utc).isoformat()}}
+        )
+    except Exception as e:
+        logger.error(f"shiprocket trigger failed: {e}")
+
+# ============ Reviews ============
+async def recalculate_product_rating(product_id: str):
+    pipe = [
+        {"$match": {"product_id": product_id, "is_approved": True}},
+        {"$group": {"_id": None, "avg": {"$avg": "$rating"}, "cnt": {"$sum": 1}}}
+    ]
+    agg = await db.reviews.aggregate(pipe).to_list(1)
+    if agg:
+        await db.products.update_one(
+            {"id": product_id},
+            {"$set": {"rating": round(float(agg[0]["avg"]), 2), "review_count": int(agg[0]["cnt"])}}
+        )
+    else:
+        await db.products.update_one({"id": product_id}, {"$set": {"review_count": 0}})
+
+@api_router.get("/products/{pid}/reviews")
+async def list_reviews(pid: str):
+    reviews = await db.reviews.find({"product_id": pid, "is_approved": True}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return reviews
+
+@api_router.post("/products/{pid}/reviews")
+async def create_review(pid: str, body: ReviewIn):
+    p = await db.products.find_one({"id": pid}, {"_id": 0})
+    if not p:
+        raise HTTPException(404, "Product not found")
+    if not (1 <= body.rating <= 5):
+        raise HTTPException(400, "Rating must be 1-5")
+    if not body.name.strip() or not body.title.strip() or not body.comment.strip():
+        raise HTTPException(400, "All fields required")
+    review = Review(product_id=pid, **body.model_dump())
+    await db.reviews.insert_one(review.model_dump())
+    await recalculate_product_rating(pid)
+    return {"ok": True, "review": review.model_dump()}
+
+@api_router.get("/admin/reviews")
+async def admin_list_reviews(_=Depends(get_admin)):
+    reviews = await db.reviews.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    return reviews
+
+@api_router.patch("/admin/reviews/{rid}")
+async def admin_toggle_review(rid: str, is_approved: bool, _=Depends(get_admin)):
+    r = await db.reviews.find_one({"id": rid}, {"_id": 0})
+    if not r:
+        raise HTTPException(404, "Not found")
+    await db.reviews.update_one({"id": rid}, {"$set": {"is_approved": is_approved}})
+    await recalculate_product_rating(r["product_id"])
+    return {"ok": True}
+
+@api_router.delete("/admin/reviews/{rid}")
+async def admin_delete_review(rid: str, _=Depends(get_admin)):
+    r = await db.reviews.find_one({"id": rid}, {"_id": 0})
+    if not r:
+        raise HTTPException(404, "Not found")
+    await db.reviews.delete_one({"id": rid})
+    await recalculate_product_rating(r["product_id"])
+    return {"ok": True}
+
 # ============ Products ============
 @api_router.get("/products")
 async def list_products(category: Optional[str] = None, featured: Optional[bool] = None, q: Optional[str] = None):
@@ -202,7 +442,75 @@ async def categories():
         {"slug": "led-lights", "name": "LED Lights", "icon": "Lightbulb"},
         {"slug": "perfumes", "name": "Car Perfumes", "icon": "Sparkles"},
         {"slug": "accessories", "name": "Accessories", "icon": "Wrench"},
+        {"slug": "key-chains", "name": "Key Chains", "icon": "Key"},
+        {"slug": "body-covers", "name": "Body Covers", "icon": "Shirt"},
     ]
+
+# ============ Automotive Catalog ============
+CAR_BRANDS_MODELS = {
+    "Maruti Suzuki": ["Swift", "Baleno", "Brezza", "WagonR", "Alto", "Dzire", "Ertiga", "XL6", "Ciaz", "S-Presso", "Celerio", "Ignis", "Grand Vitara", "Jimny", "Fronx", "Invicto"],
+    "Hyundai": ["i20", "i10", "Creta", "Venue", "Verna", "Aura", "Alcazar", "Tucson", "Kona Electric", "Exter", "Ioniq 5"],
+    "Tata": ["Nexon", "Punch", "Harrier", "Safari", "Altroz", "Tiago", "Tigor", "Curvv", "Nexon EV", "Punch EV"],
+    "Mahindra": ["Thar", "XUV700", "XUV300", "XUV400", "Scorpio-N", "Scorpio Classic", "Bolero", "Bolero Neo", "Marazzo", "BE 6", "XEV 9e"],
+    "Honda": ["City", "Amaze", "Elevate", "WR-V", "Jazz", "Civic"],
+    "Toyota": ["Innova Crysta", "Innova Hycross", "Fortuner", "Hilux", "Glanza", "Urban Cruiser Hyryder", "Camry", "Vellfire"],
+    "Kia": ["Seltos", "Sonet", "Carens", "Carnival", "EV6"],
+    "Volkswagen": ["Virtus", "Taigun", "Tiguan"],
+    "Skoda": ["Kushaq", "Slavia", "Kodiaq", "Superb"],
+    "Renault": ["Kwid", "Triber", "Kiger"],
+    "Nissan": ["Magnite", "X-Trail"],
+    "MG": ["Hector", "Astor", "Gloster", "ZS EV", "Comet EV", "Windsor EV"],
+    "Ford": ["EcoSport", "Endeavour", "Figo", "Aspire"],
+    "Mercedes-Benz": ["A-Class", "C-Class", "E-Class", "S-Class", "GLA", "GLC", "GLE", "GLS"],
+    "BMW": ["3 Series", "5 Series", "7 Series", "X1", "X3", "X5", "X7"],
+    "Audi": ["A4", "A6", "Q3", "Q5", "Q7", "Q8"],
+}
+
+@api_router.get("/catalog/car-brands")
+async def car_brands():
+    return [{"name": b, "model_count": len(m)} for b, m in CAR_BRANDS_MODELS.items()]
+
+@api_router.get("/catalog/car-models")
+async def car_models(brand: Optional[str] = None):
+    if brand:
+        brands = [b.strip() for b in brand.split(",") if b.strip()]
+        result = []
+        for b in brands:
+            for m in CAR_BRANDS_MODELS.get(b, []):
+                result.append({"brand": b, "model": m})
+        return result
+    return [{"brand": b, "model": m} for b, ms in CAR_BRANDS_MODELS.items() for m in ms]
+
+@api_router.get("/catalog/years")
+async def years():
+    current = datetime.now().year
+    return list(range(current, 1999, -1))
+
+# Update product list endpoint with extended filters
+@api_router.get("/products/filter")
+async def filter_products(
+    category: Optional[str] = None,
+    car_brand: Optional[str] = None,
+    car_model: Optional[str] = None,
+    year: Optional[int] = None,
+    tag: Optional[str] = None,
+    min_price: Optional[float] = None,
+    max_price: Optional[float] = None,
+    q: Optional[str] = None,
+):
+    query = {}
+    if category and category != "all": query["category"] = category
+    if car_brand: query["car_brands"] = {"$in": [b.strip() for b in car_brand.split(",")]}
+    if car_model: query["car_models"] = {"$in": [m.strip() for m in car_model.split(",")]}
+    if year: query["years"] = year
+    if tag: query["tags"] = tag
+    if min_price is not None or max_price is not None:
+        query["price"] = {}
+        if min_price is not None: query["price"]["$gte"] = min_price
+        if max_price is not None: query["price"]["$lte"] = max_price
+    if q: query["name"] = {"$regex": q, "$options": "i"}
+    items = await db.products.find(query, {"_id": 0}).to_list(500)
+    return items
 
 @api_router.post("/admin/products")
 async def create_product(p: ProductIn, _=Depends(get_admin)):
@@ -357,6 +665,9 @@ async def serve_file(path: str):
 # ============ Orders / Payment ============
 @api_router.post("/orders/create")
 async def create_order(req: CreateOrderReq, creds: Optional[HTTPAuthorizationCredentials] = Depends(security)):
+    settings = await get_settings_doc()
+    active_kid, active_ksec, active_mock = get_active_razorpay_creds(settings)
+
     # Resolve user (optional for guest)
     user_id = None
     if creds:
@@ -395,9 +706,10 @@ async def create_order(req: CreateOrderReq, creds: Optional[HTTPAuthorizationCre
     amount_paise = int(round(total * 100))
 
     razorpay_order_id = None
-    if not MOCK_PAYMENT and rzp_client:
+    if not active_mock and active_kid and active_ksec:
         try:
-            r_order = rzp_client.order.create({
+            client = razorpay.Client(auth=(active_kid, active_ksec))
+            r_order = client.order.create({
                 "amount": amount_paise,
                 "currency": "INR",
                 "receipt": order_id[:40],
@@ -419,7 +731,7 @@ async def create_order(req: CreateOrderReq, creds: Optional[HTTPAuthorizationCre
         "razorpay_order_id": razorpay_order_id,
         "razorpay_payment_id": None,
         "status": "created",
-        "mock": MOCK_PAYMENT,
+        "mock": active_mock,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.orders.insert_one(order_doc)
@@ -427,10 +739,10 @@ async def create_order(req: CreateOrderReq, creds: Optional[HTTPAuthorizationCre
     return {
         "order_id": order_id,
         "razorpay_order_id": razorpay_order_id,
-        "razorpay_key_id": RAZORPAY_KEY_ID,
+        "razorpay_key_id": active_kid,
         "amount": amount_paise,
         "currency": "INR",
-        "mock": MOCK_PAYMENT,
+        "mock": active_mock,
         "total": total
     }
 
@@ -458,13 +770,17 @@ async def verify_payment(req: VerifyPaymentReq):
                 "paid_at": datetime.now(timezone.utc).isoformat()
             }}
         )
+        updated = await db.orders.find_one({"id": req.order_id}, {"_id": 0})
+        if updated: await trigger_shiprocket(updated)
         return {"ok": True, "status": "paid", "order_id": req.order_id}
 
     if not (req.razorpay_order_id and req.razorpay_payment_id and req.razorpay_signature):
         raise HTTPException(400, "Missing payment fields")
 
-    body = f"{req.razorpay_order_id}|{req.razorpay_payment_id}".encode()
-    expected = hmac.new(RAZORPAY_KEY_SECRET.encode(), body, hashlib.sha256).hexdigest()
+    body_bytes = f"{req.razorpay_order_id}|{req.razorpay_payment_id}".encode()
+    settings = await get_settings_doc()
+    _, active_ksec, _ = get_active_razorpay_creds(settings)
+    expected = hmac.new(active_ksec.encode(), body_bytes, hashlib.sha256).hexdigest()
     if not hmac.compare_digest(expected, req.razorpay_signature):
         await db.orders.update_one({"id": req.order_id}, {"$set": {"status": "failed"}})
         raise HTTPException(400, "Invalid signature")
@@ -479,6 +795,8 @@ async def verify_payment(req: VerifyPaymentReq):
             "paid_at": datetime.now(timezone.utc).isoformat()
         }}
     )
+    updated = await db.orders.find_one({"id": req.order_id}, {"_id": 0})
+    if updated: await trigger_shiprocket(updated)
     return {"ok": True, "status": "paid", "order_id": req.order_id}
 
 ALLOWED_STATUSES = ["paid", "processing", "shipped", "delivered", "cancelled"]
@@ -489,12 +807,15 @@ from fastapi import Request
 @api_router.post("/razorpay/webhook")
 async def razorpay_webhook(request: Request, x_razorpay_signature: Optional[str] = Header(None)):
     body = await request.body()
-    if not RAZORPAY_WEBHOOK_SECRET:
-        logger.error("Webhook received but RAZORPAY_WEBHOOK_SECRET not configured")
+    settings = await get_settings_doc()
+    active_webhook_secret = get_active_webhook_secret(settings)
+    _, active_ksec, _ = get_active_razorpay_creds(settings)
+    if not active_webhook_secret:
+        logger.error("Webhook received but secret not configured")
         raise HTTPException(503, "Webhook secret not configured")
     if not x_razorpay_signature:
         raise HTTPException(400, "Missing signature")
-    expected = hmac.new(RAZORPAY_WEBHOOK_SECRET.encode(), body, hashlib.sha256).hexdigest()
+    expected = hmac.new(active_webhook_secret.encode(), body, hashlib.sha256).hexdigest()
     if not hmac.compare_digest(expected, x_razorpay_signature):
         logger.warning("Webhook signature mismatch")
         raise HTTPException(400, "Invalid signature")
@@ -522,7 +843,7 @@ async def razorpay_webhook(request: Request, x_razorpay_signature: Optional[str]
     if order.get("status") == "paid" and event_type in ("payment.captured", "payment.authorized"):
         return {"ok": True, "handled": True, "already_paid": True}
 
-    if event_type in ("payment.captured", "payment.authorized"):
+    if event_type in ("payment.captured", "payment.authorized", "order.paid"):
         for it in order["items"]:
             await db.products.update_one({"id": it["product_id"]}, {"$inc": {"stock": -it["quantity"]}})
         await db.orders.update_one(
@@ -534,6 +855,8 @@ async def razorpay_webhook(request: Request, x_razorpay_signature: Optional[str]
                 "webhook_event": event_type
             }}
         )
+        updated = await db.orders.find_one({"id": order["id"]}, {"_id": 0})
+        if updated: await trigger_shiprocket(updated)
     elif event_type == "payment.failed":
         await db.orders.update_one(
             {"id": order["id"]},

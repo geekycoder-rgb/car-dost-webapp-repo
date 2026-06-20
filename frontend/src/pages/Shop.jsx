@@ -3,23 +3,56 @@ import { useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api";
 import ProductCard from "@/components/ProductCard";
 import { Input } from "@/components/ui/input";
-import { Search, SlidersHorizontal } from "lucide-react";
+import { Search, SlidersHorizontal, ChevronDown, ChevronUp, X } from "lucide-react";
+
+function FilterSection({ id, title, open, toggle, children }) {
+  return (
+    <div className="bg-white border border-stone-200 rounded-2xl overflow-hidden">
+      <button onClick={() => toggle(id)} className="w-full flex items-center justify-between p-4 text-left">
+        <span className="text-xs uppercase tracking-[0.15em] font-bold text-stone-900">{title}</span>
+        {open ? <ChevronUp className="w-4 h-4 text-stone-500"/> : <ChevronDown className="w-4 h-4 text-stone-500"/>}
+      </button>
+      {open && <div className="px-4 pb-4">{children}</div>}
+    </div>
+  );
+}
 
 export default function Shop() {
   const [params, setParams] = useSearchParams();
   const category = params.get("category") || "all";
   const initialQ = params.get("q") || "";
+  const carBrand = params.get("car_brand") || "";
+  const carModel = params.get("car_model") || "";
+  const year = params.get("year") || "";
+
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [carBrands, setCarBrands] = useState([]);
+  const [carModels, setCarModels] = useState([]);
+  const [years, setYears] = useState([]);
   const [q, setQ] = useState(initialQ);
   const [loading, setLoading] = useState(true);
   const [sort, setSort] = useState("featured");
+  const [filterOpen, setFilterOpen] = useState({ category: true, vehicle: true });
 
-  useEffect(() => { api.get("/categories").then((r) => setCategories(r.data)); }, []);
+  useEffect(() => {
+    api.get("/categories").then((r) => setCategories(r.data));
+    api.get("/catalog/car-brands").then((r) => setCarBrands(r.data));
+    api.get("/catalog/years").then((r) => setYears(r.data));
+  }, []);
+
+  useEffect(() => {
+    if (carBrand) {
+      api.get("/catalog/car-models", { params: { brand: carBrand } }).then((r) => setCarModels(r.data));
+    } else {
+      setCarModels([]);
+    }
+  }, [carBrand]);
 
   useEffect(() => {
     setLoading(true);
-    api.get("/products", { params: { category, q: q || undefined } })
+    const filterParams = { category, q: q || undefined, car_brand: carBrand || undefined, car_model: carModel || undefined, year: year || undefined };
+    api.get("/products/filter", { params: filterParams })
       .then((r) => {
         let list = [...r.data];
         if (sort === "low") list.sort((a, b) => a.price - b.price);
@@ -28,86 +61,115 @@ export default function Shop() {
         setProducts(list);
       })
       .finally(() => setLoading(false));
-  }, [category, q, sort]);
+  }, [category, q, sort, carBrand, carModel, year]);
 
-  const setCat = (slug) => {
+  const updateParam = (key, val) => {
     const p = new URLSearchParams(params);
-    if (slug === "all") p.delete("category"); else p.set("category", slug);
+    if (!val || val === "all") p.delete(key); else p.set(key, val);
+    if (key === "car_brand") p.delete("car_model");
+    setParams(p);
+  };
+
+  const clearVehicle = () => {
+    const p = new URLSearchParams(params);
+    p.delete("car_brand"); p.delete("car_model"); p.delete("year");
     setParams(p);
   };
 
   const activeCatName = category === "all" ? "All Products" : (categories.find((c) => c.slug === category)?.name || "Products");
+  const hasVehicleFilter = carBrand || carModel || year;
+
+  const Section = ({ id, title, children }) => null; // moved out
 
   return (
-    <div className="bg-white">
-      {/* Breadcrumb header */}
-      <div className="bg-neutral-50 border-b border-neutral-200">
+    <div className="bg-stone-50">
+      <div className="bg-white border-b border-stone-200">
         <div className="max-w-7xl mx-auto px-6 py-8">
           <div className="text-xs uppercase tracking-[0.2em] text-indigo-600 font-bold mb-2">Catalog</div>
-          <h1 className="font-display text-3xl lg:text-4xl font-bold uppercase text-neutral-900">{activeCatName}</h1>
-          <div className="text-xs text-neutral-500 mt-1">Home / Shop / {activeCatName}</div>
+          <h1 className="font-display text-3xl lg:text-4xl font-bold text-stone-950">{activeCatName}</h1>
+          <div className="text-xs text-stone-500 mt-1">Home / Shop / {activeCatName}</div>
         </div>
       </div>
 
       <div className="max-w-7xl mx-auto px-6 py-10 flex flex-col lg:flex-row gap-8">
-        {/* Sidebar */}
-        <aside className="lg:w-64 shrink-0 space-y-6">
-          <div>
-            <div className="relative">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400"/>
-              <Input
-                data-testid="search-input"
-                placeholder="Search products..."
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                className="pl-9 h-10 border border-neutral-300 focus:border-indigo-600 text-sm"
-              />
-            </div>
+        <aside className="lg:w-72 shrink-0 space-y-4">
+          <div className="relative">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-stone-400"/>
+            <Input data-testid="search-input" placeholder="Search products..." value={q} onChange={(e) => setQ(e.target.value)} className="pl-9 h-10 border-stone-300 focus:border-indigo-600 text-sm"/>
           </div>
 
-          <div className="bg-white border border-neutral-200 rounded-md p-4">
-            <div className="text-xs uppercase tracking-[0.15em] font-bold text-neutral-900 mb-3 flex items-center gap-2 pb-2 border-b border-neutral-200">
-              <SlidersHorizontal className="w-3.5 h-3.5 text-indigo-600"/> Categories
-            </div>
-            <button
-              data-testid="filter-all"
-              onClick={() => setCat("all")}
-              className={`w-full text-left px-3 py-2 rounded text-sm transition ${
-                category === "all" ? "bg-indigo-50 text-indigo-600 font-bold" : "text-neutral-700 hover:bg-neutral-100"
-              }`}
-            >
-              All Products
-            </button>
-            {categories.map((c) => (
-              <button
-                key={c.slug}
-                data-testid={`filter-${c.slug}`}
-                onClick={() => setCat(c.slug)}
-                className={`w-full text-left px-3 py-2 rounded text-sm transition ${
-                  category === c.slug ? "bg-indigo-50 text-indigo-600 font-bold" : "text-neutral-700 hover:bg-neutral-100"
-                }`}
-              >
-                {c.name}
+          <FilterSection id="category" title="Categories" open={filterOpen.category} toggle={(k) => setFilterOpen({ ...filterOpen, [k]: !filterOpen[k] })}>
+            <div className="space-y-1">
+              <button data-testid="filter-all" onClick={() => updateParam("category", "all")}
+                      className={`w-full text-left px-3 py-2 rounded text-sm transition ${category === "all" ? "bg-indigo-50 text-indigo-700 font-bold" : "text-stone-700 hover:bg-stone-100"}`}>
+                All Products
               </button>
-            ))}
-          </div>
+              {categories.map((c) => (
+                <button key={c.slug} data-testid={`filter-${c.slug}`} onClick={() => updateParam("category", c.slug)}
+                        className={`w-full text-left px-3 py-2 rounded text-sm transition ${category === c.slug ? "bg-indigo-50 text-indigo-700 font-bold" : "text-stone-700 hover:bg-stone-100"}`}>
+                  {c.name}
+                </button>
+              ))}
+            </div>
+          </FilterSection>
 
-          <div className="bg-[#0F172A] text-white p-5 rounded-md">
+          <FilterSection id="vehicle" title="My Car" open={filterOpen.vehicle} toggle={(k) => setFilterOpen({ ...filterOpen, [k]: !filterOpen[k] })}>
+            {hasVehicleFilter && (
+              <button onClick={clearVehicle} className="text-[11px] text-indigo-600 hover:underline mb-2 flex items-center gap-1">
+                <X className="w-3 h-3"/> Clear vehicle filter
+              </button>
+            )}
+            <div className="space-y-3">
+              <div>
+                <label className="text-[10px] uppercase tracking-wider font-bold text-stone-500 mb-1 block">Brand</label>
+                <select data-testid="filter-car-brand" value={carBrand} onChange={(e) => updateParam("car_brand", e.target.value)}
+                        className="w-full border border-stone-300 rounded px-3 py-2 text-sm bg-white">
+                  <option value="">All Brands</option>
+                  {carBrands.map((b) => <option key={b.name} value={b.name}>{b.name}</option>)}
+                </select>
+              </div>
+              {carBrand && (
+                <div>
+                  <label className="text-[10px] uppercase tracking-wider font-bold text-stone-500 mb-1 block">Model</label>
+                  <select data-testid="filter-car-model" value={carModel} onChange={(e) => updateParam("car_model", e.target.value)}
+                          className="w-full border border-stone-300 rounded px-3 py-2 text-sm bg-white">
+                    <option value="">All {carBrand} Models</option>
+                    {carModels.map((m) => <option key={m.model} value={m.model}>{m.model}</option>)}
+                  </select>
+                </div>
+              )}
+              <div>
+                <label className="text-[10px] uppercase tracking-wider font-bold text-stone-500 mb-1 block">Manufacturing Year</label>
+                <select data-testid="filter-year" value={year} onChange={(e) => updateParam("year", e.target.value)}
+                        className="w-full border border-stone-300 rounded px-3 py-2 text-sm bg-white">
+                  <option value="">All Years</option>
+                  {years.map((y) => <option key={y} value={y}>{y}</option>)}
+                </select>
+              </div>
+            </div>
+          </FilterSection>
+
+          <div className="bg-stone-950 text-white p-5 rounded-2xl">
             <div className="font-anton text-2xl mb-2">NEED HELP?</div>
-            <p className="text-xs text-neutral-400 mb-3">Talk to our sound experts to choose the right setup for your car.</p>
-            <a href="tel:+919063278724" className="block text-center bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold uppercase tracking-wider py-2.5 rounded transition">Call +91 90632 78724</a>
+            <p className="text-xs text-stone-400 mb-3">Talk to our sound experts to choose the right setup.</p>
+            <a href="tel:+919063278724" className="block text-center bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold uppercase tracking-wider py-2.5 rounded-full transition">Call Us</a>
           </div>
         </aside>
 
-        {/* Grid */}
         <div className="flex-1">
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-6 pb-4 border-b border-neutral-200">
-            <div className="text-sm text-neutral-600" data-testid="results-count">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-6 pb-4 border-b border-stone-200">
+            <div className="text-sm text-stone-600" data-testid="results-count">
               {loading ? "Loading..." : `${products.length} product${products.length === 1 ? "" : "s"} found`}
+              {hasVehicleFilter && (
+                <span className="ml-2 text-[10px] uppercase tracking-wider text-indigo-600 font-bold">
+                  · {[carBrand, carModel, year].filter(Boolean).join(" · ")}
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-2 text-sm">
-              <label className="text-xs uppercase tracking-wider font-bold text-neutral-700">Sort:</label>
-              <select value={sort} onChange={(e) => setSort(e.target.value)} data-testid="sort-select" className="border border-neutral-300 rounded px-3 py-1.5 text-sm bg-white">
+              <SlidersHorizontal className="w-4 h-4 text-stone-500"/>
+              <label className="text-xs uppercase tracking-wider font-bold text-stone-700">Sort:</label>
+              <select value={sort} onChange={(e) => setSort(e.target.value)} data-testid="sort-select" className="border border-stone-300 rounded px-3 py-1.5 text-sm bg-white">
                 <option value="featured">Featured</option>
                 <option value="low">Price: Low to High</option>
                 <option value="high">Price: High to Low</option>
@@ -116,7 +178,7 @@ export default function Shop() {
             </div>
           </div>
           {!loading && products.length === 0 ? (
-            <div className="text-center py-20 text-neutral-500 bg-neutral-50 rounded">No products found.</div>
+            <div className="text-center py-20 text-stone-500 bg-white rounded-2xl border border-stone-200">No products match these filters.</div>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               {products.map((p) => <ProductCard key={p.id} product={p}/>)}
