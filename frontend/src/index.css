@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&family=Oswald:wght@300;400;500;600;700&family=Anton&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&family=Bricolage+Grotesque:wght@400;500;600;700;800&family=Bebas+Neue&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -19,10 +19,25 @@
 
 * { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
 
-body { margin: 0; background: var(--bg); color: var(--text); font-family: 'Poppins', -apple-system, sans-serif; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-feature-settings: 'ss01', 'cv11';
+  letter-spacing: -0.005em;
+}
 
-.font-display { font-family: 'Oswald', sans-serif; letter-spacing: 0.01em; }
-.font-anton { font-family: 'Anton', sans-serif; letter-spacing: 0.02em; }
+.font-display {
+  font-family: 'Bricolage Grotesque', 'DM Sans', sans-serif;
+  letter-spacing: -0.02em;
+  font-feature-settings: 'ss02';
+}
+
+.font-anton {
+  font-family: 'Bebas Neue', 'Bricolage Grotesque', sans-serif;
+  letter-spacing: 0.01em;
+}
 
 ::selection { background: var(--primary); color: #fff; }
 
