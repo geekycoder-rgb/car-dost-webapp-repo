@@ -136,8 +136,9 @@ export default function Checkout() {
         <h1 className="font-display text-4xl font-black mb-3">Order Placed!</h1>
         <p className="text-neutral-400 mb-2">Order ID: <span className="font-mono text-white">{successOrder.order_id.slice(0, 8)}</span></p>
         <p className="text-neutral-400 mb-8">Amount paid: <span className="text-white font-bold">{formatINR(successOrder.total)}</span></p>
-        <div className="flex gap-3 justify-center">
-          <Button data-testid="continue-shopping-btn" onClick={() => navigate("/shop")} className="bg-red-500 hover:bg-red-600">Continue Shopping</Button>
+        <div className="flex flex-wrap gap-3 justify-center">
+          <Button data-testid="view-order-btn" onClick={() => navigate(`/order/${successOrder.order_id}`)} className="bg-red-500 hover:bg-red-600">View Order</Button>
+          <Button data-testid="continue-shopping-btn" onClick={() => navigate("/shop")} variant="outline" className="border-[#262626]">Continue Shopping</Button>
           {user && <Button variant="outline" onClick={() => navigate("/my-orders")} className="border-[#262626]">My Orders</Button>}
         </div>
       </div>

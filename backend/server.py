@@ -221,6 +221,47 @@ async def delete_product(pid: str, _=Depends(get_admin)):
     await db.products.delete_one({"id": pid})
     return {"ok": True}
 
+# ============ Bulk CSV Import ============
+import csv
+import io
+
+@api_router.post("/admin/products/bulk")
+async def bulk_import_products(file: UploadFile = File(...), _=Depends(get_admin)):
+    if not (file.filename or "").lower().endswith(".csv"):
+        raise HTTPException(400, "Please upload a .csv file")
+    raw = await file.read()
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        raise HTTPException(400, "CSV must be UTF-8 encoded")
+    reader = csv.DictReader(io.StringIO(text))
+    required = {"name", "description", "price", "category", "image"}
+    if not reader.fieldnames or not required.issubset({h.strip() for h in reader.fieldnames}):
+        raise HTTPException(400, f"CSV must have columns: {', '.join(sorted(required))} (optional: original_price, brand, stock, rating, featured)")
+
+    created = 0
+    errors = []
+    for i, row in enumerate(reader, start=2):  # row 1 is header
+        try:
+            p_in = ProductIn(
+                name=row["name"].strip(),
+                description=row["description"].strip(),
+                price=float(row["price"]),
+                original_price=float(row["original_price"]) if row.get("original_price") else None,
+                category=row["category"].strip(),
+                brand=row.get("brand", "").strip() or None,
+                image=row["image"].strip(),
+                stock=int(row.get("stock") or 50),
+                rating=float(row.get("rating") or 4.5),
+                featured=str(row.get("featured", "")).strip().lower() in ("true", "1", "yes", "y"),
+            )
+            prod = Product(**p_in.model_dump())
+            await db.products.insert_one(prod.model_dump())
+            created += 1
+        except Exception as e:
+            errors.append({"row": i, "error": str(e)[:120]})
+    return {"created": created, "errors": errors[:20], "error_count": len(errors)}
+
 # ============ File Upload (Emergent Object Storage) ============
 def init_storage():
     global storage_key

@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
+import { Link, Navigate } from "react-router-dom";
 import { api, formatINR } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import { Navigate } from "react-router-dom";
-import { Package } from "lucide-react";
+import { Package, ChevronRight } from "lucide-react";
 
 export default function MyOrders() {
   const { user, loading } = useAuth();
@@ -26,11 +26,11 @@ export default function MyOrders() {
       ) : (
         <div className="space-y-4">
           {orders.map((o) => (
-            <div key={o.id} data-testid={`order-${o.id}`} className="bg-[#141414] border border-[#262626] rounded-xl p-6">
+            <Link key={o.id} to={`/order/${o.id}`} data-testid={`order-${o.id}`} className="block bg-[#141414] border border-[#262626] hover:border-red-500/50 rounded-xl p-6 transition group">
               <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                 <div>
                   <div className="text-xs text-neutral-500">Order ID</div>
-                  <div className="font-mono text-sm">{o.id.slice(0, 8)}</div>
+                  <div className="font-mono text-sm">#{o.id.slice(0, 8).toUpperCase()}</div>
                 </div>
                 <div>
                   <div className="text-xs text-neutral-500">Date</div>
@@ -40,7 +40,7 @@ export default function MyOrders() {
                   <div className="text-xs text-neutral-500">Total</div>
                   <div className="font-bold">{formatINR(o.total)}</div>
                 </div>
-                <div>
+                <div className="flex items-center gap-3">
                   <span data-testid={`order-status-${o.id}`} className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
                     o.status === "delivered" ? "bg-green-500/10 text-green-400" :
                     o.status === "shipped" ? "bg-blue-500/10 text-blue-400" :
@@ -49,17 +49,19 @@ export default function MyOrders() {
                     o.status === "cancelled" ? "bg-neutral-500/10 text-neutral-400" :
                     "bg-yellow-500/10 text-yellow-400"
                   }`}>{o.status}</span>
+                  <ChevronRight className="w-5 h-5 text-neutral-600 group-hover:text-red-400 group-hover:translate-x-1 transition"/>
                 </div>
               </div>
-              <div className="border-t border-[#262626] pt-3 space-y-2">
-                {o.items.map((i, idx) => (
+              <div className="border-t border-[#262626] pt-3 space-y-1.5">
+                {o.items.slice(0, 3).map((i, idx) => (
                   <div key={idx} className="flex justify-between text-sm">
-                    <span className="text-neutral-300">{i.name} × {i.quantity}</span>
-                    <span>{formatINR(i.line_total)}</span>
+                    <span className="text-neutral-300 line-clamp-1 pr-2">{i.name} × {i.quantity}</span>
+                    <span className="shrink-0">{formatINR(i.line_total)}</span>
                   </div>
                 ))}
+                {o.items.length > 3 && <div className="text-xs text-neutral-500">+ {o.items.length - 3} more item(s)</div>}
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       )}

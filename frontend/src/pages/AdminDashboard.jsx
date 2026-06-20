@@ -10,7 +10,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
-import { Plus, Edit, Trash2, ShoppingCart, Package, DollarSign, Users, Upload, Loader2 } from "lucide-react";
+import { Plus, Edit, Trash2, ShoppingCart, Package, DollarSign, Users, Upload, Loader2, FileText, ExternalLink } from "lucide-react";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 
 const BACKEND = process.env.REACT_APP_BACKEND_URL;
@@ -29,6 +30,9 @@ export default function AdminDashboard() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef(null);
+  const csvInputRef = useRef(null);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState(null);
 
   const loadAll = () => {
     api.get("/admin/stats").then((r) => setStats(r.data)).catch(() => {});
@@ -108,6 +112,38 @@ export default function AdminDashboard() {
     }
   };
 
+  const importCSV = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImporting(true);
+    setImportResult(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const { data } = await api.post("/admin/products/bulk", fd, { headers: { "Content-Type": "multipart/form-data" } });
+      setImportResult(data);
+      toast.success(`Imported ${data.created} product${data.created === 1 ? "" : "s"}`);
+      loadAll();
+    } catch (err) {
+      const d = err.response?.data?.detail;
+      toast.error(typeof d === "string" ? d : "Import failed");
+    } finally {
+      setImporting(false);
+      if (csvInputRef.current) csvInputRef.current.value = "";
+    }
+  };
+
+  const downloadSampleCSV = () => {
+    const sample = "name,description,price,original_price,category,brand,image,stock,rating,featured\n" +
+      "Sample Speaker,High quality 6-inch speaker,1999,2499,speakers,Generic,https://example.com/img.jpg,50,4.5,false\n" +
+      "Demo Stereo,9-inch Android stereo,9999,12999,android-stereos,Demo,https://example.com/stereo.jpg,20,4.7,true";
+    const blob = new Blob([sample], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "cardost-products-sample.csv";
+    a.click();
+  };
+
   const c = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
   return (
@@ -141,10 +177,25 @@ export default function AdminDashboard() {
           <div className="bg-[#141414] border border-[#262626] rounded-lg overflow-hidden">
             <div className="flex justify-between items-center p-4 border-b border-[#262626]">
               <h2 className="font-bold">Products ({products.length})</h2>
-              <Button data-testid="add-product-btn" onClick={openCreate} className="bg-red-500 hover:bg-red-600">
-                <Plus className="w-4 h-4 mr-1"/> Add Product
-              </Button>
+              <div className="flex gap-2">
+                <input ref={csvInputRef} data-testid="csv-input" type="file" accept=".csv" onChange={importCSV} className="hidden"/>
+                <Button data-testid="sample-csv-btn" onClick={downloadSampleCSV} variant="outline" className="border-[#262626] bg-[#0A0A0A] hover:bg-[#1a1a1a]">
+                  <FileText className="w-4 h-4 mr-1"/> Sample CSV
+                </Button>
+                <Button data-testid="import-csv-btn" disabled={importing} onClick={() => csvInputRef.current?.click()} variant="outline" className="border-[#262626] bg-[#0A0A0A] hover:bg-[#1a1a1a]">
+                  {importing ? <Loader2 className="w-4 h-4 mr-1 animate-spin"/> : <Upload className="w-4 h-4 mr-1"/>} Import CSV
+                </Button>
+                <Button data-testid="add-product-btn" onClick={openCreate} className="bg-red-500 hover:bg-red-600">
+                  <Plus className="w-4 h-4 mr-1"/> Add Product
+                </Button>
+              </div>
             </div>
+            {importResult && (
+              <div data-testid="import-result" className="px-4 py-3 bg-emerald-500/5 border-b border-emerald-500/20 text-sm flex items-center justify-between">
+                <span><span className="text-emerald-400 font-bold">{importResult.created}</span> products imported{importResult.error_count > 0 && <span className="text-yellow-500"> · {importResult.error_count} row(s) failed</span>}</span>
+                <button onClick={() => setImportResult(null)} className="text-neutral-500 hover:text-white text-xs">Dismiss</button>
+              </div>
+            )}
             <Table>
               <TableHeader>
                 <TableRow className="border-[#262626] hover:bg-transparent">
@@ -195,7 +246,11 @@ export default function AdminDashboard() {
               <TableBody>
                 {orders.map((o) => (
                   <TableRow key={o.id} className="border-[#262626]">
-                    <TableCell className="font-mono text-xs">{o.id.slice(0, 8)}</TableCell>
+                    <TableCell className="font-mono text-xs">
+                      <Link to={`/order/${o.id}`} data-testid={`admin-order-link-${o.id}`} className="text-red-400 hover:underline inline-flex items-center gap-1">
+                        {o.id.slice(0, 8)} <ExternalLink className="w-3 h-3"/>
+                      </Link>
+                    </TableCell>
                     <TableCell>
                       <div className="text-sm">{o.address.full_name}</div>
                       <div className="text-xs text-neutral-500">{o.address.phone}</div>
@@ -203,7 +258,18 @@ export default function AdminDashboard() {
                     <TableCell>{o.items.length}</TableCell>
                     <TableCell>{formatINR(o.total)}</TableCell>
                     <TableCell>
-                      <span className={`text-xs px-2 py-0.5 rounded ${o.status === "paid" ? "bg-green-500/10 text-green-400" : "bg-yellow-500/10 text-yellow-400"}`}>{o.status}</span>
+                      <Select value={o.status} onValueChange={(v) => updateOrderStatus(o.id, v)}>
+                        <SelectTrigger data-testid={`status-${o.id}`} className="bg-[#0A0A0A] border-[#262626] h-8 text-xs w-32">
+                          <SelectValue/>
+                        </SelectTrigger>
+                        <SelectContent className="bg-[#141414] border-[#262626] text-white">
+                          <SelectItem value="paid">Paid</SelectItem>
+                          <SelectItem value="processing">Processing</SelectItem>
+                          <SelectItem value="shipped">Shipped</SelectItem>
+                          <SelectItem value="delivered">Delivered</SelectItem>
+                          <SelectItem value="cancelled">Cancelled</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </TableCell>
                     <TableCell className="text-xs text-neutral-500">{new Date(o.created_at).toLocaleDateString()}</TableCell>
                   </TableRow>

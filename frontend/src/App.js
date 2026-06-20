@@ -14,6 +14,7 @@ import Signup from "@/pages/Signup";
 import MyOrders from "@/pages/MyOrders";
 import AdminLogin from "@/pages/AdminLogin";
 import AdminDashboard from "@/pages/AdminDashboard";
+import OrderDetail from "@/pages/OrderDetail";
 import Contact from "@/pages/Contact";
 
 export default function App() {
@@ -32,6 +33,7 @@ export default function App() {
                 <Route path="/login" element={<Login />} />
                 <Route path="/signup" element={<Signup />} />
                 <Route path="/my-orders" element={<MyOrders />} />
+                <Route path="/order/:id" element={<OrderDetail />} />
                 <Route path="/admin/login" element={<AdminLogin />} />
                 <Route path="/admin" element={<AdminDashboard />} />
                 <Route path="/contact" element={<Contact />} />
