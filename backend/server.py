@@ -3,8 +3,11 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
+from email_service import send_email, order_confirmation_email, admin_order_email, admin_contact_email
+
 import os
 import re
+import asyncio
 import logging
 import uuid
 import hmac
@@ -222,6 +225,15 @@ DEFAULT_SETTINGS = {
     "store_name": "CarDost",
     "support_email": "Autobotscarstudio@gmail.com",
     "support_phone": "+919063278724",
+    # SMTP / Email
+    "smtp_enabled": False,
+    "smtp_host": "smtpout.secureserver.net",  # GoDaddy default
+    "smtp_port": 587,
+    "smtp_use_ssl": False,
+    "smtp_username": "",
+    "smtp_password": "",
+    "smtp_from": "",  # e.g. customercare@cardost.in
+    "smtp_admin_email": "",  # admin recipient for order/contact alerts
 }
 
 async def get_settings_doc():
@@ -257,6 +269,14 @@ class SettingsUpdate(BaseModel):
     store_name: Optional[str] = None
     support_email: Optional[str] = None
     support_phone: Optional[str] = None
+    smtp_enabled: Optional[bool] = None
+    smtp_host: Optional[str] = None
+    smtp_port: Optional[int] = None
+    smtp_use_ssl: Optional[bool] = None
+    smtp_username: Optional[str] = None
+    smtp_password: Optional[str] = None
+    smtp_from: Optional[str] = None
+    smtp_admin_email: Optional[str] = None
 
 @api_router.get("/admin/settings")
 async def admin_get_settings(_=Depends(get_admin)):
@@ -266,9 +286,11 @@ async def admin_get_settings(_=Depends(get_admin)):
     s["razorpay_key_secret_masked"] = mask(s.get("razorpay_key_secret", ""))
     s["razorpay_webhook_secret_masked"] = mask(s.get("razorpay_webhook_secret", ""))
     s["shiprocket_password_masked"] = mask(s.get("shiprocket_password", ""))
+    s["smtp_password_masked"] = mask(s.get("smtp_password", ""))
     s.pop("razorpay_key_secret", None)
     s.pop("razorpay_webhook_secret", None)
     s.pop("shiprocket_password", None)
+    s.pop("smtp_password", None)
     return s
 
 @api_router.put("/admin/settings")
@@ -276,6 +298,26 @@ async def admin_update_settings(body: SettingsUpdate, _=Depends(get_admin)):
     update = {k: v for k, v in body.model_dump().items() if v is not None}
     if update:
         await db.settings.update_one({"id": "global"}, {"$set": update}, upsert=True)
+    return {"ok": True}
+
+class TestEmailReq(BaseModel):
+    to: str
+
+@api_router.post("/admin/test-email")
+async def admin_test_email(req: TestEmailReq, _=Depends(get_admin)):
+    s = await get_settings_doc()
+    if not s.get("smtp_enabled"):
+        raise HTTPException(400, "SMTP is not enabled. Toggle it on and save settings first.")
+    if not s.get("smtp_username") or not s.get("smtp_password"):
+        raise HTTPException(400, "SMTP username/password missing")
+    html = f"""<!doctype html><html><body style="font-family:Arial">
+      <h2>✅ SMTP test successful</h2>
+      <p>Your CarDost backend is correctly configured to send transactional emails via <b>{s.get('smtp_host')}:{s.get('smtp_port')}</b>.</p>
+      <p style="color:#78716c">Sent from: {s.get('smtp_from') or s.get('smtp_username')}</p>
+    </body></html>"""
+    ok = await send_email(s, req.to, "✅ CarDost SMTP Test", html)
+    if not ok:
+        raise HTTPException(500, "Send failed — check backend logs and SMTP credentials")
     return {"ok": True}
 
 @api_router.get("/settings/public")
@@ -1247,6 +1289,18 @@ async def create_order(req: CreateOrderReq, creds: Optional[HTTPAuthorizationCre
     if coupon_data:
         await db.coupons.update_one({"code": coupon_data["code"]}, {"$inc": {"used_count": 1}})
 
+    # Fire customer + admin notification emails (non-blocking)
+    try:
+        if settings.get("smtp_enabled"):
+            subj_c, html_c = order_confirmation_email(order_doc)
+            asyncio.create_task(send_email(settings, order_doc["address"]["email"], subj_c, html_c, reply_to=settings.get("smtp_admin_email") or settings.get("support_email")))
+            admin_to = settings.get("smtp_admin_email") or settings.get("support_email")
+            if admin_to:
+                subj_a, html_a = admin_order_email(order_doc)
+                asyncio.create_task(send_email(settings, admin_to, subj_a, html_a, reply_to=order_doc["address"]["email"]))
+    except Exception as e:
+        logger.error(f"[email] order confirmation failed: {e}")
+
     return {
         "order_id": order_id,
         "razorpay_order_id": razorpay_order_id,
@@ -1496,6 +1550,15 @@ async def contact(req: ContactReq):
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.contacts.insert_one(doc)
+    # Email admin about the new enquiry
+    try:
+        settings = await get_settings_doc()
+        admin_to = settings.get("smtp_admin_email") or settings.get("support_email")
+        if settings.get("smtp_enabled") and admin_to:
+            subj, html = admin_contact_email(doc)
+            asyncio.create_task(send_email(settings, admin_to, subj, html, reply_to=doc.get("email") or None))
+    except Exception as e:
+        logger.error(f"[email] contact notify failed: {e}")
     return {"ok": True}
 
 @api_router.get("/admin/messages")

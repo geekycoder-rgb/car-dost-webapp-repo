@@ -5,7 +5,41 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { CreditCard, Truck, Store, ShieldCheck, KeyRound, Eye, EyeOff } from "lucide-react";
+import { CreditCard, Truck, Store, ShieldCheck, KeyRound, Eye, EyeOff, Mail, Send } from "lucide-react";
+
+function TestEmailButton({ settings }) {
+  const [open, setOpen] = useState(false);
+  const [to, setTo] = useState("");
+  const [sending, setSending] = useState(false);
+  const submit = async () => {
+    if (!to.trim()) return toast.error("Enter an email to test send");
+    setSending(true);
+    try {
+      await api.post("/admin/test-email", { to: to.trim() });
+      toast.success(`Test email sent to ${to.trim()}`);
+      setOpen(false);
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Send failed — check logs");
+    } finally {
+      setSending(false);
+    }
+  };
+  if (!open) {
+    return (
+      <Button data-testid="smtp-test-open" type="button" onClick={() => { setOpen(true); setTo(settings?.smtp_admin_email || settings?.smtp_from || ""); }}
+              className="bg-rose-600 hover:bg-rose-700 text-xs font-bold uppercase tracking-wider">
+        <Send className="w-3.5 h-3.5 mr-1.5"/> Send Test Email
+      </Button>
+    );
+  }
+  return (
+    <div className="flex items-center gap-2">
+      <Input data-testid="smtp-test-to" value={to} onChange={(e) => setTo(e.target.value)} placeholder="you@example.com" className="h-9 text-sm w-56"/>
+      <Button data-testid="smtp-test-send" disabled={sending} onClick={submit} className="bg-emerald-600 hover:bg-emerald-700 text-xs font-bold uppercase">{sending ? "Sending…" : "Send"}</Button>
+      <Button onClick={() => setOpen(false)} variant="outline" className="text-xs">×</Button>
+    </div>
+  );
+}
 
 function SecretInput({ name, label, maskedKey, placeholder, s, setS, showSecrets, setShowSecrets }) {
   const visible = showSecrets[name];
@@ -69,10 +103,10 @@ export default function AdminSettings() {
       data-state={checked ? "checked" : "unchecked"}
       data-testid={testid}
       onClick={() => onChange(!checked)}
-      className={`relative inline-flex items-center h-9 w-[88px] rounded-full transition-colors duration-200 font-bold uppercase tracking-wider text-[11px] focus:outline-none focus:ring-2 focus:ring-offset-2 ${checked ? "bg-emerald-500 text-white ring-emerald-300" : "bg-stone-300 text-stone-600 ring-stone-300"}`}
+      className={`relative inline-flex items-center h-9 w-[88px] rounded-full transition-colors duration-200 font-bold uppercase tracking-wider text-[11px] focus:outline-none focus:ring-2 focus:ring-offset-2 shrink-0 ${checked ? "bg-emerald-500 text-white ring-emerald-300" : "bg-stone-300 text-stone-600 ring-stone-300"}`}
     >
       <span className={`absolute h-7 w-7 rounded-full bg-white shadow-md transition-transform duration-200 ${checked ? "translate-x-[54px]" : "translate-x-1"}`}/>
-      <span className={`absolute ${checked ? "left-3" : "right-3"}`}>
+      <span className={`absolute ${checked ? "left-3" : "right-3"} pointer-events-none`}>
         {checked ? onLabel : offLabel}
       </span>
     </button>
@@ -121,8 +155,8 @@ export default function AdminSettings() {
           </div>
           {sec("razorpay_key_secret","Key Secret","razorpay_key_secret_masked","••••••••")}
           {sec("razorpay_webhook_secret","Webhook Secret","razorpay_webhook_secret_masked","Set on Razorpay → Webhooks → Add")}
-          <div className="flex items-center justify-between gap-3 px-3 py-3 bg-stone-50 rounded-xl border border-stone-200">
-            <div>
+          <div className="flex items-center justify-between gap-4 px-4 py-3.5 bg-stone-50 rounded-xl border border-stone-200">
+            <div className="min-w-0">
               <Label className="text-xs uppercase font-bold text-stone-700">Mock Mode</Label>
               <p className="text-[10px] text-stone-500 mt-0.5">Simulate payments (no real Razorpay popup)</p>
             </div>
@@ -144,8 +178,8 @@ export default function AdminSettings() {
             <p className="text-xs text-stone-500">Auto-create shipment orders after successful payment</p>
           </div>
         </div>
-        <div className="flex items-center justify-between gap-3 px-4 py-3.5 bg-emerald-50/40 rounded-xl border border-emerald-200 mb-4">
-          <div>
+        <div className="flex items-center justify-between gap-4 px-4 py-3.5 bg-emerald-50/40 rounded-xl border border-emerald-200 mb-4">
+          <div className="min-w-0">
             <Label className="text-sm uppercase font-bold text-stone-800">Enable Shiprocket Auto-Sync</Label>
             <p className="text-[11px] text-stone-600 mt-0.5">When ON, every paid order will be forwarded to Shiprocket automatically.</p>
           </div>
@@ -165,6 +199,64 @@ export default function AdminSettings() {
             <Label className="text-xs uppercase font-bold text-stone-700">Pickup Location</Label>
             <Input data-testid="set-ship-pickup" value={s.shiprocket_pickup_location || ""} onChange={c("shiprocket_pickup_location")} placeholder="Primary" className="border-stone-300 mt-1.5"/>
           </div>
+        </div>
+      </div>
+
+      {/* SMTP Email */}
+      <div className="bg-white border border-stone-200 rounded-2xl p-6">
+        <div className="flex items-center gap-3 mb-5 pb-3 border-b border-stone-200">
+          <div className="w-10 h-10 rounded-xl bg-rose-50 grid place-items-center text-rose-600"><Mail className="w-5 h-5"/></div>
+          <div>
+            <h2 className="font-display text-lg font-bold text-stone-950">Order &amp; Notification Emails</h2>
+            <p className="text-xs text-stone-500">Send order confirmations to customers and alerts to admin via SMTP (GoDaddy, Gmail, Office 365, etc.)</p>
+          </div>
+        </div>
+        <div className="flex items-center justify-between gap-4 px-4 py-3.5 bg-emerald-50/40 rounded-xl border border-emerald-200 mb-4">
+          <div className="min-w-0">
+            <Label className="text-sm uppercase font-bold text-stone-800">Enable Email Notifications</Label>
+            <p className="text-[11px] text-stone-600 mt-0.5">When ON, customers get order confirmations and you get a copy + new-contact alerts.</p>
+          </div>
+          <TogglePill testid="set-smtp-toggle" checked={!!s.smtp_enabled} onChange={toggleAndSave("smtp_enabled")}/>
+        </div>
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div>
+            <Label className="text-xs uppercase font-bold text-stone-700">SMTP Host</Label>
+            <Input data-testid="set-smtp-host" value={s.smtp_host || ""} onChange={c("smtp_host")} placeholder="smtpout.secureserver.net" className="border-stone-300 mt-1.5"/>
+            <p className="text-[10px] text-stone-500 mt-1">GoDaddy: <code>smtpout.secureserver.net</code> · Gmail: <code>smtp.gmail.com</code></p>
+          </div>
+          <div>
+            <Label className="text-xs uppercase font-bold text-stone-700">Port</Label>
+            <Input data-testid="set-smtp-port" type="number" value={s.smtp_port || 587} onChange={c("smtp_port")} placeholder="587" className="border-stone-300 mt-1.5"/>
+            <p className="text-[10px] text-stone-500 mt-1">587 (TLS · default) or 465 (SSL)</p>
+          </div>
+          <div>
+            <Label className="text-xs uppercase font-bold text-stone-700">Username / Email</Label>
+            <Input data-testid="set-smtp-user" value={s.smtp_username || ""} onChange={c("smtp_username")} placeholder="customercare@cardost.in" className="border-stone-300 mt-1.5"/>
+          </div>
+          {sec("smtp_password","Password","smtp_password_masked","Mailbox password")}
+          <div>
+            <Label className="text-xs uppercase font-bold text-stone-700">&quot;From&quot; Display Email</Label>
+            <Input data-testid="set-smtp-from" value={s.smtp_from || ""} onChange={c("smtp_from")} placeholder="customercare@cardost.in" className="border-stone-300 mt-1.5"/>
+            <p className="text-[10px] text-stone-500 mt-1">Usually same as username</p>
+          </div>
+          <div>
+            <Label className="text-xs uppercase font-bold text-stone-700">Admin Notification Email</Label>
+            <Input data-testid="set-smtp-admin" value={s.smtp_admin_email || ""} onChange={c("smtp_admin_email")} placeholder="customercare@cardost.in" className="border-stone-300 mt-1.5"/>
+            <p className="text-[10px] text-stone-500 mt-1">Where new-order &amp; contact alerts are sent</p>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-3 mt-4 px-4 py-3 bg-stone-50 rounded-lg border border-stone-200">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              data-testid="set-smtp-ssl"
+              type="checkbox"
+              checked={!!s.smtp_use_ssl}
+              onChange={(e) => setS({ ...s, smtp_use_ssl: e.target.checked })}
+              className="w-4 h-4"
+            />
+            <Label className="text-xs uppercase font-bold text-stone-700 cursor-pointer">Use SSL (port 465)</Label>
+          </label>
+          <TestEmailButton settings={s} />
         </div>
       </div>
 
