@@ -6,36 +6,33 @@ import ReviewsBanner from "@/components/ReviewsBanner";
 import { ChevronLeft, ChevronRight, Truck, Shield, Headphones, RotateCcw } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
-const HERO_SLIDES = [
+const DEFAULT_SLIDES = [
   {
     title: "MEGA SOUND SALE",
-    sub: "Up to 76% OFF on selected products",
-    badge: "EXTRA 5-10% OFF on Prepaid",
-    code: "SAVE5",
-    cta: "Shop Now",
-    link: "/shop",
+    subtitle: "Up to 76% OFF on selected products",
+    badge: "EXTRA 5-10% OFF on Prepaid · CODE SAVE5",
+    cta_text: "Shop Now",
+    cta_link: "/shop",
     mesh: "mesh-indigo",
     accent: "#A5B4FC",
     image: "https://images.pexels.com/photos/9530906/pexels-photo-9530906.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=720&w=1920",
   },
   {
     title: "ANDROID STEREOS",
-    sub: "10\" Touchscreen · Carplay · GPS",
-    badge: "Starting ₹7,499",
-    code: "STEREO10",
-    cta: "Explore Stereos",
-    link: "/shop?category=android-stereos",
+    subtitle: "10\" Touchscreen · Carplay · GPS",
+    badge: "Starting ₹7,499 · CODE STEREO10",
+    cta_text: "Explore Stereos",
+    cta_link: "/shop?category=android-stereos",
     mesh: "mesh-stereo",
     accent: "#FBBF24",
     image: "https://images.pexels.com/photos/4078064/pexels-photo-4078064.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=720&w=1920",
   },
   {
     title: "BASS LEGENDS",
-    sub: "Sony · JBL · Pioneer · Magnetz",
-    badge: "Free Shipping All India",
-    code: "BASS500",
-    cta: "Shop Speakers",
-    link: "/shop?category=speakers",
+    subtitle: "Sony · JBL · Pioneer · Magnetz",
+    badge: "Free Shipping All India · CODE BASS500",
+    cta_text: "Shop Speakers",
+    cta_link: "/shop?category=speakers",
     mesh: "mesh-speakers",
     accent: "#FBCFE8",
     image: "https://images.unsplash.com/photo-1608538770329-65941f62f9f8?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MTN8MHwxfHNlYXJjaHwxfHxjYXIlMjBhdWRpbyUyMHNwZWFrZXIlMjBtYWNyb3xlbnwwfHx8fDE3ODE4OTgwOTB8MA&ixlib=rb-4.1.0&q=85",
@@ -67,26 +64,34 @@ export default function Home() {
   const [stereos, setStereos] = useState([]);
   const [speakers, setSpeakers] = useState([]);
   const [slide, setSlide] = useState(0);
+  const [slides, setSlides] = useState(DEFAULT_SLIDES);
 
   useEffect(() => {
     api.get("/products", { params: { featured: true } }).then((r) => setNewArrivals(r.data.slice(0, 8)));
     api.get("/products", { params: { category: "android-stereos" } }).then((r) => setStereos(r.data));
     api.get("/products", { params: { category: "speakers" } }).then((r) => setSpeakers(r.data));
+    // Live banners managed by admin — falls back to DEFAULT_SLIDES if none
+    api.get("/banners")
+      .then((r) => { if (r.data && r.data.length > 0) { setSlides(r.data); setSlide(0); } })
+      .catch(() => { /* keep defaults */ });
   }, []);
 
   useEffect(() => {
-    const t = setInterval(() => setSlide((s) => (s + 1) % HERO_SLIDES.length), 6000);
+    if (slides.length <= 1) return;
+    const t = setInterval(() => setSlide((s) => (s + 1) % slides.length), 6000);
     return () => clearInterval(t);
-  }, []);
+  }, [slides.length]);
 
-  const current = HERO_SLIDES[slide];
+  const current = slides[slide] || slides[0];
 
   return (
     <div className="bg-white">
       {/* HERO Carousel */}
       <section className="relative overflow-hidden">
-        <div className={`relative h-[280px] sm:h-[400px] lg:h-[520px] ${current.mesh}`}>
-          <div className="absolute inset-0 opacity-30" style={{ backgroundImage: `url(${current.image})`, backgroundSize: "cover", backgroundPosition: "center", mixBlendMode: "luminosity" }}/>
+        <div className={`relative h-[280px] sm:h-[400px] lg:h-[520px] ${current.mesh || "mesh-indigo"}`}>
+          {current.image && (
+            <div className="absolute inset-0 opacity-30" style={{ backgroundImage: `url(${current.image})`, backgroundSize: "cover", backgroundPosition: "center", mixBlendMode: "luminosity" }}/>
+          )}
           <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/40"/>
           <div className="relative max-w-7xl mx-auto h-full px-6 flex items-center">
             <div className="space-y-3 sm:space-y-5 animate-fade-up text-white">
@@ -96,32 +101,38 @@ export default function Home() {
               <h1 className="font-anton text-4xl sm:text-6xl lg:text-8xl leading-[0.95] uppercase drop-shadow-2xl">
                 {current.title}
               </h1>
-              <p className="font-display text-base sm:text-2xl lg:text-3xl font-medium" style={{ color: current.accent }}>{current.sub}</p>
+              {current.subtitle && (
+                <p className="font-display text-base sm:text-2xl lg:text-3xl font-medium" style={{ color: current.accent || "#A5B4FC" }}>{current.subtitle}</p>
+              )}
               <div className="flex flex-wrap gap-3 items-center pt-2">
-                <Link to={current.link} className="group bg-white hover:bg-indigo-50 text-slate-900 font-bold uppercase text-xs sm:text-sm tracking-wider px-7 sm:px-10 py-3 sm:py-4 rounded-full transition shadow-2xl inline-flex items-center gap-2">
-                  {current.cta} <span className="group-hover:translate-x-1 transition">→</span>
+                <Link to={current.cta_link || "/shop"} className="group bg-white hover:bg-indigo-50 text-slate-900 font-bold uppercase text-xs sm:text-sm tracking-wider px-7 sm:px-10 py-3 sm:py-4 rounded-full transition shadow-2xl inline-flex items-center gap-2">
+                  {current.cta_text || "Shop Now"} <span className="group-hover:translate-x-1 transition">→</span>
                 </Link>
-                <div className="hidden sm:flex items-center gap-2 glass border border-white/20 text-white px-4 py-2.5 rounded-full text-[10px] uppercase font-bold tracking-wider">
-                  {current.badge} · CODE <span className="text-amber-300 font-mono">{current.code}</span>
-                </div>
+                {current.badge && (
+                  <div className="hidden sm:flex items-center gap-2 glass border border-white/20 text-white px-4 py-2.5 rounded-full text-[10px] uppercase font-bold tracking-wider">
+                    {current.badge}
+                  </div>
+                )}
               </div>
             </div>
           </div>
 
           {/* Slider arrows */}
-          <button onClick={() => setSlide((s) => (s - 1 + HERO_SLIDES.length) % HERO_SLIDES.length)} aria-label="prev"
-                  className="absolute left-3 top-1/2 -translate-y-1/2 w-11 h-11 grid place-items-center glass border border-white/20 text-white hover:bg-white hover:text-slate-900 rounded-full transition">
-            <ChevronLeft className="w-5 h-5"/>
-          </button>
-          <button onClick={() => setSlide((s) => (s + 1) % HERO_SLIDES.length)} aria-label="next"
-                  className="absolute right-3 top-1/2 -translate-y-1/2 w-11 h-11 grid place-items-center glass border border-white/20 text-white hover:bg-white hover:text-slate-900 rounded-full transition">
-            <ChevronRight className="w-5 h-5"/>
-          </button>
-          <div className="absolute bottom-5 left-1/2 -translate-x-1/2 flex gap-2">
-            {HERO_SLIDES.map((_, i) => (
-              <button key={i} onClick={() => setSlide(i)} className={`h-1.5 rounded-full transition-all ${i === slide ? "w-10 bg-white" : "w-1.5 bg-white/50 hover:bg-white/80"}`}/>
-            ))}
-          </div>
+          {slides.length > 1 && (<>
+            <button onClick={() => setSlide((s) => (s - 1 + slides.length) % slides.length)} aria-label="prev"
+                    className="absolute left-3 top-1/2 -translate-y-1/2 w-11 h-11 grid place-items-center glass border border-white/20 text-white hover:bg-white hover:text-slate-900 rounded-full transition">
+              <ChevronLeft className="w-5 h-5"/>
+            </button>
+            <button onClick={() => setSlide((s) => (s + 1) % slides.length)} aria-label="next"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 w-11 h-11 grid place-items-center glass border border-white/20 text-white hover:bg-white hover:text-slate-900 rounded-full transition">
+              <ChevronRight className="w-5 h-5"/>
+            </button>
+            <div className="absolute bottom-5 left-1/2 -translate-x-1/2 flex gap-2">
+              {slides.map((_, i) => (
+                <button key={i} onClick={() => setSlide(i)} aria-label={`slide ${i+1}`} className={`h-1.5 rounded-full transition-all ${i === slide ? "w-10 bg-white" : "w-1.5 bg-white/50 hover:bg-white/80"}`}/>
+              ))}
+            </div>
+          </>)}
         </div>
       </section>
 
