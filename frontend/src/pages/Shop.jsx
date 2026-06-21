@@ -35,6 +35,21 @@ export default function Shop() {
   const [sort, setSort] = useState("featured");
   const [filterOpen, setFilterOpen] = useState({ category: true, vehicle: true });
 
+  // Sync local search state when URL ?q= changes (e.g. user submits header search while already on /shop)
+  useEffect(() => { setQ(params.get("q") || ""); }, [params]);
+
+  // Push sidebar typing back to URL (debounced) so refresh & back-button preserve it
+  useEffect(() => {
+    const urlQ = params.get("q") || "";
+    if (q === urlQ) return;
+    const id = setTimeout(() => {
+      const p = new URLSearchParams(params);
+      if (q.trim()) p.set("q", q.trim()); else p.delete("q");
+      setParams(p, { replace: true });
+    }, 350);
+    return () => clearTimeout(id);
+  }, [q, params, setParams]);
+
   useEffect(() => {
     api.get("/categories").then((r) => setCategories(r.data));
     api.get("/catalog/car-brands").then((r) => setCarBrands(r.data));

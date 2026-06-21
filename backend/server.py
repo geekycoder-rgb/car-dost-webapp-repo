@@ -695,7 +695,15 @@ async def filter_products(
         query["price"] = {}
         if min_price is not None: query["price"]["$gte"] = min_price
         if max_price is not None: query["price"]["$lte"] = max_price
-    if q: query["name"] = {"$regex": q, "$options": "i"}
+    if q:
+        # Multi-field case-insensitive search: name, description, brand, tags
+        regex = {"$regex": q.strip(), "$options": "i"}
+        and_clauses.append({"$or": [
+            {"name": regex},
+            {"description": regex},
+            {"brand": regex},
+            {"tags": regex},
+        ]})
     if and_clauses:
         query["$and"] = and_clauses
     items = await db.products.find(query, {"_id": 0}).to_list(500)

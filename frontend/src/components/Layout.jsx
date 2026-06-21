@@ -26,6 +26,7 @@ export default function Layout({ children }) {
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchQ, setSearchQ] = useState("");
+  const [searchCat, setSearchCat] = useState("all");
   const [categories, setCategories] = useState([]);
 
   useEffect(() => {
@@ -54,7 +55,10 @@ export default function Layout({ children }) {
 
   const submitSearch = (e) => {
     e.preventDefault();
-    if (searchQ.trim()) navigate(`/shop?q=${encodeURIComponent(searchQ.trim())}`);
+    const p = new URLSearchParams();
+    if (searchQ.trim()) p.set("q", searchQ.trim());
+    if (searchCat && searchCat !== "all") p.set("category", searchCat);
+    navigate(`/shop${p.toString() ? `?${p.toString()}` : ""}`);
   };
 
   return (
@@ -107,17 +111,27 @@ export default function Layout({ children }) {
             </div>
           </Link>
 
-          <div className="hidden md:flex flex-1 max-w-xl items-center gap-3">
+          <div className="hidden md:flex flex-1 max-w-2xl items-center gap-3">
             <span className="text-indigo-600 font-bold text-sm uppercase tracking-wide whitespace-nowrap hidden lg:inline">What are you looking for?</span>
-            <form onSubmit={submitSearch} className="flex-1 relative">
+            <form onSubmit={submitSearch} className="flex-1 flex items-stretch border-2 border-neutral-300 rounded-md focus-within:border-indigo-600 overflow-hidden bg-white">
+              <select
+                data-testid="header-search-cat"
+                value={searchCat}
+                onChange={(e) => setSearchCat(e.target.value)}
+                className="px-3 py-2 bg-stone-100 hover:bg-stone-200 text-xs font-bold uppercase tracking-wider text-stone-700 border-r border-stone-300 focus:outline-none cursor-pointer max-w-[140px] truncate"
+                aria-label="Search category"
+              >
+                <option value="all">All Categories</option>
+                {categories.map((c) => <option key={c.slug} value={c.slug}>{c.name}</option>)}
+              </select>
               <Input
                 data-testid="header-search"
                 placeholder="Search for stereos, speakers, accessories..."
                 value={searchQ}
                 onChange={(e) => setSearchQ(e.target.value)}
-                className="h-11 pr-12 border-2 border-neutral-300 focus:border-indigo-600 text-sm rounded-md"
+                className="h-11 flex-1 border-0 focus:ring-0 focus-visible:ring-0 text-sm rounded-none px-3"
               />
-              <button type="submit" className="absolute right-0 top-0 h-11 w-11 grid place-items-center bg-indigo-600 hover:bg-indigo-700 text-white rounded-r-md transition">
+              <button type="submit" data-testid="header-search-submit" className="h-11 w-12 grid place-items-center bg-indigo-600 hover:bg-indigo-700 text-white transition shrink-0">
                 <Search className="w-4 h-4"/>
               </button>
             </form>
