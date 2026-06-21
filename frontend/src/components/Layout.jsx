@@ -40,6 +40,7 @@ export default function Layout({ children }) {
     { to: "/", label: "Home" },
   ];
   const tailLinks = [
+    { to: "/track-order", label: "Track Order" },
     { to: "/reviews", label: "Reviews" },
     { to: "/about", label: "About" },
     { to: "/faq", label: "FAQ" },
@@ -277,7 +278,7 @@ export default function Layout({ children }) {
               <li><Link to="/reviews" className="hover:text-indigo-400">Reviews</Link></li>
               <li><Link to="/faq" className="hover:text-indigo-400">FAQ</Link></li>
               <li><Link to="/contact" className="hover:text-indigo-400">Contact Us</Link></li>
-              <li><Link to="/my-orders" className="hover:text-indigo-400">Track Order</Link></li>
+              <li><Link to="/track-order" className="hover:text-indigo-400">Track Order</Link></li>
               <li><Link to="/faq" className="hover:text-indigo-400">Return Policy</Link></li>
               <li><Link to="/faq" className="hover:text-indigo-400">Shipping Info</Link></li>
             </ul>

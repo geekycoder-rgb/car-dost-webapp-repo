@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
 import { api, formatINR, resolveImg } from "@/lib/api";
@@ -116,9 +116,13 @@ export default function Checkout() {
           </div>
           <h1 className="font-display text-3xl font-bold uppercase mb-3">Order Placed!</h1>
           <p className="text-neutral-600 mb-2">Order ID: <span className="font-mono text-neutral-900 font-bold">{successOrder.order_id.slice(0, 8).toUpperCase()}</span></p>
-          <p className="text-neutral-600 mb-8">Amount paid: <span className="text-indigo-600 font-bold text-lg">{formatINR(successOrder.total)}</span></p>
+          <p className="text-neutral-600 mb-6">Amount paid: <span className="text-indigo-600 font-bold text-lg">{formatINR(successOrder.total)}</span></p>
+          <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-800 mb-6 max-w-md mx-auto">
+            <strong>Save this Order ID</strong> — you can track your order anytime at <Link to="/track-order" className="font-bold underline text-amber-900">cardost.net/track-order</Link> using your email/phone or order ID. We&apos;ve also emailed it to you.
+          </div>
           <div className="flex flex-wrap gap-3 justify-center">
             <Button data-testid="view-order-btn" onClick={() => navigate(`/order/${successOrder.order_id}`)} className="bg-indigo-600 hover:bg-indigo-700 font-bold uppercase tracking-wider text-xs">View Order</Button>
+            <Button data-testid="track-order-btn" onClick={() => navigate(`/track-order?order_id=${successOrder.order_id}`)} variant="outline" className="border-indigo-300 text-indigo-700 hover:bg-indigo-50 font-bold uppercase tracking-wider text-xs">Track Order</Button>
             <Button data-testid="continue-shopping-btn" onClick={() => navigate("/shop")} variant="outline" className="border-neutral-300 font-bold uppercase tracking-wider text-xs">Continue Shopping</Button>
           </div>
         </div>

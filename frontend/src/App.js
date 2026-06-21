@@ -17,6 +17,7 @@ import AdminLogin from "@/pages/AdminLogin";
 import AdminDashboard from "@/pages/AdminDashboard";
 import OrderDetail from "@/pages/OrderDetail";
 import Wishlist from "@/pages/Wishlist";
+import TrackOrder from "@/pages/TrackOrder";
 import Reviews from "@/pages/Reviews";
 import About from "@/pages/About";
 import FAQ from "@/pages/FAQ";
@@ -41,6 +42,7 @@ export default function App() {
                 <Route path="/signup" element={<Signup />} />
                 <Route path="/my-orders" element={<MyOrders />} />
                 <Route path="/order/:id" element={<OrderDetail />} />
+                <Route path="/track-order" element={<TrackOrder />} />
                 <Route path="/reviews" element={<Reviews />} />
                 <Route path="/about" element={<About />} />
                 <Route path="/faq" element={<FAQ />} />

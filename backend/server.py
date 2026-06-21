@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
+import re
 import logging
 import uuid
 import hmac
@@ -1347,6 +1348,34 @@ async def get_order(oid: str):
 @api_router.get("/my/orders")
 async def my_orders(user=Depends(get_current_user)):
     orders = await db.orders.find({"user_id": user["uid"]}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    return orders
+
+# Guest order tracking — lookup by order ID + (email OR phone)
+class TrackOrderReq(BaseModel):
+    order_id: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+
+@api_router.post("/orders/track")
+async def track_order(req: TrackOrderReq):
+    if not (req.email or req.phone):
+        raise HTTPException(400, "Please provide email or phone number")
+    if not req.order_id and not (req.email and req.phone):
+        # Without order_id, require both email + phone for stronger identity check
+        raise HTTPException(400, "Provide an order ID, or both email and phone, to look up your order(s).")
+    query = {}
+    if req.order_id:
+        query["id"] = req.order_id.strip()
+    if req.email:
+        query["address.email"] = {"$regex": f"^{re.escape(req.email.strip())}$", "$options": "i"}
+    if req.phone:
+        # Match phone ignoring spaces / dashes / leading + or 91 — keep last 10 digits
+        phone = "".join(ch for ch in req.phone if ch.isdigit())[-10:]
+        if phone:
+            query["address.phone"] = {"$regex": re.escape(phone)}
+    orders = await db.orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(50)
+    if not orders:
+        raise HTTPException(404, "No orders found matching those details. Please check and try again.")
     return orders
 
 @api_router.get("/admin/orders")
