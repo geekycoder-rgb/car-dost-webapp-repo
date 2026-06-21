@@ -636,12 +636,49 @@ async def filter_products(
         and_clauses.append({"$or": [{"category": category}, {"categories": category}]})
     if car_brand:
         brands_q = [b.strip() for b in car_brand.split(",") if b.strip() and b.strip().upper() != "ALL"]
-        and_clauses.append({"car_brands": {"$in": brands_q + ["ALL"]}})
+        # Resolve brand names to make_ids → all variants under those makes
+        mk_docs = await db.car_makes.find({"name": {"$in": brands_q}}, {"id": 1, "_id": 0}).to_list(20)
+        mk_ids = [m["id"] for m in mk_docs]
+        bridged_variant_ids = []
+        if mk_ids:
+            md_docs = await db.car_models.find({"make_id": {"$in": mk_ids}}, {"id": 1, "_id": 0}).to_list(500)
+            md_ids = [m["id"] for m in md_docs]
+            if md_ids:
+                vt_docs = await db.car_variants.find({"model_id": {"$in": md_ids}}, {"id": 1, "_id": 0}).to_list(2000)
+                bridged_variant_ids = [v["id"] for v in vt_docs]
+        # Match legacy flat car_brands OR new compatible_variants OR Universal
+        and_clauses.append({"$or": [
+            {"car_brands": {"$in": brands_q + ["ALL"]}},
+            {"compatible_variants": {"$in": bridged_variant_ids}} if bridged_variant_ids else {"car_brands": "ALL"},
+        ]})
     if car_model:
         models_q = [m.strip() for m in car_model.split(",") if m.strip()]
-        and_clauses.append({"$or": [{"car_models": {"$in": models_q}}, {"car_brands": "ALL"}]})
+        # Resolve model names → model_ids → variants
+        md_docs = await db.car_models.find({"name": {"$in": models_q}}, {"id": 1, "_id": 0}).to_list(100)
+        md_ids = [m["id"] for m in md_docs]
+        bridged_variant_ids = []
+        if md_ids:
+            vt_docs = await db.car_variants.find({"model_id": {"$in": md_ids}}, {"id": 1, "_id": 0}).to_list(500)
+            bridged_variant_ids = [v["id"] for v in vt_docs]
+        and_clauses.append({"$or": [
+            {"car_models": {"$in": models_q}},
+            {"compatible_variants": {"$in": bridged_variant_ids}} if bridged_variant_ids else {"car_brands": "ALL"},
+            {"car_brands": "ALL"},
+        ]})
     if year:
-        and_clauses.append({"$or": [{"years": year}, {"car_brands": "ALL"}]})
+        # Resolve year → variants whose [start_year, end_year] covers this year
+        vt_docs = await db.car_variants.find(
+            {"$and": [
+                {"start_year": {"$lte": year}},
+                {"$or": [{"end_year": None}, {"end_year": {"$gte": year}}]},
+            ]}, {"id": 1, "_id": 0}
+        ).to_list(2000)
+        bridged_variant_ids = [v["id"] for v in vt_docs]
+        and_clauses.append({"$or": [
+            {"years": year},
+            {"compatible_variants": {"$in": bridged_variant_ids}} if bridged_variant_ids else {"car_brands": "ALL"},
+            {"car_brands": "ALL"},
+        ]})
     # Hierarchical v2 filters
     if variant_id:
         and_clauses.append({"$or": [{"compatible_variants": variant_id}, {"car_brands": "ALL"}]})

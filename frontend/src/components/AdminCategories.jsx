@@ -7,16 +7,46 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
-import { Plus, Edit, Trash2, GripVertical, EyeOff, Eye as EyeIcon } from "lucide-react";
+import { Plus, Edit, Trash2, GripVertical, EyeOff, Eye as EyeIcon, Upload, ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 
 const EMPTY = { slug: "", name: "", description: "", image: "", icon: "Package", parent_slug: null, is_active: true, sort_order: 100 };
+
+const resolveImg = (src) => {
+  if (!src) return "";
+  if (src.startsWith("http") || src.startsWith("data:")) return src;
+  const base = process.env.REACT_APP_BACKEND_URL || "";
+  return `${base}${src}`;
+};
 
 export default function AdminCategories() {
   const [cats, setCats] = useState([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY);
+  const [uploading, setUploading] = useState(false);
+
+  const handleUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.type)) {
+      return toast.error("JPG, PNG, WEBP or GIF only");
+    }
+    if (file.size > 5 * 1024 * 1024) return toast.error("Max file size is 5MB");
+    const fd = new FormData();
+    fd.append("file", file);
+    setUploading(true);
+    try {
+      const { data } = await api.post("/admin/upload", fd, { headers: { "Content-Type": "multipart/form-data" } });
+      setForm((f) => ({ ...f, image: data.url }));
+      toast.success("Image uploaded");
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Upload failed");
+    } finally {
+      setUploading(false);
+      e.target.value = ""; // allow re-uploading same file
+    }
+  };
 
   const load = () => api.get("/admin/categories").then((r) => setCats(r.data));
   useEffect(() => { load(); }, []);
@@ -113,7 +143,30 @@ export default function AdminCategories() {
             <div><Label className="text-xs uppercase font-bold">Name *</Label><Input data-testid="cat-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="mt-1"/></div>
             <div><Label className="text-xs uppercase font-bold">Slug * (kebab-case, e.g. android-stereos)</Label><Input data-testid="cat-slug" value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-") })} className="mt-1"/></div>
             <div><Label className="text-xs uppercase font-bold">Description</Label><Textarea value={form.description || ""} onChange={(e) => setForm({ ...form, description: e.target.value })} className="mt-1"/></div>
-            <div><Label className="text-xs uppercase font-bold">Image URL</Label><Input value={form.image || ""} onChange={(e) => setForm({ ...form, image: e.target.value })} placeholder="https://..." className="mt-1"/></div>
+            <div>
+              <Label className="text-xs uppercase font-bold">Category Image</Label>
+              <div className="mt-1 flex gap-3 items-start">
+                {form.image ? (
+                  <div className="relative">
+                    <img data-testid="cat-image-preview" src={resolveImg(form.image)} alt="" className="w-20 h-20 rounded-lg object-cover border-2 border-stone-200"/>
+                    <button type="button" onClick={() => setForm({ ...form, image: "" })} className="absolute -top-1.5 -right-1.5 w-5 h-5 grid place-items-center bg-rose-500 text-white rounded-full text-[10px] hover:bg-rose-600" aria-label="Remove image">×</button>
+                  </div>
+                ) : (
+                  <div className="w-20 h-20 rounded-lg border-2 border-dashed border-stone-300 grid place-items-center text-stone-400 bg-stone-50">
+                    <ImageIcon className="w-7 h-7"/>
+                  </div>
+                )}
+                <div className="flex-1 space-y-2">
+                  <Input data-testid="cat-image-url" value={form.image || ""} onChange={(e) => setForm({ ...form, image: e.target.value })} placeholder="Paste image URL OR use upload →"/>
+                  <label className={`inline-flex items-center gap-2 px-3 py-2 rounded text-xs font-bold uppercase tracking-wider transition cursor-pointer ${uploading ? "bg-stone-200 text-stone-500" : "bg-indigo-600 hover:bg-indigo-700 text-white"}`}>
+                    <Upload className="w-3.5 h-3.5"/>
+                    {uploading ? "Uploading…" : "Upload image"}
+                    <input data-testid="cat-image-file" type="file" accept="image/*" onChange={handleUpload} className="hidden" disabled={uploading}/>
+                  </label>
+                  <div className="text-[10px] text-stone-500">JPG / PNG / WEBP / GIF · max 5MB</div>
+                </div>
+              </div>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label className="text-xs uppercase font-bold">Parent Category</Label>
                 <select value={form.parent_slug || ""} onChange={(e) => setForm({ ...form, parent_slug: e.target.value || null })} className="w-full border border-stone-300 rounded px-3 py-2 text-sm mt-1">

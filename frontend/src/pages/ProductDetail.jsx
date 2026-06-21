@@ -127,10 +127,16 @@ export default function ProductDetail() {
             {product.brand && <div className="text-xs uppercase tracking-[0.3em] text-indigo-600 font-bold">{product.brand}</div>}
             <h1 className="font-display text-2xl lg:text-4xl font-bold text-neutral-900 leading-tight">{product.name}</h1>
             <div className="flex items-center gap-3">
-              <div className="flex text-yellow-500">
-                {[...Array(5)].map((_, i) => <Star key={i} className={`w-4 h-4 ${i < Math.floor(product.rating) ? "fill-current" : "text-neutral-300"}`}/>)}
-              </div>
-              <span className="text-sm text-neutral-600">{product.rating} · 142 reviews</span>
+              {(product.review_count || 0) > 0 ? (
+                <>
+                  <div className="flex text-yellow-500">
+                    {[...Array(5)].map((_, i) => <Star key={i} className={`w-4 h-4 ${i < Math.floor(product.rating) ? "fill-current" : "text-neutral-300"}`}/>)}
+                  </div>
+                  <span data-testid="pd-review-summary" className="text-sm text-neutral-600">{product.rating} · {product.review_count} review{product.review_count !== 1 ? "s" : ""}</span>
+                </>
+              ) : (
+                <span data-testid="pd-review-empty" className="text-xs text-stone-500 italic">No reviews yet · Be the first to rate</span>
+              )}
             </div>
             <div className="bg-indigo-50 border border-indigo-200 p-4 rounded-md">
               <div className="flex items-baseline gap-3">

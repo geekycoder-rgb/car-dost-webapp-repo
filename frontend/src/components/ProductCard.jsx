@@ -37,11 +37,17 @@ export default function ProductCard({ product }) {
         <Link to={`/product/${product.id}`} className="block">
           <h3 className="text-sm font-semibold text-neutral-900 line-clamp-2 group-hover:text-indigo-600 transition leading-snug min-h-[2.5rem]">{product.name}</h3>
         </Link>
-        <div className="flex items-center gap-1 text-xs">
-          <div className="flex text-yellow-500">
-            {[...Array(5)].map((_, i) => <Star key={i} className={`w-3 h-3 ${i < Math.floor(product.rating) ? "fill-current" : "text-neutral-300"}`}/>)}
-          </div>
-          <span className="text-neutral-500 ml-1">({product.rating})</span>
+        <div className="flex items-center gap-1 text-xs h-4">
+          {(product.review_count || 0) > 0 ? (
+            <>
+              <div className="flex text-yellow-500">
+                {[...Array(5)].map((_, i) => <Star key={i} className={`w-3 h-3 ${i < Math.floor(product.rating) ? "fill-current" : "text-neutral-300"}`}/>)}
+              </div>
+              <span className="text-neutral-500 ml-1">({product.rating}) · {product.review_count}</span>
+            </>
+          ) : (
+            <span className="text-stone-400 italic text-[10px]">No reviews yet</span>
+          )}
         </div>
         <div className="flex items-baseline gap-2 pt-1">
           <span className="font-display text-lg font-bold text-indigo-600">{formatINR(product.price)}</span>
