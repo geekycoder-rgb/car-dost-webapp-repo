@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import { api, formatINR, resolveImg } from "@/lib/api";
 import { Star, Plus, Minus, ShoppingCart, Truck, Shield, RotateCcw, Heart, Share2, CheckCircle2 } from "lucide-react";
 import { useCart } from "@/context/CartContext";
+import { useWishlist } from "@/context/WishlistContext";
 import { toast } from "sonner";
 import ProductReviews from "@/components/ProductReviews";
 import { CustomerVehicleSelector } from "@/components/VehicleVariantPicker";
@@ -11,10 +12,42 @@ export default function ProductDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { add } = useCart();
+  const { has: inWishlist, toggle: toggleWishlist } = useWishlist();
   const [product, setProduct] = useState(null);
   const [qty, setQty] = useState(1);
   const [activeImg, setActiveImg] = useState(null);
   const [vehicle, setVehicle] = useState(null); // { id, label }
+
+  const handleShare = async () => {
+    const url = window.location.href;
+    const shareData = {
+      title: product?.name || "CarDost",
+      text: `${product?.name} on CarDost`,
+      url,
+    };
+    try {
+      if (navigator.share && navigator.canShare?.(shareData)) {
+        await navigator.share(shareData);
+        return;
+      }
+    } catch (err) {
+      if (err?.name === "AbortError") return; // user cancelled
+    }
+    // Clipboard fallback
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success("Product link copied to clipboard");
+    } catch {
+      toast.error("Could not copy link — please copy it from the address bar.");
+    }
+  };
+
+  const handleWishlist = () => {
+    if (!product) return;
+    const wasIn = inWishlist(product.id);
+    toggleWishlist(product);
+    toast.success(wasIn ? "Removed from wishlist" : "Saved to wishlist");
+  };
 
   useEffect(() => {
     api.get(`/products/${id}`).then((r) => { setProduct(r.data); setActiveImg(r.data.image); }).catch(() => navigate("/shop"));
@@ -169,8 +202,17 @@ export default function ProductDetail() {
             </button>
 
             <div className="flex gap-4 text-xs pt-2 text-neutral-600">
-              <button className="flex items-center gap-1 hover:text-indigo-600"><Heart className="w-4 h-4"/> Wishlist</button>
-              <button className="flex items-center gap-1 hover:text-indigo-600"><Share2 className="w-4 h-4"/> Share</button>
+              <button
+                data-testid="pd-wishlist-btn"
+                onClick={handleWishlist}
+                className={`flex items-center gap-1.5 transition ${product && inWishlist(product.id) ? "text-rose-600 font-bold" : "hover:text-indigo-600"}`}
+              >
+                <Heart className={`w-4 h-4 ${product && inWishlist(product.id) ? "fill-current" : ""}`}/>
+                {product && inWishlist(product.id) ? "Wishlisted" : "Wishlist"}
+              </button>
+              <button data-testid="pd-share-btn" onClick={handleShare} className="flex items-center gap-1.5 hover:text-indigo-600 transition">
+                <Share2 className="w-4 h-4"/> Share
+              </button>
             </div>
 
             <div className="grid grid-cols-3 gap-3 pt-5 border-t border-neutral-200">

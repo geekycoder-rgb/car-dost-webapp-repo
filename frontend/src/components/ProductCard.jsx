@@ -2,10 +2,13 @@ import { Link } from "react-router-dom";
 import { Star, ShoppingCart, Heart } from "lucide-react";
 import { formatINR, resolveImg } from "@/lib/api";
 import { useCart } from "@/context/CartContext";
+import { useWishlist } from "@/context/WishlistContext";
 import { toast } from "sonner";
 
 export default function ProductCard({ product }) {
   const { add } = useCart();
+  const { has, toggle } = useWishlist();
+  const wished = has(product.id);
   const off = product.original_price ? Math.round(100 - (product.price / product.original_price) * 100) : 0;
 
   return (
@@ -16,10 +19,17 @@ export default function ProductCard({ product }) {
           <span className="absolute top-3 left-3 bg-indigo-600 text-white text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-sm">-{off}% OFF</span>
         )}
         <button
-          onClick={(e) => { e.preventDefault(); toast.success("Saved to wishlist"); }}
-          className="absolute top-3 right-3 w-8 h-8 grid place-items-center bg-white/90 hover:bg-indigo-600 hover:text-white text-neutral-700 rounded-full opacity-0 group-hover:opacity-100 transition"
+          data-testid={`wishlist-${product.id}`}
+          aria-label={wished ? "Remove from wishlist" : "Save to wishlist"}
+          onClick={(e) => {
+            e.preventDefault();
+            const wasIn = has(product.id);
+            toggle(product);
+            toast.success(wasIn ? "Removed from wishlist" : "Saved to wishlist");
+          }}
+          className={`absolute top-3 right-3 w-8 h-8 grid place-items-center rounded-full transition opacity-100 ${wished ? "bg-rose-500 text-white" : "bg-white/90 hover:bg-rose-500 hover:text-white text-neutral-700"}`}
         >
-          <Heart className="w-4 h-4"/>
+          <Heart className={`w-4 h-4 ${wished ? "fill-current" : ""}`}/>
         </button>
       </Link>
       <div className="p-3.5 space-y-1.5">

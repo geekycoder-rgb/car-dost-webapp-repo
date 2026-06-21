@@ -3,6 +3,7 @@ import { ShoppingCart, User, LogOut, Menu, X, Phone, Mail, Search, Heart, Home a
 import { useEffect, useState } from "react";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
+import { useWishlist } from "@/context/WishlistContext";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +22,7 @@ const PROMO_ITEMS = [
 export default function Layout({ children }) {
   const { count } = useCart();
   const { user, logout } = useAuth();
+  const { count: wlCount } = useWishlist();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchQ, setSearchQ] = useState("");
@@ -122,9 +124,12 @@ export default function Layout({ children }) {
           </div>
 
           <div className="flex items-center gap-2 lg:gap-4 shrink-0">
-            <button className="hidden md:grid place-items-center p-2 text-neutral-700 hover:text-indigo-600 transition">
+            <Link to="/wishlist" data-testid="wishlist-btn" className="relative hidden md:grid place-items-center p-2 text-neutral-700 hover:text-indigo-600 transition">
               <Heart className="w-5 h-5"/>
-            </button>
+              {wlCount > 0 && (
+                <span data-testid="wishlist-count" className="absolute -top-0.5 -right-0.5 bg-rose-500 text-white text-[10px] font-bold w-5 h-5 rounded-full grid place-items-center">{wlCount}</span>
+              )}
+            </Link>
             <Link to="/cart" data-testid="cart-btn" className="relative p-2 text-neutral-700 hover:text-indigo-600 transition">
               <ShoppingCart className="w-5 h-5"/>
               {count > 0 && (

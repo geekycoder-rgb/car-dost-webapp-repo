@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Toaster } from "sonner";
 import { AuthProvider } from "@/context/AuthContext";
 import { CartProvider } from "@/context/CartContext";
+import { WishlistProvider } from "@/context/WishlistContext";
 import Layout from "@/components/Layout";
 import Home from "@/pages/Home";
 import Shop from "@/pages/Shop";
@@ -15,6 +16,7 @@ import MyOrders from "@/pages/MyOrders";
 import AdminLogin from "@/pages/AdminLogin";
 import AdminDashboard from "@/pages/AdminDashboard";
 import OrderDetail from "@/pages/OrderDetail";
+import Wishlist from "@/pages/Wishlist";
 import Reviews from "@/pages/Reviews";
 import About from "@/pages/About";
 import FAQ from "@/pages/FAQ";
@@ -26,12 +28,14 @@ export default function App() {
       <BrowserRouter>
         <AuthProvider>
           <CartProvider>
+            <WishlistProvider>
             <Layout>
               <Routes>
                 <Route path="/" element={<Home />} />
                 <Route path="/shop" element={<Shop />} />
                 <Route path="/product/:id" element={<ProductDetail />} />
                 <Route path="/cart" element={<Cart />} />
+                <Route path="/wishlist" element={<Wishlist />} />
                 <Route path="/checkout" element={<Checkout />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/signup" element={<Signup />} />
@@ -46,6 +50,7 @@ export default function App() {
               </Routes>
             </Layout>
             <Toaster position="top-right" theme="light" richColors/>
+            </WishlistProvider>
           </CartProvider>
         </AuthProvider>
       </BrowserRouter>
