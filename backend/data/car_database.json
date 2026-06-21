@@ -1,0 +1,666 @@
+{
+  "makes": [
+    {
+      "name": "Maruti Suzuki",
+      "slug": "maruti-suzuki",
+      "models": [
+        {
+          "name": "Swift",
+          "slug": "swift",
+          "variants": [
+            {
+              "name": "1st Generation",
+              "slug": "1st-generation-2005-2011",
+              "start_year": 2005,
+              "end_year": 2011,
+              "facelift_years": "2010",
+              "notes": "Original curved body shell. Floor mats & seat covers completely unique to this phase."
+            },
+            {
+              "name": "2nd Generation",
+              "slug": "2nd-generation-2011-2018",
+              "start_year": 2011,
+              "end_year": 2018,
+              "facelift_years": "2014",
+              "notes": "Longer wheelbase. Completely changed floorpan shape, dashboard profile, and wiper sizes."
+            },
+            {
+              "name": "3rd Generation",
+              "slug": "3rd-generation-2018-2024",
+              "start_year": 2018,
+              "end_year": 2024,
+              "facelift_years": "2021",
+              "notes": "HEARTECT platform. Flat-bottom steering wheel; completely new bucket seats with high side bolsters."
+            },
+            {
+              "name": "4th Generation",
+              "slug": "4th-generation-2024-present",
+              "start_year": 2024,
+              "end_year": "Present",
+              "facelift_years": "",
+              "notes": "Latest model. 3D/7D mats, seat profiles, and infotainment screen size completely changed."
+            }
+          ]
+        },
+        {
+          "name": "Dzire",
+          "slug": "dzire",
+          "variants": [
+            {
+              "name": "1st Generation",
+              "slug": "1st-generation-2008-2012",
+              "start_year": 2008,
+              "end_year": 2012,
+              "facelift_years": "",
+              "notes": "Full-sized sedan trunk. Shared front profile and floor structure with 1st Gen Swift."
+            },
+            {
+              "name": "2nd Generation (Sub-4m)",
+              "slug": "2nd-generation-sub-4m-2012-2017",
+              "start_year": 2012,
+              "end_year": 2017,
+              "facelift_years": "2015",
+              "notes": "Compact trunk (<4m). Floor mats differ slightly from Swift due to unique rear legroom styling."
+            },
+            {
+              "name": "3rd Generation",
+              "slug": "3rd-generation-2017-2024",
+              "start_year": 2017,
+              "end_year": 2024,
+              "facelift_years": "2020",
+              "notes": "Dropped 'Swift' prefix. Completely different dashboard layout from Swift 3; unique mat clips."
+            },
+            {
+              "name": "4th Generation",
+              "slug": "4th-generation-2024-present",
+              "start_year": 2024,
+              "end_year": "Present",
+              "facelift_years": "",
+              "notes": "Distinct blocky styling. Shared interior layout with Swift 4 but distinct seat stitching profiles."
+            }
+          ]
+        },
+        {
+          "name": "Baleno",
+          "slug": "baleno",
+          "variants": [
+            {
+              "name": "1st Generation",
+              "slug": "1st-generation-2015-2022",
+              "start_year": 2015,
+              "end_year": 2022,
+              "facelift_years": "2019",
+              "notes": "Premium hatchback. Large boot space, 7-inch SmartPlay screen protector fitment."
+            },
+            {
+              "name": "2nd Generation",
+              "slug": "2nd-generation-2022-present",
+              "start_year": 2022,
+              "end_year": "Present",
+              "facelift_years": "",
+              "notes": "Heavy body panel changes. 9-inch screen protector; front seats require airbag-compliant side-seam seat covers."
+            }
+          ]
+        },
+        {
+          "name": "Vitara Brezza / Brezza",
+          "slug": "vitara-brezza-brezza",
+          "variants": [
+            {
+              "name": "1st Generation",
+              "slug": "1st-generation-2016-2022",
+              "start_year": 2016,
+              "end_year": 2022,
+              "facelift_years": "2020",
+              "notes": "Diesel only initially, later petrol. Boxy dashboard. Flat, square-ish floor mat layout."
+            }
+          ]
+        },
+        {
+          "name": "Brezza",
+          "slug": "brezza",
+          "variants": [
+            {
+              "name": "2nd Generation",
+              "slug": "2nd-generation-2022-present",
+              "start_year": 2022,
+              "end_year": "Present",
+              "facelift_years": "",
+              "notes": "Dropped 'Vitara'. Sunroof added (impacts roof wrap sizing). Ambient lighting tracks and updated dash profile."
+            }
+          ]
+        },
+        {
+          "name": "Ertiga",
+          "slug": "ertiga",
+          "variants": [
+            {
+              "name": "1st Generation",
+              "slug": "1st-generation-2012-2018",
+              "start_year": 2012,
+              "end_year": 2018,
+              "facelift_years": "2015",
+              "notes": "7-seater MPV. Shared platform with Swift 2 but distinct long 3-row 3D mat set required."
+            },
+            {
+              "name": "2nd Generation",
+              "slug": "2nd-generation-2018-present",
+              "start_year": 2018,
+              "end_year": "Present",
+              "facelift_years": "2022",
+              "notes": "Larger body frame. 3rd-row mat design and boot space dimension entirely different from Gen 1."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Hyundai",
+      "slug": "hyundai",
+      "models": [
+        {
+          "name": "i10 / Grand i10",
+          "slug": "i10-grand-i10",
+          "variants": [
+            {
+              "name": "1st Generation (i10)",
+              "slug": "1st-generation-i10-2007-2013",
+              "start_year": 2007,
+              "end_year": 2013,
+              "facelift_years": "2010",
+              "notes": "Tallboy hatch layout. Dashboard features integrated high-mounted center gear shifter console."
+            },
+            {
+              "name": "2nd Generation (Grand i10)",
+              "slug": "2nd-generation-grand-i10-2013-2019",
+              "start_year": 2013,
+              "end_year": 2019,
+              "facelift_years": "2017",
+              "notes": "Extended wheelbase unique to India. Floorpan and seat dimensions diverge completely from European i10."
+            },
+            {
+              "name": "3rd Generation (Nios)",
+              "slug": "3rd-generation-nios-2019-present",
+              "start_year": 2019,
+              "end_year": "Present",
+              "facelift_years": "2023",
+              "notes": "Sculpted seats, integrated fixed headrests on lower variants affecting universal seat cover installation."
+            }
+          ]
+        },
+        {
+          "name": "i20",
+          "slug": "i20",
+          "variants": [
+            {
+              "name": "1st Generation (PB)",
+              "slug": "1st-generation-pb-2008-2014",
+              "start_year": 2008,
+              "end_year": 2014,
+              "facelift_years": "2012",
+              "notes": "Original premium hatch layout. Flat floorboards and standard seat profiles."
+            },
+            {
+              "name": "2nd Generation (Elite i20)",
+              "slug": "2nd-generation-elite-i20-2014-2020",
+              "start_year": 2014,
+              "end_year": 2020,
+              "facelift_years": "2018",
+              "notes": "Completely wide floorpan. Note: Elite Active variant (2015-2020) uses rugged plastic side wheel-arch cladding."
+            },
+            {
+              "name": "3rd Generation",
+              "slug": "3rd-generation-2020-present",
+              "start_year": 2020,
+              "end_year": "Present",
+              "facelift_years": "2023",
+              "notes": "Low-slung sporty front seats. Large digital cockpit panel screen protector needed."
+            }
+          ]
+        },
+        {
+          "name": "Creta",
+          "slug": "creta",
+          "variants": [
+            {
+              "name": "1st Generation",
+              "slug": "1st-generation-2015-2020",
+              "start_year": 2015,
+              "end_year": 2020,
+              "facelift_years": "2018",
+              "notes": "Flat floor layout in the rear. Bumper chrome garnish and front grille brackets differ between 2015 and 2018."
+            },
+            {
+              "name": "2nd Generation",
+              "slug": "2nd-generation-2020-present",
+              "start_year": 2020,
+              "end_year": "Present",
+              "facelift_years": "2024",
+              "notes": "Panoramic sunroof version changes roof graphic layouts. 2024 facelift completely changed front chrome and light trims."
+            }
+          ]
+        },
+        {
+          "name": "Verna",
+          "slug": "verna",
+          "variants": [
+            {
+              "name": "Fluidic Era (Gen 3/4)",
+              "slug": "fluidic-era-gen-3-4-2006-2017",
+              "start_year": 2006,
+              "end_year": 2017,
+              "facelift_years": "2011, 2015",
+              "notes": "Huge shift in 2011 to Fluidic layout. Floor mats and body covers completely diverge from old model here."
+            },
+            {
+              "name": "Next-Gen Verna (Gen 5)",
+              "slug": "next-gen-verna-gen-5-2017-2023",
+              "start_year": 2017,
+              "end_year": 2023,
+              "facelift_years": "2020",
+              "notes": "Ventilated seat options on high variants require specific perforated leatherette seat covers."
+            },
+            {
+              "name": "Futuristic Verna (Gen 6)",
+              "slug": "futuristic-verna-gen-6-2023-present",
+              "start_year": 2023,
+              "end_year": "Present",
+              "facelift_years": "",
+              "notes": "Radical fastback design. Longest wheelbase in class; older generation mats will not fit at all."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Tata Motors",
+      "slug": "tata-motors",
+      "models": [
+        {
+          "name": "Nexon",
+          "slug": "nexon",
+          "variants": [
+            {
+              "name": "1st Generation",
+              "slug": "1st-generation-2017-2020",
+              "start_year": 2017,
+              "end_year": 2020,
+              "facelift_years": "",
+              "notes": "Original ceramic-trim exterior profile. Standard round steering wheel cover."
+            },
+            {
+              "name": "1st Gen Facelift",
+              "slug": "1st-gen-facelift-2020-2023",
+              "start_year": 2020,
+              "end_year": 2023,
+              "facelift_years": "",
+              "notes": "Changed front bumper and added flat-bottom steering wheel layout."
+            },
+            {
+              "name": "2nd Generation",
+              "slug": "2nd-generation-2023-present",
+              "start_year": 2023,
+              "end_year": "Present",
+              "facelift_years": "",
+              "notes": "Phygital look. Twin-spoke illuminated steering wheel cover and custom screen protector for touch HVAC console."
+            }
+          ]
+        },
+        {
+          "name": "Harrier",
+          "slug": "harrier",
+          "variants": [
+            {
+              "name": "1st Generation",
+              "slug": "1st-generation-2019-2023",
+              "start_year": 2019,
+              "end_year": 2023,
+              "facelift_years": "2020",
+              "notes": "Omega-Arc platform. Large deep footwells for precision 3D/7D mats."
+            },
+            {
+              "name": "1st Gen Facelift",
+              "slug": "1st-gen-facelift-2023-present",
+              "start_year": 2023,
+              "end_year": "Present",
+              "facelift_years": "",
+              "notes": "Full-width LED bars require new light chrome trims. Completely revised center console structure."
+            }
+          ]
+        },
+        {
+          "name": "Punch",
+          "slug": "punch",
+          "variants": [
+            {
+              "name": "1st Generation",
+              "slug": "1st-generation-2021-present",
+              "start_year": 2021,
+              "end_year": "Present",
+              "facelift_years": "",
+              "notes": "Micro-SUV floor mats. Note: Punch.EV (2024+) has a modified central transmission tunnel console."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Mahindra",
+      "slug": "mahindra",
+      "models": [
+        {
+          "name": "Scorpio",
+          "slug": "scorpio",
+          "variants": [
+            {
+              "name": "1st Generation / Classic",
+              "slug": "1st-generation-classic-2002-present",
+              "start_year": 2002,
+              "end_year": "Present",
+              "facelift_years": "2006, 2009, 2014, 2022",
+              "notes": "Continuous updates. 2014 change altered rear tailgate & panel layout. 2022 renamed to Scorpio Classic."
+            }
+          ]
+        },
+        {
+          "name": "Scorpio-N",
+          "slug": "scorpio-n",
+          "variants": [
+            {
+              "name": "2nd Generation",
+              "slug": "2nd-generation-2022-present",
+              "start_year": 2022,
+              "end_year": "Present",
+              "facelift_years": "",
+              "notes": "Completely distinct global platform. Zero interior or exterior body accessories shared with Scorpio Classic."
+            }
+          ]
+        },
+        {
+          "name": "Thar",
+          "slug": "thar",
+          "variants": [
+            {
+              "name": "1st Generation",
+              "slug": "1st-generation-2010-2020",
+              "start_year": 2010,
+              "end_year": 2020,
+              "facelift_years": "2015",
+              "notes": "Pure off-roader. Canvas top/soft-top replacement structures are key categories."
+            },
+            {
+              "name": "2nd Generation (3-Door)",
+              "slug": "2nd-generation-3-door-2020-present",
+              "start_year": 2020,
+              "end_year": "Present",
+              "facelift_years": "",
+              "notes": "Wider lifestyle cabin. Molded plastic interior flooring requiring precision 7D mats with high sidewalls."
+            }
+          ]
+        },
+        {
+          "name": "Thar Roxx",
+          "slug": "thar-roxx",
+          "variants": [
+            {
+              "name": "2nd Generation (5-Door)",
+              "slug": "2nd-generation-5-door-2024-present",
+              "start_year": 2024,
+              "end_year": "Present",
+              "facelift_years": "",
+              "notes": "Extended wheelbase. Rear door visors, window curtains, and entirely different full floor mat layouts needed."
+            }
+          ]
+        },
+        {
+          "name": "XUV500",
+          "slug": "xuv500",
+          "variants": [
+            {
+              "name": "1st Generation",
+              "slug": "1st-generation-2011-2021",
+              "start_year": 2011,
+              "end_year": 2021,
+              "facelift_years": "2015, 2018",
+              "notes": "Cheetah-inspired body panels. Unique wrap-around seat contours with specific split 3rd-row setup."
+            }
+          ]
+        },
+        {
+          "name": "XUV700",
+          "slug": "xuv700",
+          "variants": [
+            {
+              "name": "1st Generation",
+              "slug": "1st-generation-2021-present",
+              "start_year": 2021,
+              "end_year": "Present",
+              "facelift_years": "",
+              "notes": "Flush door handles (affects anti-scratch film). Dual-screen display requires large panoramic screen guard."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Honda",
+      "slug": "honda",
+      "models": [
+        {
+          "name": "City",
+          "slug": "city",
+          "variants": [
+            {
+              "name": "3rd Generation",
+              "slug": "3rd-generation-2008-2014",
+              "start_year": 2008,
+              "end_year": 2014,
+              "facelift_years": "2011",
+              "notes": "Arrow-shot form factor. Sleek low-slung cabin layout."
+            },
+            {
+              "name": "4th Generation",
+              "slug": "4th-generation-2014-2022",
+              "start_year": 2014,
+              "end_year": 2022,
+              "facelift_years": "2017",
+              "notes": "Extended rear legroom. Continued alongside Gen 5 as an entry-level variant for several years."
+            },
+            {
+              "name": "5th Generation",
+              "slug": "5th-generation-2020-present",
+              "start_year": 2020,
+              "end_year": "Present",
+              "facelift_years": "2023",
+              "notes": "Longer, wider sedan footprint. Entirely separate generation fitments for mats, body covers, sunshades."
+            }
+          ]
+        },
+        {
+          "name": "Amaze",
+          "slug": "amaze",
+          "variants": [
+            {
+              "name": "1st Generation",
+              "slug": "1st-generation-2013-2018",
+              "start_year": 2013,
+              "end_year": 2018,
+              "facelift_years": "2016",
+              "notes": "Based on Brio platform. Narrow cabin footprint, simple flat seats."
+            },
+            {
+              "name": "2nd Generation",
+              "slug": "2nd-generation-2018-present",
+              "start_year": 2018,
+              "end_year": "Present",
+              "facelift_years": "2021",
+              "notes": "Boxy design language. Square footwells and significantly deeper dashboard panel."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Toyota",
+      "slug": "toyota",
+      "models": [
+        {
+          "name": "Innova",
+          "slug": "innova",
+          "variants": [
+            {
+              "name": "1st Generation / Type 1-4",
+              "slug": "1st-generation-type-1-4-2005-2016",
+              "start_year": 2005,
+              "end_year": 2016,
+              "facelift_years": "2009, 2012, 2014",
+              "notes": "Immense variant changes across years affecting chrome garnish, front grilles, and light trims."
+            },
+            {
+              "name": "Innova Crysta",
+              "slug": "innova-crysta-2016-present",
+              "start_year": 2016,
+              "end_year": "Present",
+              "facelift_years": "2020",
+              "notes": "Premium MPV structure. Captain seat vs 7-seater configurations radically alter center row seat covers."
+            },
+            {
+              "name": "Innova Hycross",
+              "slug": "innova-hycross-2022-present",
+              "start_year": 2022,
+              "end_year": "Present",
+              "facelift_years": "",
+              "notes": "Monocoque TNGA-C platform. Completely flat second-row floor pan (no transmission tunnel bump like Crysta)."
+            }
+          ]
+        },
+        {
+          "name": "Fortuner",
+          "slug": "fortuner",
+          "variants": [
+            {
+              "name": "1st Generation",
+              "slug": "1st-generation-2009-2016",
+              "start_year": 2009,
+              "end_year": 2016,
+              "facelift_years": "2012",
+              "notes": "Classic rugged layout. Chrome trim moldings on light blocks differ heavily before/after 2012 facelift."
+            },
+            {
+              "name": "2nd Generation",
+              "slug": "2nd-generation-2016-present",
+              "start_year": 2016,
+              "end_year": "Present",
+              "facelift_years": "2021",
+              "notes": "Legender and GR-S variants have completely custom front bumper lips and grille assemblies for chrome kits."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Kia",
+      "slug": "kia",
+      "models": [
+        {
+          "name": "Seltos",
+          "slug": "seltos",
+          "variants": [
+            {
+              "name": "1st Generation",
+              "slug": "1st-generation-2019-2023",
+              "start_year": 2019,
+              "end_year": 2023,
+              "facelift_years": "",
+              "notes": "Standard floorpans and separate binnacle infotainment screen housing frame."
+            },
+            {
+              "name": "1st Gen Facelift",
+              "slug": "1st-gen-facelift-2023-present",
+              "start_year": 2023,
+              "end_year": "Present",
+              "facelift_years": "",
+              "notes": "Connected dual panoramic screen guards. Completely re-profiled front bumper & lower skid plate fittings."
+            }
+          ]
+        },
+        {
+          "name": "Sonet",
+          "slug": "sonet",
+          "variants": [
+            {
+              "name": "1st Generation",
+              "slug": "1st-generation-2020-2024",
+              "start_year": 2020,
+              "end_year": 2024,
+              "facelift_years": "",
+              "notes": "Compact under-4m SUV setup. High center tunnel console between front seats."
+            },
+            {
+              "name": "1st Gen Facelift",
+              "slug": "1st-gen-facelift-2024-present",
+              "start_year": 2024,
+              "end_year": "Present",
+              "facelift_years": "",
+              "notes": "Sleek C-shaped rear light connectivity requiring custom chrome appliques; modified adjustable rear headrest tracks."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Volkswagen",
+      "slug": "volkswagen",
+      "models": [
+        {
+          "name": "Polo",
+          "slug": "polo",
+          "variants": [
+            {
+              "name": "1st Generation",
+              "slug": "1st-generation-2010-2022",
+              "start_year": 2010,
+              "end_year": 2022,
+              "facelift_years": "2014, 2019",
+              "notes": "Timeless frame layout but minor front lip bumper alterations across updates. Floor pan dimensions stayed identical."
+            }
+          ]
+        },
+        {
+          "name": "Virtus",
+          "slug": "virtus",
+          "variants": [
+            {
+              "name": "1st Generation",
+              "slug": "1st-generation-2022-present",
+              "start_year": 2022,
+              "end_year": "Present",
+              "facelift_years": "",
+              "notes": "MQB-A0-IN platform. Front seats have side-airbags standard (critical note for specialized seat covers)."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Skoda",
+      "slug": "skoda",
+      "models": [
+        {
+          "name": "Kushaq",
+          "slug": "kushaq",
+          "variants": [
+            {
+              "name": "1st Generation",
+              "slug": "1st-generation-2021-present",
+              "start_year": 2021,
+              "end_year": "Present",
+              "facelift_years": "",
+              "notes": "Sister car to VW Taigun but uses a fully distinct dashboard design and center console layout."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

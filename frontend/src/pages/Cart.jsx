@@ -4,7 +4,7 @@ import { formatINR, resolveImg } from "@/lib/api";
 import { Trash2, Plus, Minus, ShoppingBag, ArrowRight, Tag } from "lucide-react";
 
 export default function Cart() {
-  const { items, updateQty, remove, subtotal } = useCart();
+  const { items, updateQty, remove, subtotal, cartKey } = useCart();
   const navigate = useNavigate();
 
   if (items.length === 0) {
@@ -36,27 +36,34 @@ export default function Cart() {
       </div>
       <div className="max-w-7xl mx-auto px-6 py-10 grid lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-3">
-          {items.map((i) => (
-            <div key={i.id} data-testid={`cart-item-${i.id}`} className="bg-white border border-neutral-200 rounded-md p-4 flex gap-4 hover:border-indigo-300 transition">
+          {items.map((i) => {
+            const ckey = cartKey(i);
+            return (
+            <div key={ckey} data-testid={`cart-item-${i.id}`} className="bg-white border border-neutral-200 rounded-md p-4 flex gap-4 hover:border-indigo-300 transition">
               <Link to={`/product/${i.id}`} className="shrink-0">
                 <img src={resolveImg(i.image)} alt={i.name} className="w-24 h-24 object-cover rounded border border-neutral-100"/>
               </Link>
               <div className="flex-1 min-w-0">
                 <Link to={`/product/${i.id}`} className="font-semibold text-sm hover:text-indigo-600 line-clamp-2 block">{i.name}</Link>
+                {i.vehicle_label && (
+                  <div className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2 py-0.5 mt-1 inline-block">
+                    🚗 {i.vehicle_label}
+                  </div>
+                )}
                 <div className="font-display text-lg font-bold text-indigo-600 mt-1">{formatINR(i.price)}</div>
                 <div className="flex items-center justify-between mt-3">
                   <div className="flex items-center border border-neutral-300 rounded">
-                    <button onClick={() => updateQty(i.id, i.qty - 1)} className="p-1.5 hover:bg-neutral-100"><Minus className="w-3 h-3"/></button>
+                    <button onClick={() => updateQty(ckey, i.qty - 1)} className="p-1.5 hover:bg-neutral-100"><Minus className="w-3 h-3"/></button>
                     <span className="w-10 text-center text-sm font-bold">{i.qty}</span>
-                    <button onClick={() => updateQty(i.id, i.qty + 1)} className="p-1.5 hover:bg-neutral-100"><Plus className="w-3 h-3"/></button>
+                    <button onClick={() => updateQty(ckey, i.qty + 1)} className="p-1.5 hover:bg-neutral-100"><Plus className="w-3 h-3"/></button>
                   </div>
-                  <button data-testid={`remove-${i.id}`} onClick={() => remove(i.id)} className="text-neutral-400 hover:text-indigo-600 p-2 transition">
+                  <button data-testid={`remove-${i.id}`} onClick={() => remove(ckey)} className="text-neutral-400 hover:text-indigo-600 p-2 transition">
                     <Trash2 className="w-4 h-4"/>
                   </button>
                 </div>
               </div>
             </div>
-          ))}
+          );})}
         </div>
 
         <div className="bg-white border border-neutral-200 rounded-md p-6 h-fit lg:sticky lg:top-24">

@@ -18,8 +18,10 @@ import AdminCoupons from "@/components/AdminCoupons";
 import AdminBanners from "@/components/AdminBanners";
 import AdminReviews from "@/components/AdminReviews";
 import AdminTax from "@/components/AdminTax";
+import AdminVehicleCatalog from "@/components/AdminVehicleCatalog";
+import VehicleVariantPicker from "@/components/VehicleVariantPicker";
 
-const EMPTY_P = { name: "", description: "", price: "", original_price: "", category: "android-stereos", brand: "", image: "", gallery: [], stock: 50, rating: 4.5, featured: false, discount_percent: 0, discount_flat: 0, gst_percent: 18, tags: [], car_brands: [], car_models: [], years: [], meta_title: "", meta_description: "", seo_slug: "" };
+const EMPTY_P = { name: "", description: "", price: "", original_price: "", category: "android-stereos", brand: "", image: "", gallery: [], stock: 50, rating: 4.5, featured: false, discount_percent: 0, discount_flat: 0, gst_percent: 18, tags: [], car_brands: [], car_models: [], years: [], compatible_variants: [], meta_title: "", meta_description: "", seo_slug: "" };
 
 export default function AdminDashboard() {
   const { user, loading } = useAuth();
@@ -88,6 +90,7 @@ export default function AdminDashboard() {
         car_brands: form.car_brands || [],
         car_models: form.car_models || [],
         years: (form.years || []).map((y) => parseInt(y)),
+        compatible_variants: form.compatible_variants || [],
         meta_title: form.meta_title || "",
         meta_description: form.meta_description || "",
         seo_slug: form.seo_slug || "",
@@ -215,6 +218,7 @@ export default function AdminDashboard() {
           <TabsList className="bg-white border border-stone-200 flex-wrap h-auto">
             <TabsTrigger value="products" data-testid="tab-products">Products</TabsTrigger>
             <TabsTrigger value="categories" data-testid="tab-categories">Categories</TabsTrigger>
+            <TabsTrigger value="vehicles" data-testid="tab-vehicles">Vehicles</TabsTrigger>
             <TabsTrigger value="coupons" data-testid="tab-coupons">Coupons</TabsTrigger>
             <TabsTrigger value="banners" data-testid="tab-banners">Banners</TabsTrigger>
             <TabsTrigger value="reviews" data-testid="tab-reviews">Reviews</TabsTrigger>
@@ -335,6 +339,10 @@ export default function AdminDashboard() {
 
           <TabsContent value="categories">
             <AdminCategories/>
+          </TabsContent>
+
+          <TabsContent value="vehicles">
+            <AdminVehicleCatalog/>
           </TabsContent>
 
           <TabsContent value="coupons">
@@ -481,80 +489,29 @@ export default function AdminDashboard() {
               )}
             </div>
 
-            {/* Car Brands */}
+            {/* Vehicle Compatibility (NEW: hierarchical Make → Model → Year/Variant) */}
             <div className="col-span-2 border-t border-stone-200 pt-4">
-              <Label className="text-xs uppercase font-bold">Vehicle Compatibility — Car Brands</Label>
-              <div className="text-[10px] text-stone-500 mt-1 mb-1">Choose <strong>ALL CARS (Universal)</strong> for products that fit every car (e.g. accessories, wires, generic mounts).</div>
-              <div className="flex flex-wrap gap-1.5 mt-1 max-h-40 overflow-y-auto p-2 bg-stone-50 rounded border border-stone-200">
-                {carBrands.map((b) => {
-                  const sel = (form.car_brands || []).includes(b.name);
-                  const isAll = b.name === "ALL";
-                  if (isAll) {
-                    return (
-                      <button key="ALL" type="button" data-testid="cb-ALL" onClick={() => toggleArrItem("car_brands", "ALL")}
-                              className={`text-xs px-3 py-1.5 rounded-full transition font-bold uppercase tracking-wider ${sel ? "bg-emerald-600 text-white shadow ring-2 ring-emerald-300" : "bg-emerald-50 border border-emerald-300 text-emerald-700 hover:bg-emerald-100"}`}>
-                        🌐 ALL CARS (Universal)
-                      </button>
-                    );
-                  }
-                  return (
-                    <button key={b.name} type="button" data-testid={`cb-${b.name}`} onClick={() => toggleArrItem("car_brands", b.name)}
-                            disabled={(form.car_brands || []).includes("ALL")}
-                            className={`text-xs px-3 py-1.5 rounded-full transition ${sel ? "bg-indigo-600 text-white" : "bg-white border border-stone-300 text-stone-700 hover:border-indigo-400"} ${(form.car_brands || []).includes("ALL") ? "opacity-40 cursor-not-allowed" : ""}`}>
-                      {b.name}
-                    </button>
-                  );
-                })}
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  <Label className="text-xs uppercase font-bold">Vehicle Compatibility</Label>
+                  <div className="text-[10px] text-stone-500">Pick exact <strong>Make → Model → Year/Variant</strong> the product fits — or mark Universal.</div>
+                </div>
+                <button type="button" data-testid="cb-ALL" onClick={() => toggleArrItem("car_brands", "ALL")}
+                        className={`text-xs px-3 py-1.5 rounded-full transition font-bold uppercase tracking-wider ${(form.car_brands || []).includes("ALL") ? "bg-emerald-600 text-white shadow ring-2 ring-emerald-300" : "bg-emerald-50 border border-emerald-300 text-emerald-700 hover:bg-emerald-100"}`}>
+                  🌐 ALL CARS (Universal)
+                </button>
               </div>
+              {!(form.car_brands || []).includes("ALL") && (
+                <VehicleVariantPicker
+                  value={form.compatible_variants || []}
+                  onChange={(vids) => setForm({ ...form, compatible_variants: vids })}
+                />
+              )}
             </div>
-
-            {/* Car Models (dependent) */}
-            {(form.car_brands || []).length > 0 && !(form.car_brands || []).includes("ALL") && (
-              <div className="col-span-2">
-                <Label className="text-xs uppercase font-bold">Car Models (based on selected brands)</Label>
-                <div className="space-y-2 mt-2">
-                  {form.car_brands.map((b) => (
-                    <div key={b}>
-                      <div className="text-[10px] uppercase tracking-wider text-indigo-600 font-bold mb-1.5">{b}</div>
-                      <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-2 bg-stone-50 rounded border border-stone-200">
-                        {(carModelsByBrand[b] || []).map((m) => {
-                          const sel = (form.car_models || []).includes(m);
-                          return (
-                            <button key={m} type="button" onClick={() => toggleArrItem("car_models", m)}
-                                    className={`text-xs px-2.5 py-1 rounded transition ${sel ? "bg-emerald-600 text-white" : "bg-white border border-stone-300 text-stone-700 hover:border-emerald-400"}`}>
-                              {m}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Years */}
-            {!(form.car_brands || []).includes("ALL") && (
-              <div className="col-span-2">
-                <Label className="text-xs uppercase font-bold">Manufacturing Years</Label>
-                <div className="flex flex-wrap gap-1.5 mt-2 max-h-32 overflow-y-auto p-2 bg-stone-50 rounded border border-stone-200">
-                  {yearList.map((y) => {
-                    const sel = (form.years || []).includes(y);
-                    return (
-                      <button key={y} type="button" onClick={() => toggleArrItem("years", y)}
-                              className={`text-xs px-2.5 py-1 rounded transition ${sel ? "bg-amber-500 text-white" : "bg-white border border-stone-300 text-stone-700 hover:border-amber-400"}`}>
-                        {y}
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="text-[10px] text-stone-500 mt-1">Selected: {(form.years || []).length} year(s)</div>
-              </div>
-            )}
 
             {(form.car_brands || []).includes("ALL") && (
               <div className="col-span-2 bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-3 text-sm text-emerald-800">
-                <strong>Universal product:</strong> This product will appear for every brand, model and year filter in the shop.
+                <strong>Universal product:</strong> This product will appear for every Make / Model / Year filter in the shop.
               </div>
             )}
 

@@ -5,6 +5,7 @@ import { Star, Plus, Minus, ShoppingCart, Truck, Shield, RotateCcw, Heart, Share
 import { useCart } from "@/context/CartContext";
 import { toast } from "sonner";
 import ProductReviews from "@/components/ProductReviews";
+import { CustomerVehicleSelector } from "@/components/VehicleVariantPicker";
 
 export default function ProductDetail() {
   const { id } = useParams();
@@ -13,6 +14,7 @@ export default function ProductDetail() {
   const [product, setProduct] = useState(null);
   const [qty, setQty] = useState(1);
   const [activeImg, setActiveImg] = useState(null);
+  const [vehicle, setVehicle] = useState(null); // { id, label }
 
   useEffect(() => {
     api.get(`/products/${id}`).then((r) => { setProduct(r.data); setActiveImg(r.data.image); }).catch(() => navigate("/shop"));
@@ -118,6 +120,23 @@ export default function ProductDetail() {
             </div>
             <p className="text-neutral-600 leading-relaxed text-sm border-t border-neutral-200 pt-4">{product.description}</p>
 
+            {/* Vehicle Selector — required when product has compatible_variants */}
+            {((product.compatible_variants?.length > 0) || product.car_brands?.includes("ALL")) && (
+              <div className="border-t border-neutral-200 pt-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-xs uppercase tracking-wider font-bold text-stone-700">
+                    Select Your Vehicle {product.car_brands?.includes("ALL") ? <span className="text-emerald-600">(optional · universal fit)</span> : <span className="text-rose-600">*</span>}
+                  </div>
+                </div>
+                <CustomerVehicleSelector
+                  allowedVariantIds={product.compatible_variants || []}
+                  value={vehicle?.id}
+                  onSelect={setVehicle}
+                  isUniversal={product.car_brands?.includes("ALL")}
+                />
+              </div>
+            )}
+
             <div className="flex items-center gap-4 pt-2">
               <div className="flex items-center border border-neutral-300 rounded">
                 <button data-testid="qty-decrease" onClick={() => setQty(Math.max(1, qty - 1))} className="p-2.5 hover:bg-neutral-100 text-neutral-700"><Minus className="w-4 h-4"/></button>
@@ -126,7 +145,12 @@ export default function ProductDetail() {
               </div>
               <button
                 data-testid="add-cart-detail"
-                onClick={() => { add(product, qty); toast.success(`${qty} added to cart`); }}
+                onClick={() => {
+                  const needsVehicle = (product.compatible_variants?.length > 0) && !product.car_brands?.includes("ALL");
+                  if (needsVehicle && !vehicle?.id) { toast.error("Please select your vehicle first"); return; }
+                  add(product, qty, vehicle);
+                  toast.success(`${qty} added to cart${vehicle?.label ? ` · ${vehicle.label}` : ""}`);
+                }}
                 className="flex-1 bg-neutral-900 hover:bg-neutral-800 text-white font-bold uppercase tracking-wider text-sm py-3.5 rounded transition flex items-center justify-center gap-2"
               >
                 <ShoppingCart className="w-4 h-4"/> Add to Cart
@@ -134,7 +158,11 @@ export default function ProductDetail() {
             </div>
             <button
               data-testid="buy-now-btn"
-              onClick={() => { add(product, qty); navigate("/checkout"); }}
+              onClick={() => {
+                const needsVehicle = (product.compatible_variants?.length > 0) && !product.car_brands?.includes("ALL");
+                if (needsVehicle && !vehicle?.id) { toast.error("Please select your vehicle first"); return; }
+                add(product, qty, vehicle); navigate("/checkout");
+              }}
               className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold uppercase tracking-wider text-sm py-3.5 rounded transition"
             >
               Buy Now →

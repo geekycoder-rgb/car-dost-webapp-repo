@@ -73,7 +73,7 @@ export default function Checkout() {
     if (!validate()) return;
     setProcessing(true);
     try {
-      const payload = { items: items.map((i) => ({ product_id: i.id, quantity: i.qty })), address: form, is_guest: !user, coupon_code: appliedCoupon?.code || null };
+      const payload = { items: items.map((i) => ({ product_id: i.id, quantity: i.qty, vehicle_variant_id: i.vehicle_variant_id || null, vehicle_label: i.vehicle_label || "" })), address: form, is_guest: !user, coupon_code: appliedCoupon?.code || null };
       const { data } = await api.post("/orders/create", payload);
       if (data.mock) { setMockOrder(data); setProcessing(false); return; }
       const ok = await loadRazorpay();
@@ -158,11 +158,12 @@ export default function Checkout() {
         <div className="bg-white border border-neutral-200 rounded-md p-6 h-fit lg:sticky lg:top-24">
           <h2 className="font-display text-lg font-bold uppercase mb-4 pb-3 border-b border-neutral-200">Your Order</h2>
           <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
-            {items.map((i) => (
-              <div key={i.id} className="flex gap-3 text-sm">
+            {items.map((i, idx) => (
+              <div key={`${i.id}-${i.vehicle_variant_id || idx}`} className="flex gap-3 text-sm">
                 <img src={resolveImg(i.image)} className="w-14 h-14 object-cover rounded border border-neutral-100" alt=""/>
                 <div className="flex-1 min-w-0">
                   <div className="line-clamp-1 font-semibold text-xs">{i.name}</div>
+                  {i.vehicle_label && <div className="text-[10px] text-emerald-700 line-clamp-1">🚗 {i.vehicle_label}</div>}
                   <div className="text-neutral-500 text-xs mt-0.5">Qty: {i.qty}</div>
                 </div>
                 <div className="text-right font-bold text-sm">{formatINR(i.price * i.qty)}</div>

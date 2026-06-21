@@ -92,6 +92,11 @@ export default function OrderDetail() {
                   <img src={resolveImg(i.image)} alt={i.name} className="w-20 h-20 object-cover rounded border border-neutral-100 shrink-0"/>
                   <div className="flex-1 min-w-0">
                     <Link to={`/product/${i.product_id}`} className="font-semibold text-sm hover:text-indigo-600 line-clamp-2">{i.name}</Link>
+                    {i.vehicle_label && (
+                      <div className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2 py-0.5 mt-1 inline-block">
+                        🚗 {i.vehicle_label}
+                      </div>
+                    )}
                     <div className="flex items-center justify-between mt-2 text-sm">
                       <span className="text-neutral-500 text-xs">Qty {i.quantity} × {formatINR(i.price)}</span>
                       <span className="font-bold">{formatINR(i.line_total)}</span>

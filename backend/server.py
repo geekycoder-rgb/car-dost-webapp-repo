@@ -8,6 +8,7 @@ import logging
 import uuid
 import hmac
 import hashlib
+import json
 import jwt
 import bcrypt
 import razorpay
@@ -85,6 +86,8 @@ class ProductIn(BaseModel):
     car_brands: List[str] = []
     car_models: List[str] = []
     years: List[int] = []
+    # New hierarchical compatibility (Make → Model → Variant)
+    compatible_variants: List[str] = []  # variant IDs from car_variants collection
     # SEO
     meta_title: Optional[str] = ""
     meta_description: Optional[str] = ""
@@ -110,6 +113,8 @@ class Review(ReviewIn):
 class CartItem(BaseModel):
     product_id: str
     quantity: int
+    vehicle_variant_id: Optional[str] = None
+    vehicle_label: Optional[str] = ""  # denormalized "Hyundai Creta · 2nd Gen 2020–2024"
 
 class Address(BaseModel):
     full_name: str
@@ -617,6 +622,9 @@ async def filter_products(
     car_brand: Optional[str] = None,
     car_model: Optional[str] = None,
     year: Optional[int] = None,
+    variant_id: Optional[str] = None,
+    make_id: Optional[str] = None,
+    model_id: Optional[str] = None,
     tag: Optional[str] = None,
     min_price: Optional[float] = None,
     max_price: Optional[float] = None,
@@ -634,6 +642,17 @@ async def filter_products(
         and_clauses.append({"$or": [{"car_models": {"$in": models_q}}, {"car_brands": "ALL"}]})
     if year:
         and_clauses.append({"$or": [{"years": year}, {"car_brands": "ALL"}]})
+    # Hierarchical v2 filters
+    if variant_id:
+        and_clauses.append({"$or": [{"compatible_variants": variant_id}, {"car_brands": "ALL"}]})
+    if model_id:
+        # Resolve all variant IDs under this model
+        vids = [v["id"] for v in await db.car_variants.find({"model_id": model_id}, {"id": 1, "_id": 0}).to_list(500)]
+        and_clauses.append({"$or": [{"compatible_variants": {"$in": vids}}, {"car_brands": "ALL"}]})
+    if make_id:
+        mids = [m["id"] for m in await db.car_models.find({"make_id": make_id}, {"id": 1, "_id": 0}).to_list(500)]
+        vids = [v["id"] for v in await db.car_variants.find({"model_id": {"$in": mids}}, {"id": 1, "_id": 0}).to_list(2000)]
+        and_clauses.append({"$or": [{"compatible_variants": {"$in": vids}}, {"car_brands": "ALL"}]})
     if tag: query["tags"] = tag
     if min_price is not None or max_price is not None:
         query["price"] = {}
@@ -746,6 +765,143 @@ async def car_models(brand: Optional[str] = None):
 async def years():
     current = datetime.now().year
     return list(range(current, 1999, -1))
+
+# ============ Vehicle Catalog v2 (Hierarchical Make → Model → Variant) ============
+class MakeIn(BaseModel):
+    name: str
+    slug: Optional[str] = ""
+
+class ModelIn(BaseModel):
+    make_id: str
+    name: str
+    slug: Optional[str] = ""
+
+class VariantIn(BaseModel):
+    model_id: str
+    name: str  # e.g. "3rd Generation", "Facelift 2021"
+    slug: Optional[str] = ""
+    start_year: int
+    end_year: Optional[int] = None  # None = Present
+    facelift_years: Optional[str] = ""
+    notes: Optional[str] = ""
+
+def _slugify(s: str) -> str:
+    import re
+    return re.sub(r"[^a-z0-9]+", "-", s.lower()).strip("-")
+
+@api_router.get("/catalog/makes")
+async def list_makes():
+    return await db.car_makes.find({}, {"_id": 0}).sort("name", 1).to_list(200)
+
+@api_router.get("/catalog/models")
+async def list_models(make_id: Optional[str] = None):
+    q = {"make_id": make_id} if make_id else {}
+    return await db.car_models.find(q, {"_id": 0}).sort("name", 1).to_list(500)
+
+@api_router.get("/catalog/variants")
+async def list_variants(model_id: Optional[str] = None):
+    q = {"model_id": model_id} if model_id else {}
+    return await db.car_variants.find(q, {"_id": 0}).sort("start_year", 1).to_list(1000)
+
+@api_router.get("/catalog/tree")
+async def catalog_tree():
+    makes = await db.car_makes.find({}, {"_id": 0}).sort("name", 1).to_list(200)
+    models = await db.car_models.find({}, {"_id": 0}).sort("name", 1).to_list(500)
+    variants = await db.car_variants.find({}, {"_id": 0}).sort("start_year", 1).to_list(1000)
+    # Group
+    by_model = {}
+    for v in variants:
+        by_model.setdefault(v["model_id"], []).append(v)
+    by_make = {}
+    for m in models:
+        m["variants"] = by_model.get(m["id"], [])
+        by_make.setdefault(m["make_id"], []).append(m)
+    for mk in makes:
+        mk["models"] = by_make.get(mk["id"], [])
+    return makes
+
+# Admin CRUD
+@api_router.post("/admin/catalog/makes")
+async def create_make(body: MakeIn, _=Depends(get_admin)):
+    doc = {"id": str(uuid.uuid4()), "name": body.name.strip(), "slug": body.slug or _slugify(body.name)}
+    await db.car_makes.insert_one(doc)
+    return clean(doc)
+
+@api_router.put("/admin/catalog/makes/{mid}")
+async def update_make(mid: str, body: MakeIn, _=Depends(get_admin)):
+    res = await db.car_makes.update_one({"id": mid}, {"$set": {"name": body.name.strip(), "slug": body.slug or _slugify(body.name)}})
+    if res.matched_count == 0: raise HTTPException(404, "Not found")
+    return {"ok": True}
+
+@api_router.delete("/admin/catalog/makes/{mid}")
+async def delete_make(mid: str, _=Depends(get_admin)):
+    # Also cascade delete children
+    model_ids = [m["id"] for m in await db.car_models.find({"make_id": mid}, {"id": 1, "_id": 0}).to_list(500)]
+    if model_ids:
+        await db.car_variants.delete_many({"model_id": {"$in": model_ids}})
+        await db.car_models.delete_many({"make_id": mid})
+    await db.car_makes.delete_one({"id": mid})
+    return {"ok": True}
+
+@api_router.post("/admin/catalog/models")
+async def create_model(body: ModelIn, _=Depends(get_admin)):
+    if not await db.car_makes.find_one({"id": body.make_id}):
+        raise HTTPException(404, "Make not found")
+    doc = {"id": str(uuid.uuid4()), "make_id": body.make_id, "name": body.name.strip(), "slug": body.slug or _slugify(body.name)}
+    await db.car_models.insert_one(doc)
+    return clean(doc)
+
+@api_router.put("/admin/catalog/models/{mid}")
+async def update_model(mid: str, body: ModelIn, _=Depends(get_admin)):
+    res = await db.car_models.update_one({"id": mid}, {"$set": {"make_id": body.make_id, "name": body.name.strip(), "slug": body.slug or _slugify(body.name)}})
+    if res.matched_count == 0: raise HTTPException(404, "Not found")
+    return {"ok": True}
+
+@api_router.delete("/admin/catalog/models/{mid}")
+async def delete_model(mid: str, _=Depends(get_admin)):
+    await db.car_variants.delete_many({"model_id": mid})
+    await db.car_models.delete_one({"id": mid})
+    return {"ok": True}
+
+@api_router.post("/admin/catalog/variants")
+async def create_variant(body: VariantIn, _=Depends(get_admin)):
+    if not await db.car_models.find_one({"id": body.model_id}):
+        raise HTTPException(404, "Model not found")
+    doc = {
+        "id": str(uuid.uuid4()), "model_id": body.model_id, "name": body.name.strip(),
+        "slug": body.slug or _slugify(f"{body.name}-{body.start_year}-{body.end_year or 'present'}"),
+        "start_year": body.start_year, "end_year": body.end_year,
+        "facelift_years": body.facelift_years or "", "notes": body.notes or ""
+    }
+    await db.car_variants.insert_one(doc)
+    return clean(doc)
+
+@api_router.put("/admin/catalog/variants/{vid}")
+async def update_variant(vid: str, body: VariantIn, _=Depends(get_admin)):
+    res = await db.car_variants.update_one({"id": vid}, {"$set": {
+        "model_id": body.model_id, "name": body.name.strip(),
+        "slug": body.slug or _slugify(f"{body.name}-{body.start_year}-{body.end_year or 'present'}"),
+        "start_year": body.start_year, "end_year": body.end_year,
+        "facelift_years": body.facelift_years or "", "notes": body.notes or ""
+    }})
+    if res.matched_count == 0: raise HTTPException(404, "Not found")
+    return {"ok": True}
+
+@api_router.delete("/admin/catalog/variants/{vid}")
+async def delete_variant(vid: str, _=Depends(get_admin)):
+    await db.car_variants.delete_one({"id": vid})
+    return {"ok": True}
+
+# Resolve variant IDs → human label (used by cart/order)
+@api_router.get("/catalog/variant/{vid}/label")
+async def variant_label(vid: str):
+    v = await db.car_variants.find_one({"id": vid}, {"_id": 0})
+    if not v: raise HTTPException(404, "Variant not found")
+    m = await db.car_models.find_one({"id": v["model_id"]}, {"_id": 0})
+    mk = await db.car_makes.find_one({"id": m["make_id"]}, {"_id": 0}) if m else None
+    label = f"{mk['name']} {m['name']} · {v['name']} ({v['start_year']}–{v['end_year'] or 'Present'})" if mk and m else v["name"]
+    return {"id": vid, "label": label, "variant": v, "model": m, "make": mk}
+
 
 @api_router.post("/admin/products")
 async def create_product(p: ProductIn, _=Depends(get_admin)):
@@ -931,7 +1087,9 @@ async def create_order(req: CreateOrderReq, creds: Optional[HTTPAuthorizationCre
             "image": p["image"],
             "price": p["price"],
             "quantity": item.quantity,
-            "line_total": line_total
+            "line_total": line_total,
+            "vehicle_variant_id": item.vehicle_variant_id,
+            "vehicle_label": item.vehicle_label or "",
         })
 
     if total <= 0:
@@ -1332,6 +1490,36 @@ async def startup_event():
             prod = Product(**p)
             await db.products.insert_one(prod.model_dump())
         logger.info(f"Seeded {len(SEED_PRODUCTS)} products")
+
+    # Seed vehicle catalog (hierarchical Make → Model → Variant) from car_database.json
+    if await db.car_makes.count_documents({}) == 0:
+        try:
+            data_path = ROOT_DIR / "data" / "car_database.json"
+            if data_path.exists():
+                with open(data_path, "r", encoding="utf-8") as f:
+                    seed = json.load(f)
+                mk_count = md_count = vt_count = 0
+                for mk in seed.get("makes", []):
+                    mk_id = str(uuid.uuid4())
+                    await db.car_makes.insert_one({"id": mk_id, "name": mk["name"], "slug": mk["slug"]})
+                    mk_count += 1
+                    for md in mk.get("models", []):
+                        md_id = str(uuid.uuid4())
+                        await db.car_models.insert_one({"id": md_id, "make_id": mk_id, "name": md["name"], "slug": md["slug"]})
+                        md_count += 1
+                        for v in md.get("variants", []):
+                            ey = v["end_year"] if v["end_year"] != "Present" else None
+                            await db.car_variants.insert_one({
+                                "id": str(uuid.uuid4()), "model_id": md_id,
+                                "name": v["name"], "slug": v["slug"],
+                                "start_year": v["start_year"], "end_year": ey,
+                                "facelift_years": v.get("facelift_years", ""),
+                                "notes": v.get("notes", "")
+                            })
+                            vt_count += 1
+                logger.info(f"Seeded vehicle catalog: {mk_count} makes, {md_count} models, {vt_count} variants")
+        except Exception as e:
+            logger.warning(f"Vehicle catalog seed failed: {e}")
 
 app.include_router(api_router)
 
