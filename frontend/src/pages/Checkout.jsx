@@ -26,10 +26,32 @@ export default function Checkout() {
   const [processing, setProcessing] = useState(false);
   const [mockOrder, setMockOrder] = useState(null);
   const [successOrder, setSuccessOrder] = useState(null);
+  const [couponCode, setCouponCode] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState(null);
+  const [couponLoading, setCouponLoading] = useState(false);
   const [form, setForm] = useState({
     full_name: user?.name || "", email: user?.email || "", phone: "",
     line1: "", line2: "", city: "", state: "", pincode: "",
   });
+
+  const discount = appliedCoupon?.discount || 0;
+  const total = Math.max(0, subtotal - discount);
+
+  const applyCoupon = async () => {
+    if (!couponCode.trim()) return;
+    setCouponLoading(true);
+    try {
+      const { data } = await api.post("/coupons/validate", { code: couponCode.trim(), subtotal, email: form.email });
+      setAppliedCoupon(data);
+      toast.success(`Coupon ${data.code} applied · You saved ${formatINR(data.discount)}`);
+    } catch (e) {
+      const d = e.response?.data?.detail;
+      toast.error(typeof d === "string" ? d : "Invalid coupon");
+      setAppliedCoupon(null);
+    } finally { setCouponLoading(false); }
+  };
+
+  const removeCoupon = () => { setAppliedCoupon(null); setCouponCode(""); };
 
   useEffect(() => { if (items.length === 0 && !successOrder) navigate("/cart"); }, [items.length, navigate, successOrder]);
 
@@ -51,7 +73,7 @@ export default function Checkout() {
     if (!validate()) return;
     setProcessing(true);
     try {
-      const payload = { items: items.map((i) => ({ product_id: i.id, quantity: i.qty })), address: form, is_guest: !user };
+      const payload = { items: items.map((i) => ({ product_id: i.id, quantity: i.qty })), address: form, is_guest: !user, coupon_code: appliedCoupon?.code || null };
       const { data } = await api.post("/orders/create", payload);
       if (data.mock) { setMockOrder(data); setProcessing(false); return; }
       const ok = await loadRazorpay();
@@ -149,11 +171,31 @@ export default function Checkout() {
           </div>
           <div className="border-t border-neutral-200 mt-4 pt-4 space-y-2 text-sm">
             <div className="flex justify-between"><span className="text-neutral-600">Subtotal</span><span>{formatINR(subtotal)}</span></div>
+            {appliedCoupon && (
+              <div className="flex justify-between text-emerald-700">
+                <span className="flex items-center gap-1">Coupon <span className="font-mono text-xs">({appliedCoupon.code})</span> <button onClick={removeCoupon} className="text-rose-500 text-[10px] underline">remove</button></span>
+                <span>− {formatINR(discount)}</span>
+              </div>
+            )}
             <div className="flex justify-between"><span className="text-neutral-600">Shipping</span><span className="text-green-600 font-bold">FREE</span></div>
-            <div className="flex justify-between font-display font-bold text-lg pt-3 border-t border-neutral-200"><span>Total</span><span data-testid="checkout-total" className="text-indigo-600">{formatINR(subtotal)}</span></div>
+            <div className="flex justify-between font-display font-bold text-lg pt-3 border-t border-neutral-200"><span>Total</span><span data-testid="checkout-total" className="text-indigo-600">{formatINR(total)}</span></div>
           </div>
+
+          {!appliedCoupon && (
+            <div className="mt-4 pt-4 border-t border-stone-200">
+              <Label className="text-xs uppercase font-bold text-neutral-700">Have a Coupon?</Label>
+              <div className="flex gap-2 mt-1.5">
+                <Input data-testid="coupon-input" value={couponCode} onChange={(e) => setCouponCode(e.target.value.toUpperCase())} placeholder="Enter code (e.g. SAVE5)" className="border-neutral-300 font-mono text-sm"/>
+                <Button data-testid="apply-coupon-btn" type="button" disabled={couponLoading} onClick={applyCoupon} className="bg-stone-950 hover:bg-indigo-600 text-xs font-bold uppercase">
+                  {couponLoading ? "..." : "Apply"}
+                </Button>
+              </div>
+              <div className="text-[10px] text-stone-500 mt-1.5">Try <button onClick={() => setCouponCode("SAVE5")} className="text-indigo-600 font-mono hover:underline">SAVE5</button> for 5% off ₹500+</div>
+            </div>
+          )}
+
           <Button data-testid="place-order-btn" disabled={processing} onClick={placeOrder} className="w-full mt-5 bg-indigo-600 hover:bg-indigo-700 font-bold uppercase tracking-wider text-sm py-6">
-            <Lock className="w-4 h-4 mr-2"/> {processing ? "Processing..." : `Pay ${formatINR(subtotal)}`}
+            <Lock className="w-4 h-4 mr-2"/> {processing ? "Processing..." : `Pay ${formatINR(total)}`}
           </Button>
           <div className="text-[10px] text-neutral-500 text-center mt-3 flex items-center justify-center gap-1.5">
             <ShieldCheck className="w-3 h-3"/> Secured by Razorpay · SSL Encrypted

@@ -13,6 +13,8 @@ import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@
 import { Plus, Edit, Trash2, ShoppingCart, Package, DollarSign, Users, Upload, Loader2, FileText, ExternalLink, X, Settings as SettingsIcon } from "lucide-react";
 import { toast } from "sonner";
 import AdminSettings from "@/components/AdminSettings";
+import AdminCategories from "@/components/AdminCategories";
+import AdminCoupons from "@/components/AdminCoupons";
 
 const EMPTY_P = { name: "", description: "", price: "", original_price: "", category: "android-stereos", brand: "", image: "", gallery: [], stock: 50, rating: 4.5, featured: false, discount_percent: 0, discount_flat: 0, gst_percent: 18, tags: [], car_brands: [], car_models: [], years: [] };
 
@@ -194,6 +196,8 @@ export default function AdminDashboard() {
         <Tabs defaultValue="products">
           <TabsList className="bg-white border border-stone-200">
             <TabsTrigger value="products" data-testid="tab-products">Products</TabsTrigger>
+            <TabsTrigger value="categories" data-testid="tab-categories">Categories</TabsTrigger>
+            <TabsTrigger value="coupons" data-testid="tab-coupons">Coupons</TabsTrigger>
             <TabsTrigger value="orders" data-testid="tab-orders">Orders</TabsTrigger>
             <TabsTrigger value="settings" data-testid="tab-settings"><SettingsIcon className="w-4 h-4 mr-1.5"/> Integrations</TabsTrigger>
           </TabsList>
@@ -307,6 +311,14 @@ export default function AdminDashboard() {
           <TabsContent value="settings">
             <AdminSettings/>
           </TabsContent>
+
+          <TabsContent value="categories">
+            <AdminCategories/>
+          </TabsContent>
+
+          <TabsContent value="coupons">
+            <AdminCoupons/>
+          </TabsContent>
         </Tabs>
       </div>
 
@@ -334,14 +346,52 @@ export default function AdminDashboard() {
               </Select>
             </div>
             <div>
-              <Label className="text-xs uppercase font-bold">Category *</Label>
-              <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
+              <Label className="text-xs uppercase font-bold">Primary Category *</Label>
+              <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v, categories: [...new Set([v, ...(form.categories || [])])] })}>
                 <SelectTrigger className="mt-1"><SelectValue/></SelectTrigger>
                 <SelectContent>{cats.map((c) => <SelectItem key={c.slug} value={c.slug}>{c.name}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div><Label className="text-xs uppercase font-bold">Brand</Label><Input value={form.brand || ""} onChange={c("brand")} className="mt-1" placeholder="Sony, JBL, Pioneer..."/></div>
             <div><Label className="text-xs uppercase font-bold">Stock</Label><Input type="number" value={form.stock} onChange={c("stock")} className="mt-1"/></div>
+
+            {/* Multi-category assignment */}
+            <div className="col-span-2">
+              <Label className="text-xs uppercase font-bold">Additional Categories (multi-select)</Label>
+              <div className="flex flex-wrap gap-1.5 mt-2 max-h-32 overflow-y-auto p-2 bg-stone-50 rounded border border-stone-200">
+                {cats.map((cat) => {
+                  const sel = (form.categories || []).includes(cat.slug);
+                  return (
+                    <button key={cat.slug} type="button" data-testid={`mcat-${cat.slug}`}
+                            onClick={() => toggleArrItem("categories", cat.slug)}
+                            className={`text-xs px-3 py-1.5 rounded-full transition ${sel ? "bg-indigo-600 text-white" : "bg-white border border-stone-300 text-stone-700 hover:border-indigo-400"}`}>
+                      {cat.name}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="text-[10px] text-stone-500 mt-1">Product will appear in all selected categories.</div>
+            </div>
+
+            {/* Visibility flags */}
+            <div className="col-span-2 grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-stone-200">
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={form.is_published !== false} onChange={(e) => setForm({ ...form, is_published: e.target.checked })}/>
+                Published
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={!!form.featured} onChange={(e) => setForm({ ...form, featured: e.target.checked })}/>
+                Featured
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={!!form.is_best_seller} onChange={(e) => setForm({ ...form, is_best_seller: e.target.checked })}/>
+                Best Seller
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={!!form.is_new_arrival} onChange={(e) => setForm({ ...form, is_new_arrival: e.target.checked })}/>
+                New Arrival
+              </label>
+            </div>
 
             {/* Tags */}
             <div className="col-span-2">
@@ -457,10 +507,7 @@ export default function AdminDashboard() {
             </div>
 
             <div className="col-span-2 flex items-center gap-3 pt-2 border-t border-stone-200">
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={!!form.featured} onChange={(e) => setForm({ ...form, featured: e.target.checked })}/>
-                Featured (shown on homepage)
-              </label>
+              <span className="text-[10px] text-stone-500">Tip: Use the multi-select above to assign this product to multiple categories.</span>
             </div>
           </div>
           <Button data-testid="save-product" onClick={save} className="bg-indigo-600 hover:bg-indigo-700 font-bold uppercase tracking-wider text-xs">Save Product</Button>

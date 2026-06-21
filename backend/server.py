@@ -68,12 +68,16 @@ class ProductIn(BaseModel):
     price: float
     original_price: Optional[float] = None
     category: str
+    categories: List[str] = []
     brand: Optional[str] = None
     image: str
     gallery: List[str] = []
     stock: int = 50
     rating: float = 4.5
     featured: bool = False
+    is_published: bool = True
+    is_best_seller: bool = False
+    is_new_arrival: bool = False
     discount_percent: float = 0
     discount_flat: float = 0
     gst_percent: int = 18
@@ -81,6 +85,10 @@ class ProductIn(BaseModel):
     car_brands: List[str] = []
     car_models: List[str] = []
     years: List[int] = []
+    # SEO
+    meta_title: Optional[str] = ""
+    meta_description: Optional[str] = ""
+    seo_slug: Optional[str] = ""
 
 class Product(ProductIn):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -117,6 +125,7 @@ class CreateOrderReq(BaseModel):
     items: List[CartItem]
     address: Address
     is_guest: bool = True
+    coupon_code: Optional[str] = None
 
 class VerifyPaymentReq(BaseModel):
     order_id: str
@@ -355,6 +364,174 @@ async def trigger_shiprocket(order_doc: dict):
     except Exception as e:
         logger.error(f"shiprocket trigger failed: {e}")
 
+# ============ Coupons ============
+class CouponIn(BaseModel):
+    code: str
+    type: str  # 'percent' | 'flat' | 'free_shipping'
+    value: float = 0
+    min_order: float = 0
+    max_discount: float = 0  # 0 = unlimited
+    usage_limit: int = 0  # 0 = unlimited
+    expires_at: Optional[str] = None  # ISO date
+    is_active: bool = True
+    description: Optional[str] = ""
+    customer_emails: List[str] = []  # empty = all customers
+
+def normalize_code(c: str) -> str:
+    return (c or "").strip().upper()
+
+async def validate_coupon(code: str, subtotal: float, email: Optional[str] = None):
+    if not code:
+        return None, None
+    c = await db.coupons.find_one({"code": normalize_code(code)}, {"_id": 0})
+    if not c:
+        raise HTTPException(400, "Invalid coupon code")
+    if not c.get("is_active", True):
+        raise HTTPException(400, "Coupon is disabled")
+    if c.get("expires_at"):
+        try:
+            exp = datetime.fromisoformat(c["expires_at"].replace("Z", "+00:00"))
+            if exp < datetime.now(timezone.utc):
+                raise HTTPException(400, "Coupon has expired")
+        except ValueError:
+            pass
+    if c.get("usage_limit", 0) > 0 and c.get("used_count", 0) >= c["usage_limit"]:
+        raise HTTPException(400, "Coupon usage limit reached")
+    if subtotal < c.get("min_order", 0):
+        raise HTTPException(400, f"Minimum order of ₹{c['min_order']} required")
+    allowed = c.get("customer_emails", [])
+    if allowed and email and email.lower() not in [e.lower() for e in allowed]:
+        raise HTTPException(400, "Coupon not valid for this customer")
+    # Compute discount
+    discount = 0.0
+    if c["type"] == "percent":
+        discount = round(subtotal * (c["value"] / 100), 2)
+        if c.get("max_discount", 0) > 0:
+            discount = min(discount, c["max_discount"])
+    elif c["type"] == "flat":
+        discount = min(c["value"], subtotal)
+    elif c["type"] == "free_shipping":
+        discount = 0  # shipping is free in app — coupon valid but no extra discount
+    return c, round(discount, 2)
+
+@api_router.post("/coupons/validate")
+async def validate_coupon_endpoint(body: dict):
+    code = body.get("code", "")
+    subtotal = float(body.get("subtotal", 0))
+    email = body.get("email")
+    c, discount = await validate_coupon(code, subtotal, email)
+    return {
+        "ok": True,
+        "code": c["code"],
+        "type": c["type"],
+        "discount": discount,
+        "description": c.get("description", ""),
+    }
+
+@api_router.get("/admin/coupons")
+async def admin_list_coupons(_=Depends(get_admin)):
+    return await db.coupons.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+
+@api_router.post("/admin/coupons")
+async def admin_create_coupon(body: CouponIn, _=Depends(get_admin)):
+    if body.type not in ("percent", "flat", "free_shipping"):
+        raise HTTPException(400, "Invalid coupon type")
+    code = normalize_code(body.code)
+    if await db.coupons.find_one({"code": code}):
+        raise HTTPException(400, "Coupon code already exists")
+    doc = {"id": str(uuid.uuid4()), **body.model_dump(), "code": code, "used_count": 0,
+           "created_at": datetime.now(timezone.utc).isoformat()}
+    await db.coupons.insert_one(doc)
+    return {"ok": True}
+
+@api_router.put("/admin/coupons/{code}")
+async def admin_update_coupon(code: str, body: CouponIn, _=Depends(get_admin)):
+    upd = body.model_dump()
+    upd["code"] = normalize_code(body.code)
+    res = await db.coupons.update_one({"code": normalize_code(code)}, {"$set": upd})
+    if res.matched_count == 0:
+        raise HTTPException(404, "Not found")
+    return {"ok": True}
+
+@api_router.delete("/admin/coupons/{code}")
+async def admin_delete_coupon(code: str, _=Depends(get_admin)):
+    await db.coupons.delete_one({"code": normalize_code(code)})
+    return {"ok": True}
+
+# ============ Banners / Homepage Slides ============
+class BannerIn(BaseModel):
+    title: str
+    subtitle: Optional[str] = ""
+    badge: Optional[str] = ""
+    cta_text: Optional[str] = "Shop Now"
+    cta_link: Optional[str] = "/shop"
+    mesh: Optional[str] = "mesh-indigo"  # mesh-indigo, mesh-stereo, mesh-speakers, mesh-amber, mesh-emerald
+    accent: Optional[str] = "#A5B4FC"
+    image: Optional[str] = ""
+    sort_order: int = 0
+    is_active: bool = True
+
+@api_router.get("/banners")
+async def list_banners():
+    items = await db.banners.find({"is_active": True}, {"_id": 0}).sort("sort_order", 1).to_list(50)
+    return items
+
+@api_router.get("/admin/banners")
+async def admin_list_banners(_=Depends(get_admin)):
+    items = await db.banners.find({}, {"_id": 0}).sort("sort_order", 1).to_list(100)
+    return items
+
+@api_router.post("/admin/banners")
+async def admin_create_banner(body: BannerIn, _=Depends(get_admin)):
+    doc = {"id": str(uuid.uuid4()), **body.model_dump(), "created_at": datetime.now(timezone.utc).isoformat()}
+    await db.banners.insert_one(doc)
+    return {"ok": True, "id": doc["id"]}
+
+@api_router.put("/admin/banners/{bid}")
+async def admin_update_banner(bid: str, body: BannerIn, _=Depends(get_admin)):
+    res = await db.banners.update_one({"id": bid}, {"$set": body.model_dump()})
+    if res.matched_count == 0:
+        raise HTTPException(404, "Not found")
+    return {"ok": True}
+
+@api_router.delete("/admin/banners/{bid}")
+async def admin_delete_banner(bid: str, _=Depends(get_admin)):
+    await db.banners.delete_one({"id": bid})
+    return {"ok": True}
+
+# ============ Tax Rules ============
+class TaxRuleIn(BaseModel):
+    name: str
+    rate: float  # percent
+    is_default: bool = False
+    description: Optional[str] = ""
+
+@api_router.get("/tax-rules")
+async def list_tax_rules():
+    return await db.tax_rules.find({}, {"_id": 0}).sort("rate", 1).to_list(50)
+
+@api_router.post("/admin/tax-rules")
+async def create_tax_rule(body: TaxRuleIn, _=Depends(get_admin)):
+    if body.is_default:
+        await db.tax_rules.update_many({}, {"$set": {"is_default": False}})
+    doc = {"id": str(uuid.uuid4()), **body.model_dump(), "created_at": datetime.now(timezone.utc).isoformat()}
+    await db.tax_rules.insert_one(doc)
+    return {"ok": True}
+
+@api_router.put("/admin/tax-rules/{rid}")
+async def update_tax_rule(rid: str, body: TaxRuleIn, _=Depends(get_admin)):
+    if body.is_default:
+        await db.tax_rules.update_many({"id": {"$ne": rid}}, {"$set": {"is_default": False}})
+    res = await db.tax_rules.update_one({"id": rid}, {"$set": body.model_dump()})
+    if res.matched_count == 0:
+        raise HTTPException(404, "Not found")
+    return {"ok": True}
+
+@api_router.delete("/admin/tax-rules/{rid}")
+async def delete_tax_rule(rid: str, _=Depends(get_admin)):
+    await db.tax_rules.delete_one({"id": rid})
+    return {"ok": True}
+
 # ============ Reviews ============
 async def recalculate_product_rating(product_id: str):
     pipe = [
@@ -414,12 +591,21 @@ async def admin_delete_review(rid: str, _=Depends(get_admin)):
 
 # ============ Products ============
 @api_router.get("/products")
-async def list_products(category: Optional[str] = None, featured: Optional[bool] = None, q: Optional[str] = None):
+async def list_products(category: Optional[str] = None, featured: Optional[bool] = None, q: Optional[str] = None,
+                        best_seller: Optional[bool] = None, new_arrival: Optional[bool] = None,
+                        published_only: bool = True):
     query = {}
+    if published_only:
+        query["is_published"] = {"$ne": False}
     if category and category != "all":
-        query["category"] = category
+        # match either single legacy field or multi-category array
+        query["$or"] = [{"category": category}, {"categories": category}]
     if featured is not None:
         query["featured"] = featured
+    if best_seller is not None:
+        query["is_best_seller"] = best_seller
+    if new_arrival is not None:
+        query["is_new_arrival"] = new_arrival
     if q:
         query["name"] = {"$regex": q, "$options": "i"}
     items = await db.products.find(query, {"_id": 0}).to_list(500)
@@ -434,17 +620,55 @@ async def get_product(pid: str):
 
 @api_router.get("/categories")
 async def categories():
-    return [
-        {"slug": "android-stereos", "name": "Android Stereos", "icon": "Monitor"},
-        {"slug": "speakers", "name": "Speakers", "icon": "Speaker"},
-        {"slug": "amplifiers", "name": "Amplifiers", "icon": "Zap"},
-        {"slug": "dash-cameras", "name": "Dash Cameras", "icon": "Camera"},
-        {"slug": "led-lights", "name": "LED Lights", "icon": "Lightbulb"},
-        {"slug": "perfumes", "name": "Car Perfumes", "icon": "Sparkles"},
-        {"slug": "accessories", "name": "Accessories", "icon": "Wrench"},
-        {"slug": "key-chains", "name": "Key Chains", "icon": "Key"},
-        {"slug": "body-covers", "name": "Body Covers", "icon": "Shirt"},
-    ]
+    items = await db.categories.find({"is_active": True}, {"_id": 0}).sort("sort_order", 1).to_list(200)
+    return items
+
+@api_router.get("/admin/categories")
+async def admin_list_categories(_=Depends(get_admin)):
+    items = await db.categories.find({}, {"_id": 0}).sort("sort_order", 1).to_list(500)
+    return items
+
+class CategoryIn(BaseModel):
+    slug: str
+    name: str
+    description: Optional[str] = ""
+    image: Optional[str] = ""
+    icon: Optional[str] = "Package"
+    parent_slug: Optional[str] = None
+    is_active: bool = True
+    sort_order: int = 0
+
+@api_router.post("/admin/categories")
+async def admin_create_category(body: CategoryIn, _=Depends(get_admin)):
+    if await db.categories.find_one({"slug": body.slug}):
+        raise HTTPException(400, "Slug already exists")
+    doc = {"id": str(uuid.uuid4()), **body.model_dump(), "created_at": datetime.now(timezone.utc).isoformat()}
+    await db.categories.insert_one(doc)
+    return {"ok": True}
+
+@api_router.put("/admin/categories/{slug}")
+async def admin_update_category(slug: str, body: CategoryIn, _=Depends(get_admin)):
+    if body.slug != slug:
+        await db.products.update_many({"categories": slug}, {"$set": {"categories.$": body.slug}})
+        await db.products.update_many({"category": slug}, {"$set": {"category": body.slug}})
+    res = await db.categories.update_one({"slug": slug}, {"$set": body.model_dump()})
+    if res.matched_count == 0:
+        raise HTTPException(404, "Not found")
+    return {"ok": True}
+
+@api_router.patch("/admin/categories/reorder")
+async def admin_reorder_categories(orders: List[dict], _=Depends(get_admin)):
+    for o in orders:
+        await db.categories.update_one({"slug": o["slug"]}, {"$set": {"sort_order": int(o.get("sort_order", 0))}})
+    return {"ok": True}
+
+@api_router.delete("/admin/categories/{slug}")
+async def admin_delete_category(slug: str, _=Depends(get_admin)):
+    in_use = await db.products.count_documents({"$or": [{"category": slug}, {"categories": slug}]})
+    if in_use > 0:
+        raise HTTPException(400, f"Category in use by {in_use} product(s). Reassign first.")
+    await db.categories.delete_one({"slug": slug})
+    return {"ok": True}
 
 # ============ Automotive Catalog ============
 CAR_BRANDS_MODELS = {
@@ -498,8 +722,9 @@ async def filter_products(
     max_price: Optional[float] = None,
     q: Optional[str] = None,
 ):
-    query = {}
-    if category and category != "all": query["category"] = category
+    query = {"is_published": {"$ne": False}}
+    if category and category != "all":
+        query["$or"] = [{"category": category}, {"categories": category}]
     if car_brand: query["car_brands"] = {"$in": [b.strip() for b in car_brand.split(",")]}
     if car_model: query["car_models"] = {"$in": [m.strip() for m in car_model.split(",")]}
     if year: query["years"] = year
@@ -702,6 +927,14 @@ async def create_order(req: CreateOrderReq, creds: Optional[HTTPAuthorizationCre
     if total <= 0:
         raise HTTPException(400, "Empty order")
 
+    # Apply coupon
+    coupon_data = None
+    discount = 0.0
+    if req.coupon_code:
+        c, discount = await validate_coupon(req.coupon_code, total, req.address.email)
+        coupon_data = {"code": c["code"], "type": c["type"], "discount": discount, "description": c.get("description", "")}
+        total = max(0, total - discount)
+
     order_id = str(uuid.uuid4())
     amount_paise = int(round(total * 100))
 
@@ -726,6 +959,9 @@ async def create_order(req: CreateOrderReq, creds: Optional[HTTPAuthorizationCre
         "is_guest": req.is_guest or user_id is None,
         "items": items_detail,
         "address": req.address.model_dump(),
+        "subtotal": total + discount,
+        "coupon": coupon_data,
+        "discount": discount,
         "total": total,
         "amount_paise": amount_paise,
         "razorpay_order_id": razorpay_order_id,
@@ -735,6 +971,8 @@ async def create_order(req: CreateOrderReq, creds: Optional[HTTPAuthorizationCre
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.orders.insert_one(order_doc)
+    if coupon_data:
+        await db.coupons.update_one({"code": coupon_data["code"]}, {"$inc": {"used_count": 1}})
 
     return {
         "order_id": order_id,
@@ -985,6 +1223,98 @@ async def startup_event():
             "created_at": datetime.now(timezone.utc).isoformat()
         })
         logger.info("Admin user seeded")
+
+    # Seed default categories if empty
+    cat_count = await db.categories.count_documents({})
+    if cat_count == 0:
+        DEFAULT_CATS = [
+            {"slug": "android-stereos", "name": "Android Stereos", "icon": "Monitor", "sort_order": 1, "is_active": True, "description": "10\" Touchscreen, CarPlay, GPS"},
+            {"slug": "speakers", "name": "Speakers", "icon": "Speaker", "sort_order": 2, "is_active": True, "description": "Sony, JBL, Pioneer audio speakers"},
+            {"slug": "amplifiers", "name": "Amplifiers", "icon": "Zap", "sort_order": 3, "is_active": True, "description": "Mono and multi-channel amps"},
+            {"slug": "dash-cameras", "name": "Dash Cameras", "icon": "Camera", "sort_order": 4, "is_active": True, "description": "Front and rear dash cams"},
+            {"slug": "led-lights", "name": "LED Lights", "icon": "Lightbulb", "sort_order": 5, "is_active": True, "description": "Headlights and interior LEDs"},
+            {"slug": "perfumes", "name": "Car Perfumes", "icon": "Sparkles", "sort_order": 6, "is_active": True, "description": "Air fresheners and diffusers"},
+            {"slug": "accessories", "name": "Accessories", "icon": "Wrench", "sort_order": 7, "is_active": True, "description": "Blind spot mirrors, films, etc."},
+            {"slug": "key-chains", "name": "Key Chains", "icon": "Key", "sort_order": 8, "is_active": True, "description": "Premium key covers"},
+            {"slug": "body-covers", "name": "Body Covers", "icon": "Shirt", "sort_order": 9, "is_active": True, "description": "Custom-fit car body covers"},
+        ]
+        for c in DEFAULT_CATS:
+            c["id"] = str(uuid.uuid4())
+            c["parent_slug"] = None
+            c["image"] = ""
+            c["created_at"] = datetime.now(timezone.utc).isoformat()
+            await db.categories.insert_one(c)
+        logger.info(f"Seeded {len(DEFAULT_CATS)} categories")
+
+    # Migrate existing products: backfill 'categories' array from legacy 'category' field
+    products_to_migrate = await db.products.find(
+        {"$or": [{"categories": {"$exists": False}}, {"categories": {"$size": 0}}]}, {"_id": 0, "id": 1, "category": 1}
+    ).to_list(1000)
+    for p in products_to_migrate:
+        if p.get("category"):
+            await db.products.update_one({"id": p["id"]}, {"$set": {"categories": [p["category"]]}})
+    if products_to_migrate:
+        logger.info(f"Migrated {len(products_to_migrate)} products to multi-category")
+
+    # Backfill product flag defaults
+    await db.products.update_many({"is_published": {"$exists": False}}, {"$set": {"is_published": True}})
+    await db.products.update_many({"is_best_seller": {"$exists": False}}, {"$set": {"is_best_seller": False}})
+    await db.products.update_many({"is_new_arrival": {"$exists": False}}, {"$set": {"is_new_arrival": False}})
+
+    # Seed sample coupons if empty
+    if await db.coupons.count_documents({}) == 0:
+        sample = [
+            {"code": "SAVE5", "type": "percent", "value": 5, "min_order": 500, "max_discount": 500, "usage_limit": 0,
+             "expires_at": None, "is_active": True, "description": "5% off on prepaid orders ₹500+", "customer_emails": []},
+            {"code": "FIRST100", "type": "flat", "value": 100, "min_order": 1000, "max_discount": 100, "usage_limit": 0,
+             "expires_at": None, "is_active": True, "description": "Flat ₹100 off on first order ₹1000+", "customer_emails": []},
+            {"code": "BASS500", "type": "flat", "value": 500, "min_order": 5000, "max_discount": 500, "usage_limit": 0,
+             "expires_at": None, "is_active": True, "description": "₹500 off on speakers/amps ₹5000+", "customer_emails": []},
+        ]
+        for c in sample:
+            c["id"] = str(uuid.uuid4())
+            c["used_count"] = 0
+            c["created_at"] = datetime.now(timezone.utc).isoformat()
+            await db.coupons.insert_one(c)
+        logger.info(f"Seeded {len(sample)} sample coupons")
+
+    # Seed banners if empty
+    if await db.banners.count_documents({}) == 0:
+        banners = [
+            {"title": "MEGA SOUND SALE", "subtitle": "Up to 76% OFF on selected products", "badge": "EXTRA 5% OFF ON PREPAID · CODE SAVE5",
+             "cta_text": "Shop Now", "cta_link": "/shop", "mesh": "mesh-indigo", "accent": "#A5B4FC",
+             "image": "https://images.pexels.com/photos/9530906/pexels-photo-9530906.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=720&w=1920",
+             "sort_order": 1, "is_active": True},
+            {"title": "ANDROID STEREOS", "subtitle": "10\" Touchscreen · CarPlay · GPS", "badge": "Starting ₹7,499",
+             "cta_text": "Explore Stereos", "cta_link": "/shop?category=android-stereos", "mesh": "mesh-stereo", "accent": "#FBBF24",
+             "image": "https://images.pexels.com/photos/4078064/pexels-photo-4078064.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=720&w=1920",
+             "sort_order": 2, "is_active": True},
+            {"title": "BASS LEGENDS", "subtitle": "Sony · JBL · Pioneer · Magnetz", "badge": "Free Shipping All India",
+             "cta_text": "Shop Speakers", "cta_link": "/shop?category=speakers", "mesh": "mesh-speakers", "accent": "#FBCFE8",
+             "image": "https://images.unsplash.com/photo-1608538770329-65941f62f9f8?crop=entropy&cs=srgb&fm=jpg&w=1920",
+             "sort_order": 3, "is_active": True},
+        ]
+        for b in banners:
+            b["id"] = str(uuid.uuid4())
+            b["created_at"] = datetime.now(timezone.utc).isoformat()
+            await db.banners.insert_one(b)
+        logger.info(f"Seeded {len(banners)} banners")
+
+    # Seed tax rules if empty
+    if await db.tax_rules.count_documents({}) == 0:
+        rules = [
+            {"name": "GST 0% (Exempt)", "rate": 0, "is_default": False, "description": "Tax-exempt items"},
+            {"name": "GST 5%", "rate": 5, "is_default": False, "description": "Essential goods"},
+            {"name": "GST 12%", "rate": 12, "is_default": False, "description": "Standard"},
+            {"name": "GST 18%", "rate": 18, "is_default": True, "description": "Most car audio products"},
+            {"name": "GST 28%", "rate": 28, "is_default": False, "description": "Luxury items"},
+        ]
+        for r in rules:
+            r["id"] = str(uuid.uuid4())
+            r["created_at"] = datetime.now(timezone.utc).isoformat()
+            await db.tax_rules.insert_one(r)
+        logger.info(f"Seeded {len(rules)} tax rules")
+
     # Seed products
     count = await db.products.count_documents({})
     if count == 0:
