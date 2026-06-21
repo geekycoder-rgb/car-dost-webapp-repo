@@ -1,8 +1,9 @@
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { ShoppingCart, User, LogOut, Menu, X, Phone, Mail, Search, Heart, Home as HomeIcon, Grid, MessageCircle, ChevronDown } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
+import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -23,18 +24,31 @@ export default function Layout({ children }) {
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchQ, setSearchQ] = useState("");
+  const [categories, setCategories] = useState([]);
 
-  const navLinks = [
+  useEffect(() => {
+    api.get("/categories")
+      .then((r) => setCategories((r.data || []).filter((c) => c.is_active !== false).sort((a, b) => (a.sort_order ?? 99) - (b.sort_order ?? 99))))
+      .catch(() => setCategories([]));
+  }, []);
+
+  // Static (non-category) routes — pre + post category list
+  const staticLinks = [
     { to: "/", label: "Home" },
-    { to: "/shop?category=android-stereos", label: "Android Stereos" },
-    { to: "/shop?category=speakers", label: "Speakers" },
-    { to: "/shop?category=amplifiers", label: "Amplifiers" },
-    { to: "/shop?category=dash-cameras", label: "Dash Cams" },
+  ];
+  const tailLinks = [
     { to: "/reviews", label: "Reviews" },
     { to: "/about", label: "About" },
     { to: "/faq", label: "FAQ" },
     { to: "/contact", label: "Contact" },
   ];
+
+  const categoryLinks = categories.map((c) => ({
+    to: `/shop?category=${c.slug}`,
+    label: c.name,
+  }));
+
+  const navLinks = [...staticLinks, ...categoryLinks, ...tailLinks];
 
   const submitSearch = (e) => {
     e.preventDefault();
@@ -162,7 +176,7 @@ export default function Layout({ children }) {
       {/* Dark main nav */}
       <nav className="hidden lg:block bg-[#0F172A] text-white border-t border-neutral-800">
         <div className="max-w-7xl mx-auto px-6">
-          <div className="flex items-center justify-center gap-1">
+          <div className="flex items-center justify-center gap-1 flex-wrap">
             {navLinks.map((l) => (
               <NavLink
                 key={l.to}
