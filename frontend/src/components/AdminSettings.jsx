@@ -44,6 +44,40 @@ export default function AdminSettings() {
   const c = (k) => (e) => setS({ ...s, [k]: e.target.value });
   const t = (k) => (v) => setS({ ...s, [k]: v });
 
+  // Auto-save for single toggle changes — no need to scroll & click Save
+  const toggleAndSave = (k) => async (v) => {
+    const next = { ...s, [k]: v };
+    setS(next);
+    try {
+      await api.put("/admin/settings", { [k]: v });
+      toast.success(`${v ? "Enabled" : "Disabled"} ${k === "shiprocket_enabled" ? "Shiprocket auto-sync" : "Mock payment mode"}`);
+      const fresh = await api.get("/admin/settings");
+      setS(fresh.data);
+    } catch (err) {
+      toast.error("Could not save toggle");
+      setS({ ...s, [k]: !v }); // revert
+    }
+  };
+
+  // Big ON/OFF pill toggle — clearer than the tiny switch
+  // eslint-disable-next-line react/no-unstable-nested-components
+  const TogglePill = ({ checked, onChange, testid, onLabel = "ON", offLabel = "OFF" }) => (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      data-state={checked ? "checked" : "unchecked"}
+      data-testid={testid}
+      onClick={() => onChange(!checked)}
+      className={`relative inline-flex items-center h-9 w-[88px] rounded-full transition-colors duration-200 font-bold uppercase tracking-wider text-[11px] focus:outline-none focus:ring-2 focus:ring-offset-2 ${checked ? "bg-emerald-500 text-white ring-emerald-300" : "bg-stone-300 text-stone-600 ring-stone-300"}`}
+    >
+      <span className={`absolute h-7 w-7 rounded-full bg-white shadow-md transition-transform duration-200 ${checked ? "translate-x-[54px]" : "translate-x-1"}`}/>
+      <span className={`absolute ${checked ? "left-3" : "right-3"}`}>
+        {checked ? onLabel : offLabel}
+      </span>
+    </button>
+  );
+
   const save = async () => {
     setSaving(true);
     try {
@@ -87,12 +121,12 @@ export default function AdminSettings() {
           </div>
           {sec("razorpay_key_secret","Key Secret","razorpay_key_secret_masked","••••••••")}
           {sec("razorpay_webhook_secret","Webhook Secret","razorpay_webhook_secret_masked","Set on Razorpay → Webhooks → Add")}
-          <div className="flex items-center justify-between gap-3 px-3 py-2 bg-stone-50 rounded border border-stone-200">
+          <div className="flex items-center justify-between gap-3 px-3 py-3 bg-stone-50 rounded-xl border border-stone-200">
             <div>
               <Label className="text-xs uppercase font-bold text-stone-700">Mock Mode</Label>
               <p className="text-[10px] text-stone-500 mt-0.5">Simulate payments (no real Razorpay popup)</p>
             </div>
-            <Switch data-testid="set-mock-toggle" checked={!!s.mock_payment} onCheckedChange={t("mock_payment")}/>
+            <TogglePill testid="set-mock-toggle" checked={!!s.mock_payment} onChange={toggleAndSave("mock_payment")}/>
           </div>
         </div>
         <div className="mt-4 text-[10px] text-stone-500 flex gap-2 items-start">
@@ -110,12 +144,12 @@ export default function AdminSettings() {
             <p className="text-xs text-stone-500">Auto-create shipment orders after successful payment</p>
           </div>
         </div>
-        <div className="flex items-center justify-between gap-3 px-3 py-2 bg-stone-50 rounded border border-stone-200 mb-4">
+        <div className="flex items-center justify-between gap-3 px-4 py-3.5 bg-emerald-50/40 rounded-xl border border-emerald-200 mb-4">
           <div>
-            <Label className="text-xs uppercase font-bold text-stone-700">Enable Shiprocket Auto-Sync</Label>
-            <p className="text-[10px] text-stone-500 mt-0.5">When ON, every paid order will be forwarded to Shiprocket</p>
+            <Label className="text-sm uppercase font-bold text-stone-800">Enable Shiprocket Auto-Sync</Label>
+            <p className="text-[11px] text-stone-600 mt-0.5">When ON, every paid order will be forwarded to Shiprocket automatically.</p>
           </div>
-          <Switch data-testid="set-ship-toggle" checked={!!s.shiprocket_enabled} onCheckedChange={t("shiprocket_enabled")}/>
+          <TogglePill testid="set-ship-toggle" checked={!!s.shiprocket_enabled} onChange={toggleAndSave("shiprocket_enabled")}/>
         </div>
         <div className="grid sm:grid-cols-2 gap-4">
           <div>
