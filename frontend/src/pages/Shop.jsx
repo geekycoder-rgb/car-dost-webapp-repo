@@ -125,7 +125,7 @@ export default function Shop() {
                 <select data-testid="filter-car-brand" value={carBrand} onChange={(e) => updateParam("car_brand", e.target.value)}
                         className="w-full border border-stone-300 rounded px-3 py-2 text-sm bg-white">
                   <option value="">All Brands</option>
-                  {carBrands.map((b) => <option key={b.name} value={b.name}>{b.name}</option>)}
+                  {carBrands.filter((b) => b.name !== "ALL").map((b) => <option key={b.name} value={b.name}>{b.name}</option>)}
                 </select>
               </div>
               {carBrand && (

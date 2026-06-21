@@ -18,6 +18,22 @@ export default function ProductDetail() {
     api.get(`/products/${id}`).then((r) => { setProduct(r.data); setActiveImg(r.data.image); }).catch(() => navigate("/shop"));
   }, [id, navigate]);
 
+  // Per-product SEO meta tags
+  useEffect(() => {
+    if (!product) return;
+    const prevTitle = document.title;
+    document.title = product.meta_title || `${product.name} — CarDost`;
+    const setMeta = (name, content) => {
+      if (!content) return null;
+      let el = document.querySelector(`meta[name="${name}"]`);
+      if (!el) { el = document.createElement("meta"); el.setAttribute("name", name); document.head.appendChild(el); }
+      el.setAttribute("content", content);
+      return el;
+    };
+    const desc = setMeta("description", product.meta_description || product.description?.slice(0, 160));
+    return () => { document.title = prevTitle; if (desc) desc.setAttribute("content", ""); };
+  }, [product]);
+
   if (!product) return <div className="max-w-7xl mx-auto px-6 py-20 text-stone-500">Loading...</div>;
   const off = product.original_price ? Math.round(100 - (product.price / product.original_price) * 100) : 0;
   const gallery = [product.image, ...(product.gallery || [])].filter(Boolean);
@@ -47,6 +63,12 @@ export default function ProductDetail() {
               </div>
             )}
             {(product.car_brands?.length > 0 || product.years?.length > 0) && (
+              product.car_brands?.includes("ALL") ? (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
+                  <div className="text-[10px] uppercase tracking-wider font-bold text-emerald-700 mb-2">Universal Fit</div>
+                  <div className="text-sm text-emerald-800">🌐 Fits <strong>all cars</strong>, brands, models &amp; years.</div>
+                </div>
+              ) : (
               <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4">
                 <div className="text-[10px] uppercase tracking-wider font-bold text-indigo-700 mb-2">Compatible With</div>
                 {product.car_brands?.length > 0 && (
@@ -63,6 +85,7 @@ export default function ProductDetail() {
                   <div className="text-[11px] text-stone-600">Years: {[...product.years].sort().join(", ")}</div>
                 )}
               </div>
+              )
             )}
           </div>
           <div className="space-y-5">

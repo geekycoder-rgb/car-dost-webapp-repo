@@ -15,8 +15,11 @@ import { toast } from "sonner";
 import AdminSettings from "@/components/AdminSettings";
 import AdminCategories from "@/components/AdminCategories";
 import AdminCoupons from "@/components/AdminCoupons";
+import AdminBanners from "@/components/AdminBanners";
+import AdminReviews from "@/components/AdminReviews";
+import AdminTax from "@/components/AdminTax";
 
-const EMPTY_P = { name: "", description: "", price: "", original_price: "", category: "android-stereos", brand: "", image: "", gallery: [], stock: 50, rating: 4.5, featured: false, discount_percent: 0, discount_flat: 0, gst_percent: 18, tags: [], car_brands: [], car_models: [], years: [] };
+const EMPTY_P = { name: "", description: "", price: "", original_price: "", category: "android-stereos", brand: "", image: "", gallery: [], stock: 50, rating: 4.5, featured: false, discount_percent: 0, discount_flat: 0, gst_percent: 18, tags: [], car_brands: [], car_models: [], years: [], meta_title: "", meta_description: "", seo_slug: "" };
 
 export default function AdminDashboard() {
   const { user, loading } = useAuth();
@@ -85,6 +88,9 @@ export default function AdminDashboard() {
         car_brands: form.car_brands || [],
         car_models: form.car_models || [],
         years: (form.years || []).map((y) => parseInt(y)),
+        meta_title: form.meta_title || "",
+        meta_description: form.meta_description || "",
+        seo_slug: form.seo_slug || "",
       };
       if (editing) { await api.put(`/admin/products/${editing.id}`, payload); toast.success("Product updated"); }
       else { await api.post("/admin/products", payload); toast.success("Product created"); }
@@ -130,6 +136,18 @@ export default function AdminDashboard() {
 
   const toggleArrItem = (key, val) => setForm((f) => {
     const arr = f[key] || [];
+    // Universal "ALL" car_brands behaviour: when ALL is toggled on, clear other brand/model/year selections
+    if (key === "car_brands") {
+      if (val === "ALL") {
+        const has = arr.includes("ALL");
+        return has
+          ? { ...f, car_brands: arr.filter((x) => x !== "ALL") }
+          : { ...f, car_brands: ["ALL"], car_models: [], years: [] };
+      }
+      // selecting a regular brand removes ALL
+      const next = arr.filter((x) => x !== "ALL");
+      return { ...f, car_brands: next.includes(val) ? next.filter((x) => x !== val) : [...next, val] };
+    }
     return { ...f, [key]: arr.includes(val) ? arr.filter((x) => x !== val) : [...arr, val] };
   });
 
@@ -194,10 +212,13 @@ export default function AdminDashboard() {
         )}
 
         <Tabs defaultValue="products">
-          <TabsList className="bg-white border border-stone-200">
+          <TabsList className="bg-white border border-stone-200 flex-wrap h-auto">
             <TabsTrigger value="products" data-testid="tab-products">Products</TabsTrigger>
             <TabsTrigger value="categories" data-testid="tab-categories">Categories</TabsTrigger>
             <TabsTrigger value="coupons" data-testid="tab-coupons">Coupons</TabsTrigger>
+            <TabsTrigger value="banners" data-testid="tab-banners">Banners</TabsTrigger>
+            <TabsTrigger value="reviews" data-testid="tab-reviews">Reviews</TabsTrigger>
+            <TabsTrigger value="tax" data-testid="tab-tax">Tax Rules</TabsTrigger>
             <TabsTrigger value="orders" data-testid="tab-orders">Orders</TabsTrigger>
             <TabsTrigger value="settings" data-testid="tab-settings"><SettingsIcon className="w-4 h-4 mr-1.5"/> Integrations</TabsTrigger>
           </TabsList>
@@ -318,6 +339,18 @@ export default function AdminDashboard() {
 
           <TabsContent value="coupons">
             <AdminCoupons/>
+          </TabsContent>
+
+          <TabsContent value="banners">
+            <AdminBanners/>
+          </TabsContent>
+
+          <TabsContent value="reviews">
+            <AdminReviews/>
+          </TabsContent>
+
+          <TabsContent value="tax">
+            <AdminTax/>
           </TabsContent>
         </Tabs>
       </div>
@@ -451,12 +484,23 @@ export default function AdminDashboard() {
             {/* Car Brands */}
             <div className="col-span-2 border-t border-stone-200 pt-4">
               <Label className="text-xs uppercase font-bold">Vehicle Compatibility — Car Brands</Label>
-              <div className="flex flex-wrap gap-1.5 mt-2 max-h-32 overflow-y-auto p-2 bg-stone-50 rounded border border-stone-200">
+              <div className="text-[10px] text-stone-500 mt-1 mb-1">Choose <strong>ALL CARS (Universal)</strong> for products that fit every car (e.g. accessories, wires, generic mounts).</div>
+              <div className="flex flex-wrap gap-1.5 mt-1 max-h-40 overflow-y-auto p-2 bg-stone-50 rounded border border-stone-200">
                 {carBrands.map((b) => {
                   const sel = (form.car_brands || []).includes(b.name);
+                  const isAll = b.name === "ALL";
+                  if (isAll) {
+                    return (
+                      <button key="ALL" type="button" data-testid="cb-ALL" onClick={() => toggleArrItem("car_brands", "ALL")}
+                              className={`text-xs px-3 py-1.5 rounded-full transition font-bold uppercase tracking-wider ${sel ? "bg-emerald-600 text-white shadow ring-2 ring-emerald-300" : "bg-emerald-50 border border-emerald-300 text-emerald-700 hover:bg-emerald-100"}`}>
+                        🌐 ALL CARS (Universal)
+                      </button>
+                    );
+                  }
                   return (
                     <button key={b.name} type="button" data-testid={`cb-${b.name}`} onClick={() => toggleArrItem("car_brands", b.name)}
-                            className={`text-xs px-3 py-1.5 rounded-full transition ${sel ? "bg-indigo-600 text-white" : "bg-white border border-stone-300 text-stone-700 hover:border-indigo-400"}`}>
+                            disabled={(form.car_brands || []).includes("ALL")}
+                            className={`text-xs px-3 py-1.5 rounded-full transition ${sel ? "bg-indigo-600 text-white" : "bg-white border border-stone-300 text-stone-700 hover:border-indigo-400"} ${(form.car_brands || []).includes("ALL") ? "opacity-40 cursor-not-allowed" : ""}`}>
                       {b.name}
                     </button>
                   );
@@ -465,7 +509,7 @@ export default function AdminDashboard() {
             </div>
 
             {/* Car Models (dependent) */}
-            {(form.car_brands || []).length > 0 && (
+            {(form.car_brands || []).length > 0 && !(form.car_brands || []).includes("ALL") && (
               <div className="col-span-2">
                 <Label className="text-xs uppercase font-bold">Car Models (based on selected brands)</Label>
                 <div className="space-y-2 mt-2">
@@ -490,20 +534,48 @@ export default function AdminDashboard() {
             )}
 
             {/* Years */}
-            <div className="col-span-2">
-              <Label className="text-xs uppercase font-bold">Manufacturing Years</Label>
-              <div className="flex flex-wrap gap-1.5 mt-2 max-h-32 overflow-y-auto p-2 bg-stone-50 rounded border border-stone-200">
-                {yearList.map((y) => {
-                  const sel = (form.years || []).includes(y);
-                  return (
-                    <button key={y} type="button" onClick={() => toggleArrItem("years", y)}
-                            className={`text-xs px-2.5 py-1 rounded transition ${sel ? "bg-amber-500 text-white" : "bg-white border border-stone-300 text-stone-700 hover:border-amber-400"}`}>
-                      {y}
-                    </button>
-                  );
-                })}
+            {!(form.car_brands || []).includes("ALL") && (
+              <div className="col-span-2">
+                <Label className="text-xs uppercase font-bold">Manufacturing Years</Label>
+                <div className="flex flex-wrap gap-1.5 mt-2 max-h-32 overflow-y-auto p-2 bg-stone-50 rounded border border-stone-200">
+                  {yearList.map((y) => {
+                    const sel = (form.years || []).includes(y);
+                    return (
+                      <button key={y} type="button" onClick={() => toggleArrItem("years", y)}
+                              className={`text-xs px-2.5 py-1 rounded transition ${sel ? "bg-amber-500 text-white" : "bg-white border border-stone-300 text-stone-700 hover:border-amber-400"}`}>
+                        {y}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="text-[10px] text-stone-500 mt-1">Selected: {(form.years || []).length} year(s)</div>
               </div>
-              <div className="text-[10px] text-stone-500 mt-1">Selected: {(form.years || []).length} year(s)</div>
+            )}
+
+            {(form.car_brands || []).includes("ALL") && (
+              <div className="col-span-2 bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-3 text-sm text-emerald-800">
+                <strong>Universal product:</strong> This product will appear for every brand, model and year filter in the shop.
+              </div>
+            )}
+
+            {/* SEO Metadata */}
+            <div className="col-span-2 border-t border-stone-200 pt-4">
+              <Label className="text-xs uppercase font-bold">SEO Metadata</Label>
+              <div className="grid sm:grid-cols-2 gap-3 mt-2">
+                <div>
+                  <Label className="text-[10px] uppercase text-stone-500">Meta Title</Label>
+                  <Input data-testid="p-meta-title" value={form.meta_title || ""} onChange={c("meta_title")} className="mt-1" placeholder="Best 9-inch Android Stereo for Maruti Swift — CarDost"/>
+                </div>
+                <div>
+                  <Label className="text-[10px] uppercase text-stone-500">SEO Slug</Label>
+                  <Input data-testid="p-seo-slug" value={form.seo_slug || ""} onChange={c("seo_slug")} className="mt-1" placeholder="9-inch-android-stereo-maruti-swift"/>
+                </div>
+                <div className="sm:col-span-2">
+                  <Label className="text-[10px] uppercase text-stone-500">Meta Description (max ~160 chars)</Label>
+                  <Textarea data-testid="p-meta-desc" rows={2} value={form.meta_description || ""} onChange={c("meta_description")} className="mt-1" placeholder="Premium 9-inch Android car stereo with 4GB RAM, GPS, CarPlay. Perfect fit for Maruti Swift…"/>
+                  <div className="text-[10px] text-stone-500 mt-1">{(form.meta_description || "").length} / 160 characters</div>
+                </div>
+              </div>
             </div>
 
             <div className="col-span-2 flex items-center gap-3 pt-2 border-t border-stone-200">

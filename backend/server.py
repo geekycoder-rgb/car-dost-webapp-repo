@@ -611,6 +611,40 @@ async def list_products(category: Optional[str] = None, featured: Optional[bool]
     items = await db.products.find(query, {"_id": 0}).to_list(500)
     return items
 
+@api_router.get("/products/filter")
+async def filter_products(
+    category: Optional[str] = None,
+    car_brand: Optional[str] = None,
+    car_model: Optional[str] = None,
+    year: Optional[int] = None,
+    tag: Optional[str] = None,
+    min_price: Optional[float] = None,
+    max_price: Optional[float] = None,
+    q: Optional[str] = None,
+):
+    query = {"is_published": {"$ne": False}}
+    and_clauses = []
+    if category and category != "all":
+        and_clauses.append({"$or": [{"category": category}, {"categories": category}]})
+    if car_brand:
+        brands_q = [b.strip() for b in car_brand.split(",") if b.strip() and b.strip().upper() != "ALL"]
+        and_clauses.append({"car_brands": {"$in": brands_q + ["ALL"]}})
+    if car_model:
+        models_q = [m.strip() for m in car_model.split(",") if m.strip()]
+        and_clauses.append({"$or": [{"car_models": {"$in": models_q}}, {"car_brands": "ALL"}]})
+    if year:
+        and_clauses.append({"$or": [{"years": year}, {"car_brands": "ALL"}]})
+    if tag: query["tags"] = tag
+    if min_price is not None or max_price is not None:
+        query["price"] = {}
+        if min_price is not None: query["price"]["$gte"] = min_price
+        if max_price is not None: query["price"]["$lte"] = max_price
+    if q: query["name"] = {"$regex": q, "$options": "i"}
+    if and_clauses:
+        query["$and"] = and_clauses
+    items = await db.products.find(query, {"_id": 0}).to_list(500)
+    return items
+
 @api_router.get("/products/{pid}")
 async def get_product(pid: str):
     p = await db.products.find_one({"id": pid}, {"_id": 0})
@@ -692,7 +726,10 @@ CAR_BRANDS_MODELS = {
 
 @api_router.get("/catalog/car-brands")
 async def car_brands():
-    return [{"name": b, "model_count": len(m)} for b, m in CAR_BRANDS_MODELS.items()]
+    # "ALL" is a universal sentinel meaning the product fits every car
+    items = [{"name": "ALL", "model_count": 0, "universal": True}]
+    items.extend([{"name": b, "model_count": len(m)} for b, m in CAR_BRANDS_MODELS.items()])
+    return items
 
 @api_router.get("/catalog/car-models")
 async def car_models(brand: Optional[str] = None):
@@ -709,33 +746,6 @@ async def car_models(brand: Optional[str] = None):
 async def years():
     current = datetime.now().year
     return list(range(current, 1999, -1))
-
-# Update product list endpoint with extended filters
-@api_router.get("/products/filter")
-async def filter_products(
-    category: Optional[str] = None,
-    car_brand: Optional[str] = None,
-    car_model: Optional[str] = None,
-    year: Optional[int] = None,
-    tag: Optional[str] = None,
-    min_price: Optional[float] = None,
-    max_price: Optional[float] = None,
-    q: Optional[str] = None,
-):
-    query = {"is_published": {"$ne": False}}
-    if category and category != "all":
-        query["$or"] = [{"category": category}, {"categories": category}]
-    if car_brand: query["car_brands"] = {"$in": [b.strip() for b in car_brand.split(",")]}
-    if car_model: query["car_models"] = {"$in": [m.strip() for m in car_model.split(",")]}
-    if year: query["years"] = year
-    if tag: query["tags"] = tag
-    if min_price is not None or max_price is not None:
-        query["price"] = {}
-        if min_price is not None: query["price"]["$gte"] = min_price
-        if max_price is not None: query["price"]["$lte"] = max_price
-    if q: query["name"] = {"$regex": q, "$options": "i"}
-    items = await db.products.find(query, {"_id": 0}).to_list(500)
-    return items
 
 @api_router.post("/admin/products")
 async def create_product(p: ProductIn, _=Depends(get_admin)):
