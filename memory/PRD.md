@@ -1,71 +1,92 @@
-# CarDost — Car Audio E-commerce Website
+# CarDost — Car Audio E-commerce PRD
 
-## Original Problem Statement
-Premium car-audio store with Razorpay + Shiprocket integration, reviews engine, advanced automotive catalog.
+## Original problem statement
+Build a full-stack e-commerce site for CarDost (car stereo, Android systems, accessories).
+Live integrations: Razorpay (payments), Shiprocket (logistics), Emergent Object Storage (images).
+Admin Control Center with 12 distinct management modules.
+DO NOT delete/modify Razorpay & Shiprocket live credentials saved in DB settings.
 
-## Architecture (Data-Driven)
-- **Backend**: FastAPI + MongoDB + JWT + Razorpay SDK + Shiprocket API + Emergent Object Storage
-- **Frontend**: React 19 + Tailwind + shadcn/ui + sonner — **all config flows from `settings` collection** (admin can edit any integration credential at runtime; no hardcoded keys for any third-party service)
-- **Theme**: Indigo + warm off-white + slate-900 dark accents, DM Sans / Bricolage / Bebas Neue fonts
+## Tech stack
+- Frontend: React 18 + Tailwind + shadcn/ui + Lucide icons
+- Backend: FastAPI + Motor (async MongoDB)
+- Fonts: DM Sans (body) · Bricolage Grotesque (display)
+- Theme: indigo/slate
 
-## Implemented Features (latest)
+## Architecture
+```
+/app/
+├── backend/server.py     (single-file FastAPI; all routes /api/*)
+├── backend/data/car_database.json  (seeded Make→Model→Variant hierarchy)
+├── frontend/src/
+│   ├── pages/    (Home, Shop, ProductDetail, Cart, Checkout, OrderDetail, AdminDashboard, ...)
+│   ├── components/   (ui/, Layout, ProductCard, ProductReviews,
+│   │                  AdminCategories, AdminCoupons, AdminBanners,
+│   │                  AdminReviews, AdminTax, AdminVehicleCatalog,
+│   │                  VehicleVariantPicker  — admin tree + CustomerVehicleSelector)
+│   └── context/    (AuthContext, CartContext — cart line keyed by product+variant)
+```
 
-### Integrations Tab (Admin → Integrations)
-- **Razorpay**: Key ID, Key Secret (masked w/ eye toggle), Webhook Secret, Mock Mode toggle
-- **Shiprocket**: Enable toggle, Email, Password (masked), Channel ID, Pickup Location
-- **Store Profile**: Store Name, Support Email, Support Phone (public-readable)
-- All settings persist to MongoDB; Razorpay client + webhook secret + Shiprocket creds are now read **dynamically** from settings on every order/webhook
-- Endpoints: `GET/PUT /api/admin/settings`, `GET /api/settings/public`
+## Key Data Models
+- products: { id, name, description, price, original_price, category, categories[], image, gallery[], stock, car_brands[], car_models[], years[], **compatible_variants[]** (variant IDs), meta_title, meta_description, seo_slug }
+- **car_makes**: { id, name, slug }
+- **car_models**: { id, make_id, name, slug }
+- **car_variants**: { id, model_id, name, slug, start_year, end_year (None=Present), facelift_years, notes }
+- orders: items include `vehicle_variant_id` and `vehicle_label` per line
+- banners, tax_rules, coupons, reviews, settings, users, categories — as before
 
-### Razorpay → Shiprocket Pipeline
-- Order is created in Razorpay using dynamic settings
-- On `payment.captured`, `payment.authorized`, or `order.paid` webhook → stock decrement + auto-fire Shiprocket order create
-- Shiprocket order payload: customer name/phone/email/full address extracted from checkout; mapped to `/orders/create/adhoc`
-- Shiprocket response saved to `orders.shiprocket` field for admin debugging
-- Idempotent (no double-decrement of stock)
+## Key API endpoints
+**Vehicle Catalog v2 (hierarchical)**
+- `GET /api/catalog/makes` — list
+- `GET /api/catalog/models?make_id=` — filter
+- `GET /api/catalog/variants?model_id=` — filter
+- `GET /api/catalog/tree` — nested makes→models→variants
+- `GET /api/catalog/variant/{vid}/label` — human label
+- Admin CRUD: `POST/PUT/DELETE /api/admin/catalog/{makes|models|variants}` (DELETE on make cascades)
 
-### Review Engine
-- DB: `reviews` collection with `id`, `product_id`, `name`, `rating`, `title`, `comment`, `is_approved` (default true), `created_at`
-- `POST /api/products/{pid}/reviews` — public write
-- `GET /api/products/{pid}/reviews` — public read (approved only)
-- `GET/PATCH/DELETE /api/admin/reviews` — admin moderation
-- On every review change → recalculate product avg rating + review count via Mongo aggregation
-- **Product Detail page** now shows: review summary (avg, distribution bars), "Write a Review" form (5-star widget, name, title, comment), list of approved reviews
+**Products (filter accepts both legacy & v2 params)**
+- `GET /api/products/filter?make_id=&model_id=&variant_id=&car_brand=&car_model=&year=`
+- Universal products (car_brands contains "ALL") are unioned into every brand/model/year/variant filter result
 
-### Advanced Automotive Catalog
-- Extended Product model: `gallery[]`, `discount_percent`, `discount_flat`, `gst_percent` (5/12/18/28), `tags[]`, `car_brands[]`, `car_models[]`, `years[]`, `review_count`
-- Admin product form now has:
-  - Multi-image gallery upload (drag/drop UI)
-  - GST tax dropdown
-  - Discount % + Flat ₹
-  - Tag chips
-  - **Car Brands** multi-select pills (16 Indian brands seeded)
-  - **Car Models** dependent multi-select (filtered by selected brands)
-  - **Manufacturing Years** multi-select (2000–current year)
-- Endpoints:
-  - `GET /api/catalog/car-brands` (16 brands)
-  - `GET /api/catalog/car-models?brand=A,B` (dependent)
-  - `GET /api/catalog/years` (2000 → current)
-  - `GET /api/products/filter?category=&car_brand=&car_model=&year=&tag=&min_price=&max_price=&q=`
+**Other**
+- `/api/orders/create` accepts `items[].vehicle_variant_id` and `vehicle_label`; both preserved in stored order document
+- `/api/admin/banners`, `/api/tax-rules`, `/api/admin/reviews` — moderation/admin UI
+- `/api/orders/verify` (Razorpay HMAC signature verify), `/api/razorpay/webhook` → Shiprocket sync
 
-### Shop Page Vehicle Filter
-- Sidebar now has collapsible "Categories" + "My Car" sections
-- Car brand → Model (dependent dropdown) → Year filters wire to `/api/products/filter`
-- Active filters displayed; clear-vehicle button
-- Product detail shows "Compatible With" badge box (brands, models, years)
+## Completed Features
+- Multi-category catalog with hero, FAQ, About, Reviews
+- Razorpay live + webhook → Shiprocket auto-sync
+- Object storage uploads, image gallery
+- Coupons (dynamic), Banner CMS, Tax rules CMS, Reviews moderation
+- Per-product SEO metadata (meta_title, meta_description, seo_slug) injected on ProductDetail
+- **NEW: Vehicle Catalog v2 — hierarchical Make → Model → Year/Variant**
+  - Seeded from /app/backend/data/car_database.json (9 makes / 28 models / 55 variants, Indian market 2008-2026)
+  - Admin "Vehicles" tab with tree CRUD (cascade-delete)
+  - Product form uses VehicleVariantPicker (search + collapsible tree with tri-state checkboxes)
+  - Customer ProductDetail page: cascading Make→Model→Variant dropdowns enforce selection unless product is Universal
+  - Cart lines keyed by (product_id, variant_id) — same product with two different vehicles = two cart lines
+  - Vehicle label rendered on Cart, Checkout summary, OrderDetail line items
+- Universal "ALL CARS" sentinel — products marked ALL appear for any brand/model/year/variant filter
 
-## Credentials
-See `/app/memory/test_credentials.md`
+## Roadmap / Backlog
+**P1**
+- Admin Inventory module (low stock alerts, bulk stock update)
+- Admin Customers module (CRM view, order history)
+- Admin Shipping module (Shiprocket dashboard within app)
+- Refactor: split AdminDashboard.jsx into per-tab page components
 
-## Test Endpoints Verified
-✅ `/api/admin/settings` GET/PUT
-✅ `/api/products/{id}/reviews` POST + GET
-✅ `/api/catalog/car-brands` (16) and `/api/catalog/car-models?brand=Maruti+Suzuki,Tata` (26 models)
-✅ `/api/products/filter` with car_brand / car_model / year params
+**P2**
+- Low-stock email alerts (background task)
+- Shop sidebar — cascading Make→Model→Variant filter (UI exists in product form, port to shop)
+- Phase 5 QA report
+- Verified-purchase badge on reviews
 
-## Backlog
-- **P1**: Webhook test in production with real Razorpay payload
-- **P2**: Display gallery images on shop card thumbnails
-- **P2**: Admin Reviews moderation UI (data already in `/api/admin/reviews`)
-- **P3**: Customer-facing "verified purchase" badge on reviews
-- **P3**: Tax breakdown on checkout (currently flat GST in product, but not itemized in order)
+## Test Coverage
+- /app/backend/tests/test_cardost_api.py (24 tests)
+- /app/backend/tests/test_cardost_universal.py (16 tests)
+- /app/backend/tests/test_cardost_vehicles.py (18 tests, NEW)
+
+## Run / Deploy
+- Services managed by supervisor (backend:8001, frontend:3000)
+- Frontend env: `REACT_APP_BACKEND_URL` from /app/frontend/.env
+- Backend env: `MONGO_URL`, `DB_NAME` from /app/backend/.env
+- Vehicle catalog seeds idempotently on first boot if car_makes collection is empty
