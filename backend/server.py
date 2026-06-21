@@ -33,7 +33,7 @@ RAZORPAY_KEY_SECRET = os.environ['RAZORPAY_KEY_SECRET']
 MOCK_PAYMENT = os.environ.get('MOCK_PAYMENT', 'true').lower() == 'true'
 RAZORPAY_WEBHOOK_SECRET = os.environ.get('RAZORPAY_WEBHOOK_SECRET', '')
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
-STORAGE_URL = "https://integrations.emergentagent.com/objstore/api/v1/storage"
+STORAGE_URL = os.environ.get("STORAGE_URL", "https://integrations.emergentagent.com/objstore/api/v1/storage")
 APP_NAME = "cardost"
 storage_key: Optional[str] = None
 
