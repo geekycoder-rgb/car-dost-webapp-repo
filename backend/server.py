@@ -370,6 +370,65 @@ async def trigger_shiprocket(order_doc: dict):
     except Exception as e:
         logger.error(f"shiprocket trigger failed: {e}")
 
+async def shiprocket_refresh_tracking(order: dict) -> dict:
+    """Poll Shiprocket for latest AWB, courier and tracking URL for the order."""
+    settings = await get_settings_doc()
+    if not settings.get("shiprocket_enabled"):
+        return {"skipped": True, "reason": "shiprocket disabled"}
+    sr = order.get("shiprocket") or {}
+    shipment_id = sr.get("shipment_id") or sr.get("order_id")
+    awb = sr.get("awb_code") or ""
+    if not shipment_id and not awb:
+        return {"skipped": True, "reason": "no shipment id or awb yet"}
+    token = await shiprocket_login(settings.get("shiprocket_email", ""), settings.get("shiprocket_password", ""))
+    if not token:
+        return {"error": "shiprocket auth failed"}
+    headers = {"Authorization": f"Bearer {token}"}
+    update = {}
+    try:
+        # 1) Fetch order details to discover/refresh AWB & courier
+        if shipment_id:
+            r = requests.get(f"{SHIPROCKET_BASE}/orders/show/{shipment_id}", headers=headers, timeout=15)
+            if r.status_code == 200:
+                data = r.json().get("data", {})
+                if data.get("awb_code") or data.get("awb"):
+                    update["awb_code"] = data.get("awb_code") or data.get("awb")
+                if data.get("courier_name"):
+                    update["courier_name"] = data.get("courier_name")
+                if data.get("status"):
+                    update["sr_status"] = data.get("status")
+                if data.get("shipments", [{}])[0].get("awb"):
+                    update["awb_code"] = data["shipments"][0]["awb"]
+        # 2) Fetch live tracking for the AWB if available
+        awb = update.get("awb_code") or awb
+        if awb:
+            r2 = requests.get(f"{SHIPROCKET_BASE}/courier/track/awb/{awb}", headers=headers, timeout=15)
+            if r2.status_code == 200:
+                d2 = r2.json().get("tracking_data", {})
+                update["tracking_url"] = d2.get("track_url") or f"https://shiprocket.co/tracking/{awb}"
+                shipment_track = d2.get("shipment_track", [{}])
+                if shipment_track and isinstance(shipment_track, list):
+                    st = shipment_track[0]
+                    update["courier_name"] = st.get("courier_name", update.get("courier_name", ""))
+                    update["sr_status"] = st.get("current_status", update.get("sr_status", ""))
+                    update["edd"] = st.get("edd", "")
+                # Latest scan activity
+                acts = d2.get("shipment_track_activities", [])
+                if acts:
+                    update["latest_activity"] = acts[0].get("activity", "")
+                    update["latest_activity_date"] = acts[0].get("date", "")
+        if update:
+            new_sr = {**sr, **update}
+            await db.orders.update_one(
+                {"id": order["id"]},
+                {"$set": {"shiprocket": new_sr, "shiprocket_refreshed_at": datetime.now(timezone.utc).isoformat()}}
+            )
+            return new_sr
+        return sr
+    except Exception as e:
+        logger.error(f"shiprocket refresh failed: {e}")
+        return {"error": str(e)}
+
 # ============ Coupons ============
 class CouponIn(BaseModel):
     code: str
@@ -1358,11 +1417,8 @@ class TrackOrderReq(BaseModel):
 
 @api_router.post("/orders/track")
 async def track_order(req: TrackOrderReq):
-    if not (req.email or req.phone):
-        raise HTTPException(400, "Please provide email or phone number")
-    if not req.order_id and not (req.email and req.phone):
-        # Without order_id, require both email + phone for stronger identity check
-        raise HTTPException(400, "Provide an order ID, or both email and phone, to look up your order(s).")
+    if not req.order_id and not req.email and not req.phone:
+        raise HTTPException(400, "Please provide an order ID, email, or phone number")
     query = {}
     if req.order_id:
         query["id"] = req.order_id.strip()
@@ -1376,7 +1432,31 @@ async def track_order(req: TrackOrderReq):
     orders = await db.orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(50)
     if not orders:
         raise HTTPException(404, "No orders found matching those details. Please check and try again.")
+    # Best-effort: refresh shiprocket tracking for in-flight orders so AWB/courier are up-to-date
+    for o in orders:
+        sr = o.get("shiprocket") or {}
+        if o.get("status") in ("paid", "shipped", "processing") and sr and not sr.get("error") and not sr.get("skipped"):
+            # Refresh only if last refresh is older than 10 minutes
+            last = o.get("shiprocket_refreshed_at")
+            stale = True
+            if last:
+                try:
+                    stale = (datetime.now(timezone.utc) - datetime.fromisoformat(last.replace("Z", "+00:00"))).total_seconds() > 600
+                except Exception:
+                    stale = True
+            if stale:
+                fresh = await shiprocket_refresh_tracking(o)
+                if isinstance(fresh, dict) and not fresh.get("error") and not fresh.get("skipped"):
+                    o["shiprocket"] = fresh
     return orders
+
+@api_router.post("/orders/{oid}/refresh-shiprocket")
+async def refresh_shiprocket_endpoint(oid: str):
+    o = await db.orders.find_one({"id": oid}, {"_id": 0})
+    if not o:
+        raise HTTPException(404, "Order not found")
+    sr = await shiprocket_refresh_tracking(o)
+    return {"ok": True, "shiprocket": sr}
 
 @api_router.get("/admin/orders")
 async def admin_orders(_=Depends(get_admin)):
@@ -1412,10 +1492,33 @@ async def contact(req: ContactReq):
     doc = {
         "id": str(uuid.uuid4()),
         **req.model_dump(),
+        "is_read": False,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.contacts.insert_one(doc)
     return {"ok": True}
+
+@api_router.get("/admin/messages")
+async def list_messages(_=Depends(get_admin), unread: Optional[bool] = None):
+    q = {}
+    if unread is True:
+        q["is_read"] = False
+    return await db.contacts.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
+
+@api_router.put("/admin/messages/{mid}")
+async def mark_message(mid: str, payload: dict, _=Depends(get_admin)):
+    await db.contacts.update_one({"id": mid}, {"$set": {"is_read": bool(payload.get("is_read", True))}})
+    return {"ok": True}
+
+@api_router.delete("/admin/messages/{mid}")
+async def delete_message(mid: str, _=Depends(get_admin)):
+    await db.contacts.delete_one({"id": mid})
+    return {"ok": True}
+
+@api_router.get("/admin/messages/unread-count")
+async def unread_messages_count(_=Depends(get_admin)):
+    n = await db.contacts.count_documents({"is_read": {"$ne": True}})
+    return {"count": n}
 
 # ============ Seed ============
 SEED_PRODUCTS = [

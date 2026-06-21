@@ -29,9 +29,8 @@ export default function TrackOrder() {
 
   const submit = async (e) => {
     e.preventDefault();
-    if (!form.email && !form.phone) return toast.error("Please enter your email or phone number");
-    if (!form.order_id && (!form.email || !form.phone)) {
-      return toast.error("Enter your order ID, OR enter both email and phone to look up your orders.");
+    if (!form.order_id && !form.email && !form.phone) {
+      return toast.error("Please enter your order ID, email, or phone number");
     }
     setLoading(true);
     try {
@@ -55,7 +54,7 @@ export default function TrackOrder() {
       <div className="bg-stone-50 border-b border-stone-200">
         <div className="max-w-5xl mx-auto px-6 py-10">
           <h1 className="font-display text-3xl sm:text-4xl font-bold uppercase">Track Your Order</h1>
-          <p className="text-stone-500 text-sm mt-1">Enter your details to view order status — no account required.</p>
+          <p className="text-stone-500 text-sm mt-1">Enter <strong>any one</strong> — your Order ID, email, or phone — to look up your orders. No account required.</p>
         </div>
       </div>
 
@@ -75,7 +74,7 @@ export default function TrackOrder() {
           <div>
             <Label className="text-xs uppercase font-bold tracking-wider">Phone Number</Label>
             <Input data-testid="track-phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="10-digit mobile" className="mt-1.5"/>
-            <p className="text-[10px] text-stone-500 mt-1">When using email + phone (no Order ID), both must match the order.</p>
+            <p className="text-[10px] text-stone-500 mt-1">Any one of these is enough. Email/phone is matched against the address you used at checkout.</p>
           </div>
           <Button data-testid="track-submit" type="submit" disabled={loading} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold uppercase tracking-wider text-sm h-11">
             <Search className="w-4 h-4 mr-2"/>{loading ? "Searching…" : "Find My Order"}
@@ -137,11 +136,28 @@ export default function TrackOrder() {
                     <div className="space-y-1.5 text-xs text-stone-600">
                       <div className="flex items-center gap-1.5"><Phone className="w-3 h-3"/>{o.address?.phone}</div>
                       <div className="flex items-center gap-1.5"><Mail className="w-3 h-3"/>{o.address?.email}</div>
-                      {o.shiprocket?.awb_code && (
-                        <div className="text-xs">AWB: <span className="font-mono font-bold">{o.shiprocket.awb_code}</span></div>
-                      )}
-                      {o.shiprocket?.courier_name && (
-                        <div className="text-xs">Courier: {o.shiprocket.courier_name}</div>
+                      {o.shiprocket?.awb_code ? (
+                        <div className="mt-3 p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg space-y-1">
+                          <div className="text-[10px] uppercase tracking-wider font-bold text-emerald-700">📦 Shipped</div>
+                          <div>AWB: <span className="font-mono font-bold">{o.shiprocket.awb_code}</span></div>
+                          {o.shiprocket.courier_name && <div>Courier: <strong>{o.shiprocket.courier_name}</strong></div>}
+                          {o.shiprocket.sr_status && <div>Status: <strong className="text-emerald-700">{o.shiprocket.sr_status}</strong></div>}
+                          {o.shiprocket.edd && <div>Expected by: {o.shiprocket.edd}</div>}
+                          {o.shiprocket.latest_activity && (
+                            <div className="pt-1 border-t border-emerald-200 mt-1">
+                              <div className="text-[10px] uppercase text-stone-500">Latest update</div>
+                              <div>{o.shiprocket.latest_activity}{o.shiprocket.latest_activity_date ? ` · ${o.shiprocket.latest_activity_date}` : ""}</div>
+                            </div>
+                          )}
+                          {o.shiprocket.tracking_url && (
+                            <a href={o.shiprocket.tracking_url} target="_blank" rel="noopener noreferrer"
+                               className="inline-flex items-center gap-1 mt-1 text-emerald-700 hover:text-emerald-900 font-bold uppercase text-[10px] tracking-wider">
+                              Track on courier site →
+                            </a>
+                          )}
+                        </div>
+                      ) : o.shiprocket && !o.shiprocket.error && !o.shiprocket.skipped && (
+                        <div className="mt-2 text-[10px] text-stone-500 italic">AWB will be assigned by the courier soon. Refresh in a few hours.</div>
                       )}
                     </div>
                   </div>

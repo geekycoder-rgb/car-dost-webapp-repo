@@ -18,6 +18,7 @@ import AdminCoupons from "@/components/AdminCoupons";
 import AdminBanners from "@/components/AdminBanners";
 import AdminReviews from "@/components/AdminReviews";
 import AdminTax from "@/components/AdminTax";
+import AdminMessages from "@/components/AdminMessages";
 import AdminVehicleCatalog from "@/components/AdminVehicleCatalog";
 import VehicleVariantPicker from "@/components/VehicleVariantPicker";
 
@@ -223,6 +224,7 @@ export default function AdminDashboard() {
             <TabsTrigger value="banners" data-testid="tab-banners">Banners</TabsTrigger>
             <TabsTrigger value="reviews" data-testid="tab-reviews">Reviews</TabsTrigger>
             <TabsTrigger value="tax" data-testid="tab-tax">Tax Rules</TabsTrigger>
+            <TabsTrigger value="messages" data-testid="tab-messages">Messages</TabsTrigger>
             <TabsTrigger value="orders" data-testid="tab-orders">Orders</TabsTrigger>
             <TabsTrigger value="settings" data-testid="tab-settings"><SettingsIcon className="w-4 h-4 mr-1.5"/> Integrations</TabsTrigger>
           </TabsList>
@@ -359,6 +361,10 @@ export default function AdminDashboard() {
 
           <TabsContent value="tax">
             <AdminTax/>
+          </TabsContent>
+
+          <TabsContent value="messages">
+            <AdminMessages/>
           </TabsContent>
         </Tabs>
       </div>
