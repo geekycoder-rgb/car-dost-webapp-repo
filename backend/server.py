@@ -9,8 +9,6 @@ import os
 import re
 import asyncio
 import logging
-
-FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://cardost.in")
 import uuid
 import hmac
 import hashlib
@@ -26,6 +24,8 @@ from datetime import datetime, timezone, timedelta
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
+
+FRONTEND_URL = os.environ["FRONTEND_URL"]
 
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
