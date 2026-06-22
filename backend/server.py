@@ -9,6 +9,8 @@ import os
 import re
 import asyncio
 import logging
+
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://cardost.in")
 import uuid
 import hmac
 import hashlib
@@ -1292,11 +1294,11 @@ async def create_order(req: CreateOrderReq, creds: Optional[HTTPAuthorizationCre
     # Fire customer + admin notification emails (non-blocking)
     try:
         if settings.get("smtp_enabled"):
-            subj_c, html_c = order_confirmation_email(order_doc)
+            subj_c, html_c = order_confirmation_email(order_doc, base_url=FRONTEND_URL)
             asyncio.create_task(send_email(settings, order_doc["address"]["email"], subj_c, html_c, reply_to=settings.get("smtp_admin_email") or settings.get("support_email")))
             admin_to = settings.get("smtp_admin_email") or settings.get("support_email")
             if admin_to:
-                subj_a, html_a = admin_order_email(order_doc)
+                subj_a, html_a = admin_order_email(order_doc, base_url=FRONTEND_URL)
                 asyncio.create_task(send_email(settings, admin_to, subj_a, html_a, reply_to=order_doc["address"]["email"]))
     except Exception as e:
         logger.error(f"[email] order confirmation failed: {e}")
@@ -1555,7 +1557,7 @@ async def contact(req: ContactReq):
         settings = await get_settings_doc()
         admin_to = settings.get("smtp_admin_email") or settings.get("support_email")
         if settings.get("smtp_enabled") and admin_to:
-            subj, html = admin_contact_email(doc)
+            subj, html = admin_contact_email(doc, base_url=FRONTEND_URL)
             asyncio.create_task(send_email(settings, admin_to, subj, html, reply_to=doc.get("email") or None))
     except Exception as e:
         logger.error(f"[email] contact notify failed: {e}")

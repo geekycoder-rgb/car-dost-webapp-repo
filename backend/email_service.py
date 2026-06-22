@@ -90,12 +90,12 @@ BASE_WRAP = """
 <div class="card">
   <div class="hd"><h1>{title}</h1><p>{subtitle}</p></div>
   <div class="bd">{body}</div>
-  <div class="ft">CarDost · Premium Car Audio &amp; Accessories<br>Need help? Reply to this email or visit <a href="https://cardost.net/contact" style="color:#4f46e5">cardost.net/contact</a></div>
+  <div class="ft">CarDost · Premium Car Audio &amp; Accessories<br>Need help? Reply to this email or visit <a href="https://cardost.in/contact" style="color:#4f46e5">cardost.in/contact</a></div>
 </div></body></html>
 """
 
 
-def _items_html(items, base_url="https://cardost.net"):
+def _items_html(items, base_url="https://cardost.in"):
     rows = ""
     for i in items:
         img = i.get("image") or ""
@@ -114,7 +114,7 @@ def _items_html(items, base_url="https://cardost.net"):
     return rows
 
 
-def order_confirmation_email(order: dict, base_url="https://cardost.net") -> tuple:
+def order_confirmation_email(order: dict, base_url="https://cardost.in") -> tuple:
     """Returns (subject, html) for the customer order confirmation."""
     oid_short = order["id"][:8].upper()
     addr = order.get("address", {})
@@ -142,7 +142,7 @@ def order_confirmation_email(order: dict, base_url="https://cardost.net") -> tup
     return f"Order #{oid_short} confirmed · CarDost", html
 
 
-def admin_order_email(order: dict, base_url="https://cardost.net") -> tuple:
+def admin_order_email(order: dict, base_url="https://cardost.in") -> tuple:
     oid_short = order["id"][:8].upper()
     addr = order.get("address", {})
     items_html = _items_html(order.get("items", []), base_url)
@@ -165,7 +165,7 @@ def admin_order_email(order: dict, base_url="https://cardost.net") -> tuple:
     return f"🛒 New CarDost Order #{oid_short} · ₹{order.get('total',0):,.0f}", html
 
 
-def admin_contact_email(msg: dict, base_url="https://cardost.net") -> tuple:
+def admin_contact_email(msg: dict, base_url="https://cardost.in") -> tuple:
     body = f"""
       <h2>New enquiry from {msg.get('name','Anonymous')}</h2>
       <p class="muted">Received at {msg.get('created_at','')[:19].replace('T',' ')} UTC</p>
