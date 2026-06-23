@@ -78,7 +78,7 @@ export default function Layout({ children }) {
         <div className="max-w-7xl mx-auto px-6 py-2 flex justify-between text-xs">
           <div className="flex gap-6">
             <a href="tel:+919063278724" className="flex items-center gap-2 hover:text-indigo-400 transition"><Phone className="w-3.5 h-3.5"/>+91 90632 78724</a>
-            <a href="mailto:Autobotscarstudio@gmail.com" className="flex items-center gap-2 hover:text-indigo-400 transition"><Mail className="w-3.5 h-3.5"/>Autobotscarstudio@gmail.com</a>
+            <a href="mailto:support@cardost.in" className="flex items-center gap-2 hover:text-indigo-400 transition"><Mail className="w-3.5 h-3.5"/>support@cardost.in</a>
           </div>
           <div className="flex gap-5">
             {user ? (
@@ -256,7 +256,7 @@ export default function Layout({ children }) {
             </p>
             <div className="space-y-1.5 text-xs text-neutral-400">
               <a href="tel:+919063278724" className="flex gap-2 items-center hover:text-indigo-400"><Phone className="w-3.5 h-3.5"/>+91 90632 78724</a>
-              <a href="mailto:Autobotscarstudio@gmail.com" className="flex gap-2 items-center hover:text-indigo-400 break-all"><Mail className="w-3.5 h-3.5"/>Autobotscarstudio@gmail.com</a>
+              <a href="mailto:support@cardost.in" className="flex gap-2 items-center hover:text-indigo-400 break-all"><Mail className="w-3.5 h-3.5"/>support@cardost.in</a>
             </div>
           </div>
           <div>

@@ -13,7 +13,7 @@ const FAQ_GROUPS = [
       { q: "How do I place an order on CarDost?", a: "Browse our catalog, add products to cart, and click Checkout. You can checkout as a guest or create an account to track orders and earn future loyalty rewards." },
       { q: "Can I cancel or modify my order after placing it?", a: "Yes — contact us within 2 hours of placing the order via WhatsApp or phone (+91 90632 78724). Once the order is shipped, modifications are not possible." },
       { q: "Do I need to create an account to buy?", a: "No. Guest checkout is fully supported. Creating an account lets you track orders, save addresses, and access exclusive deals." },
-      { q: "I forgot my password — how do I reset it?", a: "On the login page, click 'Forgot Password' (coming soon) or email us at Autobotscarstudio@gmail.com and we'll reset it within an hour." },
+      { q: "I forgot my password — how do I reset it?", a: "On the login page, click 'Forgot Password' (coming soon) or email us at support@cardost.in and we'll reset it within an hour." },
     ],
   },
   {

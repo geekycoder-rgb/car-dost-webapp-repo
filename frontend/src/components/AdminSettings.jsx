@@ -242,7 +242,55 @@ export default function AdminSettings() {
           <div>
             <Label className="text-xs uppercase font-bold text-stone-700">Admin Notification Email</Label>
             <Input data-testid="set-smtp-admin" value={s.smtp_admin_email || ""} onChange={c("smtp_admin_email")} placeholder="customercare@cardost.in" className="border-stone-300 mt-1.5"/>
-            <p className="text-[10px] text-stone-500 mt-1">Where new-order &amp; contact alerts are sent</p>
+            <p className="text-[10px] text-stone-500 mt-1">Fallback if specific alias inboxes below are empty</p>
+          </div>
+        </div>
+
+        {/* Purpose-specific sender aliases */}
+        <div className="mt-6 border-t border-stone-200 pt-5">
+          <h3 className="text-xs uppercase font-bold tracking-wider text-stone-700 mb-1">Sender Aliases by Purpose</h3>
+          <p className="text-[10px] text-stone-500 mb-4">All emails authenticate through the master mailbox above, but are sent <strong>FROM</strong> these aliases so customers know which inbox to reply to.</p>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <Label className="text-[10px] uppercase font-bold text-stone-600">📦 Orders (From)</Label>
+              <Input data-testid="set-email-order-from" value={s.email_order_from || ""} onChange={c("email_order_from")} placeholder="order@cardost.in" className="border-stone-300 mt-1"/>
+              <p className="text-[10px] text-stone-500 mt-1">Order confirmation, cancellation, delivery</p>
+            </div>
+            <div>
+              <Label className="text-[10px] uppercase font-bold text-stone-600">🔄 Updates (From)</Label>
+              <Input data-testid="set-email-update-from" value={s.email_update_from || ""} onChange={c("email_update_from")} placeholder="update@cardost.in" className="border-stone-300 mt-1"/>
+              <p className="text-[10px] text-stone-500 mt-1">Order status / shipping updates</p>
+            </div>
+            <div>
+              <Label className="text-[10px] uppercase font-bold text-stone-600">💬 Support (From / Reply-To)</Label>
+              <Input data-testid="set-email-support-from" value={s.email_support_from || ""} onChange={c("email_support_from")} placeholder="support@cardost.in" className="border-stone-300 mt-1"/>
+              <p className="text-[10px] text-stone-500 mt-1">Used as Reply-To on customer emails</p>
+            </div>
+            <div>
+              <Label className="text-[10px] uppercase font-bold text-stone-600">📢 Info / Promotional (From)</Label>
+              <Input data-testid="set-email-info-from" value={s.email_info_from || ""} onChange={c("email_info_from")} placeholder="info@cardost.in" className="border-stone-300 mt-1"/>
+              <p className="text-[10px] text-stone-500 mt-1">Newsletters &amp; marketing campaigns</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Purpose-specific admin inboxes */}
+        <div className="mt-6 border-t border-stone-200 pt-5">
+          <h3 className="text-xs uppercase font-bold tracking-wider text-stone-700 mb-1">Admin Recipient Inboxes</h3>
+          <p className="text-[10px] text-stone-500 mb-4">Where each type of alert lands.</p>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <Label className="text-[10px] uppercase font-bold text-stone-600">🛒 New Order Alerts → To</Label>
+              <Input data-testid="set-email-admin-to" value={s.email_admin_to || ""} onChange={c("email_admin_to")} placeholder="admin@cardost.in" className="border-stone-300 mt-1"/>
+            </div>
+            <div>
+              <Label className="text-[10px] uppercase font-bold text-stone-600">📨 Contact / Sales Enquiries → To</Label>
+              <Input data-testid="set-email-sales-to" value={s.email_sales_to || ""} onChange={c("email_sales_to")} placeholder="sales@cardost.in" className="border-stone-300 mt-1"/>
+            </div>
+            <div className="sm:col-span-2">
+              <Label className="text-[10px] uppercase font-bold text-stone-600">🧑‍🔧 Support Inbox → To</Label>
+              <Input data-testid="set-email-support-to" value={s.email_support_to || ""} onChange={c("email_support_to")} placeholder="support@cardost.in" className="border-stone-300 mt-1"/>
+            </div>
           </div>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3 mt-4 px-4 py-3 bg-stone-50 rounded-lg border border-stone-200">

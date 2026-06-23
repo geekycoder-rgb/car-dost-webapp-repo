@@ -31,7 +31,7 @@ export default function Contact() {
         <div className="space-y-4">
           {[
             { icon: Phone, label: "Phone", value: "+91 90632 78724", href: "tel:+919063278724" },
-            { icon: Mail, label: "Email", value: "Autobotscarstudio@gmail.com", href: "mailto:Autobotscarstudio@gmail.com" },
+            { icon: Mail, label: "Email", value: "support@cardost.in", href: "mailto:support@cardost.in" },
             { icon: MessageCircle, label: "WhatsApp", value: "Chat with us instantly", href: "https://wa.me/919063278724" },
             { icon: MapPin, label: "Studio", value: "Autobots Car Studio, India" },
             { icon: Clock, label: "Hours", value: "Mon – Sun · 10 AM – 9 PM" },

@@ -13,13 +13,14 @@ logger = logging.getLogger("server")
 
 def _send_sync(host: str, port: int, username: str, password: str, sender: str,
                to: list, subject: str, html: str, reply_to: Optional[str] = None,
-               use_ssl: bool = False) -> bool:
-    """Blocking SMTP send. Wrap in asyncio.to_thread when calling from async code."""
+               use_ssl: bool = False, from_name: str = "CarDost") -> bool:
+    """Blocking SMTP send. Wrap in asyncio.to_thread when calling from async code.
+    `sender` is the From/envelope-from address (can be an alias of the auth mailbox)."""
     if not all([host, port, username, password, sender]) or not to:
         logger.warning("[email] SMTP not fully configured; skipping send")
         return False
     msg = MIMEMultipart("alternative")
-    msg["From"] = formataddr(("CarDost", sender))
+    msg["From"] = formataddr((from_name, sender))
     msg["To"] = ", ".join(to)
     msg["Subject"] = subject
     if reply_to:
@@ -38,31 +39,37 @@ def _send_sync(host: str, port: int, username: str, password: str, sender: str,
                 s.ehlo()
                 s.login(username, password)
                 s.sendmail(sender, to, msg.as_string())
-        logger.info(f"[email] Sent to {to}: {subject}")
+        logger.info(f"[email] Sent from {sender} to {to}: {subject}")
         return True
     except Exception as e:
         logger.error(f"[email] SMTP send failed: {e}")
         return False
 
 
-async def send_email(settings: dict, to, subject: str, html: str, reply_to: Optional[str] = None) -> bool:
-    """Async wrapper. settings dict comes from the DB `settings` collection."""
+async def send_email(settings: dict, to, subject: str, html: str,
+                     reply_to: Optional[str] = None,
+                     from_alias: Optional[str] = None,
+                     from_name: str = "CarDost") -> bool:
+    """Async wrapper. `from_alias` overrides the default smtp_from.
+    Authentication always uses smtp_username/smtp_password (master mailbox)."""
     if not settings or not settings.get("smtp_enabled"):
         return False
     if isinstance(to, str):
         to = [to]
+    sender = from_alias or settings.get("smtp_from") or settings.get("smtp_username", "")
     return await asyncio.to_thread(
         _send_sync,
         settings.get("smtp_host", "smtpout.secureserver.net"),
         settings.get("smtp_port", 587),
         settings.get("smtp_username", ""),
         settings.get("smtp_password", ""),
-        settings.get("smtp_from", settings.get("smtp_username", "")),
+        sender,
         to,
         subject,
         html,
         reply_to,
         bool(settings.get("smtp_use_ssl")),
+        from_name,
     )
 
 
@@ -138,7 +145,7 @@ def order_confirmation_email(order: dict, base_url) -> tuple:
     """
     html = BASE_WRAP.format(title=f"Order Confirmed · #{oid_short}",
                             subtitle="Thanks for shopping with CarDost!",
-                            body=body)
+                            body=body, base_url=base_url)
     return f"Order #{oid_short} confirmed · CarDost", html
 
 
@@ -161,7 +168,7 @@ def admin_order_email(order: dict, base_url) -> tuple:
     """
     html = BASE_WRAP.format(title=f"🛒 New Order · #{oid_short}",
                             subtitle="Action needed — review &amp; dispatch",
-                            body=body)
+                            body=body, base_url=base_url)
     return f"🛒 New CarDost Order #{oid_short} · ₹{order.get('total',0):,.0f}", html
 
 
@@ -179,5 +186,5 @@ def admin_contact_email(msg: dict, base_url) -> tuple:
     """
     html = BASE_WRAP.format(title="📩 New Contact Message",
                             subtitle="A customer reached out via /contact",
-                            body=body)
+                            body=body, base_url=base_url)
     return f"📩 New CarDost enquiry from {msg.get('name','Anonymous')}", html

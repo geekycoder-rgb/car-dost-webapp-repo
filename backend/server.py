@@ -227,15 +227,24 @@ DEFAULT_SETTINGS = {
     "store_name": "CarDost",
     "support_email": "Autobotscarstudio@gmail.com",
     "support_phone": "+919063278724",
-    # SMTP / Email
+    # SMTP / Email — single auth mailbox, multiple sender aliases by purpose
     "smtp_enabled": False,
     "smtp_host": "smtpout.secureserver.net",
     "smtp_port": 587,
     "smtp_use_ssl": False,
-    "smtp_username": "",
+    "smtp_username": "",          # auth mailbox (e.g. customercare@cardost.in)
     "smtp_password": "",
-    "smtp_from": "",
-    "smtp_admin_email": "",
+    "smtp_from": "",              # legacy default sender (still used as fallback)
+    "smtp_admin_email": "",       # legacy admin recipient (still used as fallback)
+    # Purpose-specific sender aliases
+    "email_order_from": "",       # e.g. order@cardost.in    — order confirmation/cancel/delivery
+    "email_update_from": "",      # e.g. update@cardost.in   — order status updates
+    "email_info_from": "",        # e.g. info@cardost.in     — promotional/newsletter
+    "email_support_from": "",     # e.g. support@cardost.in  — replies to enquiries
+    # Purpose-specific admin inboxes (where alerts land)
+    "email_admin_to": "",         # e.g. admin@cardost.in    — new-order alerts
+    "email_sales_to": "",         # e.g. sales@cardost.in    — contact form enquiries
+    "email_support_to": "",       # e.g. support@cardost.in  — generic support
 }
 
 async def get_settings_doc():
@@ -279,6 +288,13 @@ class SettingsUpdate(BaseModel):
     smtp_password: Optional[str] = None
     smtp_from: Optional[str] = None
     smtp_admin_email: Optional[str] = None
+    email_order_from: Optional[str] = None
+    email_update_from: Optional[str] = None
+    email_info_from: Optional[str] = None
+    email_support_from: Optional[str] = None
+    email_admin_to: Optional[str] = None
+    email_sales_to: Optional[str] = None
+    email_support_to: Optional[str] = None
 
 @api_router.get("/admin/settings")
 async def admin_get_settings(_=Depends(get_admin)):
@@ -1294,12 +1310,23 @@ async def create_order(req: CreateOrderReq, creds: Optional[HTTPAuthorizationCre
     # Fire customer + admin notification emails (non-blocking)
     try:
         if settings.get("smtp_enabled"):
+            # Customer order confirmation FROM order@cardost.in (with support@ as reply-to)
             subj_c, html_c = order_confirmation_email(order_doc, base_url=FRONTEND_URL)
-            asyncio.create_task(send_email(settings, order_doc["address"]["email"], subj_c, html_c, reply_to=settings.get("smtp_admin_email") or settings.get("support_email")))
-            admin_to = settings.get("smtp_admin_email") or settings.get("support_email")
+            order_from = settings.get("email_order_from") or settings.get("smtp_from")
+            support_reply = settings.get("email_support_from") or settings.get("email_support_to") or settings.get("support_email")
+            asyncio.create_task(send_email(
+                settings, order_doc["address"]["email"], subj_c, html_c,
+                reply_to=support_reply, from_alias=order_from, from_name="CarDost Orders",
+            ))
+            # Admin new-order alert TO admin@cardost.in FROM order@cardost.in
+            admin_to = settings.get("email_admin_to") or settings.get("smtp_admin_email") or settings.get("support_email")
             if admin_to:
                 subj_a, html_a = admin_order_email(order_doc, base_url=FRONTEND_URL)
-                asyncio.create_task(send_email(settings, admin_to, subj_a, html_a, reply_to=order_doc["address"]["email"]))
+                asyncio.create_task(send_email(
+                    settings, admin_to, subj_a, html_a,
+                    reply_to=order_doc["address"]["email"],
+                    from_alias=order_from, from_name="CarDost Orders",
+                ))
     except Exception as e:
         logger.error(f"[email] order confirmation failed: {e}")
 
@@ -1552,13 +1579,18 @@ async def contact(req: ContactReq):
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.contacts.insert_one(doc)
-    # Email admin about the new enquiry
+    # Email admin about the new enquiry → sales@cardost.in FROM support@cardost.in
     try:
         settings = await get_settings_doc()
-        admin_to = settings.get("smtp_admin_email") or settings.get("support_email")
+        admin_to = settings.get("email_sales_to") or settings.get("smtp_admin_email") or settings.get("support_email")
+        sales_from = settings.get("email_support_from") or settings.get("smtp_from")
         if settings.get("smtp_enabled") and admin_to:
             subj, html = admin_contact_email(doc, base_url=FRONTEND_URL)
-            asyncio.create_task(send_email(settings, admin_to, subj, html, reply_to=doc.get("email") or None))
+            asyncio.create_task(send_email(
+                settings, admin_to, subj, html,
+                reply_to=doc.get("email") or None,
+                from_alias=sales_from, from_name="CarDost Sales",
+            ))
     except Exception as e:
         logger.error(f"[email] contact notify failed: {e}")
     return {"ok": True}
