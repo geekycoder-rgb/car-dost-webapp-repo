@@ -188,3 +188,64 @@ def admin_contact_email(msg: dict, base_url) -> tuple:
                             subtitle="A customer reached out via /contact",
                             body=body, base_url=base_url)
     return f"📩 New CarDost enquiry from {msg.get('name','Anonymous')}", html
+
+
+STATUS_COPY = {
+    "processing": {"emoji": "⚙️", "title": "Your order is being prepared", "msg": "Our team has started preparing your order. We'll notify you as soon as it ships."},
+    "shipped":    {"emoji": "📦", "title": "Your order has shipped!",       "msg": "Great news — your order is on its way."},
+    "delivered":  {"emoji": "✅", "title": "Your order has been delivered",  "msg": "Hope you love it! Drop us a review on the product page when you can."},
+    "cancelled":  {"emoji": "❌", "title": "Your order was cancelled",       "msg": "Your order has been cancelled. If you paid online, your refund will be processed within 5-7 business days."},
+    "paid":       {"emoji": "💳", "title": "Payment received",               "msg": "Thanks — your payment has been confirmed and your order is being processed."},
+}
+
+def order_status_email(order: dict, status: str, base_url) -> tuple:
+    """Email customer when order status changes."""
+    oid_short = order["id"][:8].upper()
+    addr = order.get("address", {})
+    copy = STATUS_COPY.get(status, {"emoji": "ℹ️", "title": f"Order status: {status}", "msg": f"Your order status is now <b>{status}</b>."})
+    track_url = f"{base_url}/track-order?order_id={order['id']}"
+    sr = order.get("shiprocket") or {}
+    tracking_block = ""
+    if status == "shipped" and sr.get("awb_code"):
+        tracking_block = f"""
+          <div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;padding:14px;margin-top:14px">
+            <div style="font-size:11px;text-transform:uppercase;font-weight:700;color:#065f46">Tracking</div>
+            <div style="font-size:13px;margin-top:4px">AWB: <b>{sr.get('awb_code','')}</b></div>
+            <div style="font-size:13px">Courier: <b>{sr.get('courier_name','')}</b></div>
+            {f'<div style="font-size:13px">Expected by: {sr.get("edd","")}</div>' if sr.get("edd") else ""}
+            {f'<a href="{sr.get("tracking_url","")}" style="color:#065f46;font-weight:700;font-size:11px;text-transform:uppercase">Track on courier site →</a>' if sr.get("tracking_url") else ""}
+          </div>"""
+    body = f"""
+      <h2>{copy['emoji']} {copy['title']}</h2>
+      <p class="muted">Order <b>#{oid_short}</b> · {addr.get('full_name','')}</p>
+      <p style="font-size:13px;margin-top:10px">{copy['msg']}</p>
+      {tracking_block}
+      <p style="margin:18px 0"><a href="{track_url}" class="btn">View order →</a></p>
+    """
+    html = BASE_WRAP.format(title=f"{copy['emoji']} {copy['title']}", subtitle=f"Order #{oid_short}", body=body, base_url=base_url)
+    return f"{copy['emoji']} Order #{oid_short} · {copy['title']}", html
+
+
+def low_stock_email(items: list, base_url) -> tuple:
+    rows = "".join(f"<tr><td style='padding:8px;border-bottom:1px solid #e7e5e4'><b>{i['name']}</b><br><span style='font-size:11px;color:#78716c'>ID {i['id'][:8]}</span></td><td style='padding:8px;border-bottom:1px solid #e7e5e4;text-align:right;color:#dc2626;font-weight:700'>{i['stock']} left</td></tr>" for i in items)
+    body = f"""
+      <h2>⚠️ Low stock warning</h2>
+      <p class="muted">{len(items)} product{'s' if len(items) != 1 else ''} below the safety threshold. Restock soon to avoid lost sales.</p>
+      <table style="width:100%;border-collapse:collapse;margin-top:12px">{rows}</table>
+      <p style="margin-top:18px"><a href="{base_url}/admin" class="btn">Manage inventory →</a></p>
+    """
+    html = BASE_WRAP.format(title="⚠️ Low Stock Alert", subtitle="Inventory needs attention", body=body, base_url=base_url)
+    return f"⚠️ Low stock: {len(items)} product{'s' if len(items) != 1 else ''} need restocking", html
+
+
+def abandoned_cart_email(cart: dict, base_url) -> tuple:
+    items_html = _items_html(cart.get("items", []), base_url)
+    body = f"""
+      <h2>Hey {cart.get('name','') or 'there'}, you left some great items behind 👀</h2>
+      <p style="font-size:13px">We saved your cart — finish checkout before stock runs out.</p>
+      {items_html}
+      <p style="margin:18px 0"><a href="{base_url}/checkout" class="btn">Complete your order →</a></p>
+      <p class="muted" style="margin-top:14px">Questions? Just reply to this email and our team will help.</p>
+    """
+    html = BASE_WRAP.format(title="🛒 You left items in your cart", subtitle="Complete your purchase", body=body, base_url=base_url)
+    return "🛒 You left items in your cart at CarDost", html
