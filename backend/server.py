@@ -229,13 +229,13 @@ DEFAULT_SETTINGS = {
     "support_phone": "+919063278724",
     # SMTP / Email
     "smtp_enabled": False,
-    "smtp_host": "smtpout.secureserver.net",  # GoDaddy default
+    "smtp_host": "smtpout.secureserver.net",
     "smtp_port": 587,
     "smtp_use_ssl": False,
     "smtp_username": "",
     "smtp_password": "",
-    "smtp_from": "",  # e.g. customercare@cardost.in
-    "smtp_admin_email": "",  # admin recipient for order/contact alerts
+    "smtp_from": "",
+    "smtp_admin_email": "",
 }
 
 async def get_settings_doc():
