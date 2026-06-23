@@ -260,6 +260,20 @@ async def get_settings_doc():
     for k, v in DEFAULT_SETTINGS.items():
         if k not in s:
             s[k] = v
+    # Auto-migrate legacy / wrong SMTP hosts to the working GoDaddy gateway.
+    # Titan's smtp.titan.email is blocked by GoDaddy upstream for this domain,
+    # so any historical setting must be corrected. Username/password are preserved.
+    legacy_smtp_hosts = {"smtp.titan.email", "smtp.titan.mail", "smtp.titan.in", "smtp.titanemail.com"}
+    if (s.get("smtp_host") or "").strip().lower() in legacy_smtp_hosts:
+        new_host = "smtpout.secureserver.net"
+        await db.settings.update_one(
+            {"id": "global"},
+            {"$set": {"smtp_host": new_host, "smtp_port": 587, "smtp_use_ssl": False}},
+        )
+        s["smtp_host"] = new_host
+        s["smtp_port"] = 587
+        s["smtp_use_ssl"] = False
+        logger.info(f"[settings] auto-migrated legacy SMTP host → {new_host}:587 (username/password preserved)")
     return s
 
 def get_active_razorpay_creds(settings: dict):
@@ -317,9 +331,26 @@ async def admin_get_settings(_=Depends(get_admin)):
     s.pop("smtp_password", None)
     return s
 
+# Sensitive fields that must NEVER be overwritten with an empty string.
+# Saving the settings form with these fields blank should be a no-op (so a partial
+# save doesn't accidentally wipe stored secrets).
+PROTECTED_SECRET_FIELDS = {
+    "smtp_password", "razorpay_key_secret", "razorpay_webhook_secret", "shiprocket_password",
+}
+
 @api_router.put("/admin/settings")
 async def admin_update_settings(body: SettingsUpdate, _=Depends(get_admin)):
-    update = {k: v for k, v in body.model_dump().items() if v is not None}
+    update = {}
+    for k, v in body.model_dump().items():
+        if v is None:
+            continue
+        # Skip blank secrets so partial saves don't wipe credentials
+        if k in PROTECTED_SECRET_FIELDS and isinstance(v, str) and v.strip() == "":
+            continue
+        # Also skip masked placeholder values that may bounce back from the UI
+        if isinstance(v, str) and v.startswith("••"):
+            continue
+        update[k] = v
     if update:
         await db.settings.update_one({"id": "global"}, {"$set": update}, upsert=True)
     return {"ok": True}

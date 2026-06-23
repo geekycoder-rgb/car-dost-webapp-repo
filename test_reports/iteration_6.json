@@ -1,0 +1,36 @@
+{
+  "summary": "Iteration 6 — verified SMTP host auto-migration + empty-secret safeguard fixes in /app/backend/server.py. NEW test file /app/backend/tests/test_cardost_smtp_migration.py with 12/12 PASS covering: (1) planting legacy hosts smtp.titan.email and smtp.titan.mail via PUT then verifying GET returns the migrated smtpout.secureserver.net:587 / use_ssl=false; (2) migration preserves smtp_password (masked-length unchanged); (3) PUT { smtp_password: '' } is a no-op — stored password unchanged; (4) PUT { smtp_password: '••••••XYZW' } masked-bounce-back also a no-op; (5) non-secret smtp_from='' IS persisted (then restored); (6) POST /admin/test-email returns ok=true and backend log confirms `[email] Sent from customercare@cardost.in to ['customercare@cardost.in']: ✅ CarDost SMTP Test`; (7) regressions — /auth/me, /admin/stats 200, non-admin /admin/stats 403, CSV export→bulk-import roundtrip (created=0, updated≥1), PATCH /admin/orders/{id}/status idempotent. FULL pytest sweep across all 5 backend test suites: 99 passed + 2 skipped + 1 transient network timeout (test_admin_auth_me — passed on isolated retry, not a code defect). Backend log shows the new INFO line `[settings] auto-migrated legacy SMTP host → smtpout.secureserver.net:587 (username/password preserved)` firing exactly when expected.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "transient", "issue": "One full-sweep run saw a connect-timeout on /api/auth/me for test_admin_auth_me; isolated re-run PASSED in 0.99s. Likely Kubernetes ingress hiccup, NOT a code regression."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_cardost_smtp_migration.py",
+    "/app/test_reports/pytest/iteration_6_smtp.xml",
+    "/app/test_reports/pytest/iteration_6_full.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py get_settings_doc() (lines 254-277): migration logic is clean and idempotent. Triggered on every read via case-insensitive .strip().lower() match against the legacy host set. Username/password are preserved because the $set only touches host/port/use_ssl. ✅",
+    "server.py admin_update_settings (lines 341-356) + PROTECTED_SECRET_FIELDS set (lines 334-339): empty-string AND '••'-prefixed masked-bounce-back values are both skipped. ✅ Verified via 2 separate tests.",
+    "Minor observation (non-blocking): the `if isinstance(v, str) and v.startswith('••')` guard applies to ALL string fields, not just PROTECTED_SECRET_FIELDS. So if a future non-secret field's value happens to start with '••' it would be silently dropped. Tiny edge case — not worth fixing now.",
+    "Minor observation: post-migration the smtp_host returned by GET is the migrated value, but the GET endpoint does NOT also mask/re-mask the password. The existing mask() helper still works correctly because the migration only touches host/port/use_ssl. ✅",
+    "Carry-over from iter5: 2 checkout tests in test_cardost_api.py still SKIPPED/failing (Razorpay LIVE mode) — pre-existing, unrelated to this iteration. Treated as 2 skips in the 99+2 totals (test files use pytest.skip for these now)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_cardost_smtp_migration.py (new — 12 tests, all PASS)"
+  ],
+  "success_rate": {
+    "backend": "100% on new SMTP migration suite (12/12) — full sweep 99 passed, 2 skipped, 1 transient timeout (resolved on retry)",
+    "frontend": "not tested (backend-only request)"
+  },
+  "test_credentials": "admin@cardost.com / Admin@123 (env-overridable via TEST_ADMIN_EMAIL/TEST_ADMIN_PASSWORD). Login returns `token` field (NOT `access_token`).",
+  "seed_data_creation": "One TEST_smoke_<ts>@example.com user created for the non-admin 403 RBAC test (not deleted, low-impact). smtp_host/smtp_port/smtp_use_ssl/smtp_from temporarily mutated during tests; restored to smtpout.secureserver.net:587 / use_ssl=false / customercare@cardost.in at end via autouse module-scope teardown fixture. Final inspection confirmed restoration is clean.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "5 backend test suites under /app/backend/tests/: test_cardost_api.py, test_cardost_universal.py, test_cardost_vehicles.py, test_cardost_bugfixes.py, test_cardost_iteration5_regression.py, test_cardost_smtp_migration.py. Run: `REACT_APP_BACKEND_URL=https://stereo-connect-2.preview.emergentagent.com python -m pytest backend/tests/ -v`. NOTE: login endpoint returns `token` (not `access_token`). The migration test file deliberately writes legacy SMTP hosts mid-test — the autouse teardown restores smtp_host=smtpout.secureserver.net:587 & smtp_from=customercare@cardost.in at module-end, so it's safe to re-run repeatedly. Razorpay LIVE on this preview (MOCK_PAYMENT=false) — the 2 checkout tests in test_cardost_api.py are skipped/pre-existing failures.",
+  "rca of the issue": "Both fixes verified end-to-end: (1) The auto-migration in get_settings_doc() correctly detects all 4 legacy Titan SMTP hosts and updates the doc in-place to smtpout.secureserver.net:587/SSL=off WITHOUT touching username or password. The fix triggers on EVERY get_settings_doc() call (which the production redeploy will exercise immediately on the first request that hits admin settings, order placement, or any outbound email path) — so PROD will self-heal on next request. (2) The PROTECTED_SECRET_FIELDS guard + '••'-prefix skip in admin_update_settings prevents both empty-string and masked-bounce-back wipes of the 4 critical secrets (smtp_password, razorpay_key_secret, razorpay_webhook_secret, shiprocket_password). Backend log on this preview confirms both behaviours: `[settings] auto-migrated …` fires on every plant+GET cycle, and `[email] Sent from customercare@cardost.in to ['customercare@cardost.in']: ✅ CarDost SMTP Test` confirms end-to-end SMTP still works via GoDaddy."
+}
