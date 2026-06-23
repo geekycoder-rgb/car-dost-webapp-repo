@@ -173,17 +173,101 @@ export default function AdminDashboard() {
     try {
       const fd = new FormData(); fd.append("file", file);
       const { data } = await api.post("/admin/products/bulk", fd, { headers: { "Content-Type": "multipart/form-data" } });
-      setImportResult(data); toast.success(`Imported ${data.created} product${data.created === 1 ? "" : "s"}`); loadAll();
+      setImportResult(data);
+      const parts = [];
+      if (data.created) parts.push(`${data.created} created`);
+      if (data.updated) parts.push(`${data.updated} updated`);
+      if (data.error_count) parts.push(`${data.error_count} error${data.error_count === 1 ? "" : "s"}`);
+      toast.success(`Import done — ${parts.join(", ") || "no rows processed"}`);
+      loadAll();
     } catch (err) { const d = err.response?.data?.detail; toast.error(typeof d === "string" ? d : "Import failed"); }
     finally { setImporting(false); if (csvInputRef.current) csvInputRef.current.value = ""; }
   };
 
   const downloadSampleCSV = () => {
-    const sample = "name,description,price,original_price,category,brand,image,stock,rating,featured\n" +
-      "Sample Speaker,High quality 6-inch speaker,1999,2499,speakers,Generic,https://example.com/img.jpg,50,4.5,false\n" +
-      "Demo Stereo,9-inch Android stereo,9999,12999,android-stereos,Demo,https://example.com/stereo.jpg,20,4.7,true";
-    const blob = new Blob([sample], { type: "text/csv" });
-    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "cardost-products-sample.csv"; a.click();
+    // Quote helper for CSV cells that may contain commas/quotes/newlines
+    const q = (v) => {
+      const s = String(v ?? "");
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const headers = [
+      "id", "name", "description", "price", "original_price", "category", "categories",
+      "brand", "image", "gallery", "stock", "rating", "featured", "is_published",
+      "is_best_seller", "is_new_arrival", "discount_percent", "discount_flat", "gst_percent",
+      "tags", "car_brands", "car_models", "years", "compatible_variants",
+      "meta_title", "meta_description", "seo_slug",
+    ];
+    const rows = [
+      // New product example (id blank → CREATE)
+      [
+        "",
+        "CarDost X9 Pro 10\" Android Stereo",
+        "10.1-inch Full HD IPS touchscreen Android 13 head unit with 4GB RAM, 64GB storage, Wireless CarPlay & Android Auto, GPS, Bluetooth 5.0.",
+        18999, 24999,
+        "android-stereos", "android-stereos|stereos",
+        "CarDost",
+        "https://images.pexels.com/photos/4141878/pexels-photo-4141878.jpeg",
+        "https://example.com/gallery1.jpg|https://example.com/gallery2.jpg",
+        25, 4.8,
+        "true", "true", "false", "true",
+        24, 0, 18,
+        "android|carplay|10inch",
+        "Hyundai|Maruti Suzuki", "Creta|Swift", "2020|2021|2022|2023|2024",
+        "",  // compatible_variants (variant IDs from /api/catalog/tree)
+        "CarDost X9 Pro 10-inch Android Stereo | Wireless CarPlay & Android Auto",
+        "Premium 10-inch Android 13 head unit with CarPlay, Android Auto, GPS & Bluetooth 5.0. Fits Creta, Swift & more.",
+        "cardost-x9-pro-10-android-stereo",
+      ],
+      // Universal accessory example
+      [
+        "",
+        "Premium LED Headlight H4 200W",
+        "Ultra-bright H4 LED headlights, 20000LM, 6000K cool white, plug-and-play. Pair.",
+        1899, 2999,
+        "led-lights", "led-lights",
+        "Generic",
+        "https://images.pexels.com/photos/9754665/pexels-photo-9754665.jpeg",
+        "",
+        100, 4.5,
+        "false", "true", "false", "false",
+        0, 0, 18,
+        "led|headlight|h4",
+        "ALL", "ALL", "",
+        "",
+        "Premium LED Headlight H4 200W (Pair) | Universal Fit",
+        "20000LM 6000K cool-white H4 LED headlights, plug-and-play, universal fit. Sold as a pair.",
+        "led-headlight-h4-200w",
+      ],
+      // Update-by-slug example (id blank but seo_slug matches an existing product → UPDATE)
+      [
+        "",
+        "Sony XS-FB1620E 6.5\" Coaxial Speakers (Restock)",
+        "260W peak power, 6.5-inch 2-way coaxial speakers. Restocked Feb 2026.",
+        2399, 3499,
+        "speakers", "speakers",
+        "Sony",
+        "https://images.unsplash.com/photo-1608538770329-65941f62f9f8",
+        "",
+        80, 4.7,
+        "true", "true", "true", "false",
+        31, 0, 18,
+        "speakers|sony|coaxial",
+        "ALL", "ALL", "",
+        "",
+        "Sony XS-FB1620E 6.5-inch Coaxial Car Speakers | 260W",
+        "Genuine Sony 6.5-inch 2-way coaxial speakers with mica reinforced cones. Universal fit.",
+        "sony-xs-fb1620e-6-5-coaxial-speakers",
+      ],
+    ];
+    const csv = [
+      headers.join(","),
+      ...rows.map((r) => r.map(q).join(",")),
+    ].join("\n") + "\n";
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "cardost-products-sample.csv";
+    a.click();
   };
 
   const c = (k) => (e) => setForm({ ...form, [k]: e.target.value });
@@ -248,10 +332,30 @@ export default function AdminDashboard() {
               </div>
               {importResult && (
                 <div data-testid="import-result" className="px-4 py-3 bg-emerald-50 border-b border-emerald-200 text-sm flex items-center justify-between">
-                  <span><span className="text-emerald-700 font-bold">{importResult.created}</span> products imported{importResult.error_count > 0 && <span className="text-yellow-700"> · {importResult.error_count} row(s) failed</span>}</span>
+                  <span>
+                    <span className="text-emerald-700 font-bold">{importResult.created || 0}</span> created
+                    {" · "}
+                    <span className="text-indigo-700 font-bold">{importResult.updated || 0}</span> updated
+                    {importResult.error_count > 0 && <span className="text-yellow-700"> · {importResult.error_count} row(s) failed</span>}
+                  </span>
                   <button onClick={() => setImportResult(null)} className="text-neutral-500 hover:text-neutral-900 text-xs">Dismiss</button>
                 </div>
               )}
+              {importResult && importResult.errors && importResult.errors.length > 0 && (
+                <div data-testid="import-errors" className="px-4 py-3 bg-amber-50 border-b border-amber-200 text-[11px]">
+                  <div className="font-bold text-amber-800 mb-1">Row errors (first {importResult.errors.length}):</div>
+                  <ul className="space-y-0.5 text-amber-900">
+                    {importResult.errors.map((e, i) => (
+                      <li key={i}>Row {e.row}: {e.error}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <div className="px-4 py-2.5 bg-stone-50 border-b border-stone-200 text-[11px] text-stone-600 leading-relaxed">
+                <span className="font-bold text-stone-800">CSV format:</span> Required → <code className="bg-white px-1 rounded">name, description, price, category, image</code>.
+                List columns (<code className="bg-white px-1 rounded">categories, gallery, tags, car_brands, car_models, years, compatible_variants</code>) use <code className="bg-white px-1 rounded">|</code> as separator.
+                To <span className="font-bold">update</span> an existing product fill <code className="bg-white px-1 rounded">id</code> or <code className="bg-white px-1 rounded">seo_slug</code> matching an existing one. Use <code className="bg-white px-1 rounded">ALL</code> in car_brands/car_models for universal-fit.
+              </div>
               <Table>
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">

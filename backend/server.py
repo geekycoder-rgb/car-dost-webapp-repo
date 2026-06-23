@@ -1215,6 +1215,70 @@ async def delete_product(pid: str, _=Depends(get_admin)):
 import csv
 import io
 
+def _csv_str(row, key, default=""):
+    v = row.get(key)
+    return (v.strip() if isinstance(v, str) else default) or default
+
+def _csv_list(row, key, sep="|"):
+    """Pipe-separated list. Returns [] if empty."""
+    v = _csv_str(row, key)
+    if not v:
+        return []
+    return [s.strip() for s in v.split(sep) if s.strip()]
+
+def _csv_int_list(row, key, sep="|"):
+    out = []
+    for s in _csv_list(row, key, sep):
+        try:
+            out.append(int(s))
+        except ValueError:
+            pass
+    return out
+
+def _csv_bool(row, key, default=False):
+    v = _csv_str(row, key)
+    if not v:
+        return default
+    return v.lower() in ("true", "1", "yes", "y", "t")
+
+def _csv_float(row, key, default=None):
+    v = _csv_str(row, key)
+    if not v:
+        return default
+    try:
+        return float(v)
+    except ValueError:
+        return default
+
+def _csv_int(row, key, default=0):
+    v = _csv_str(row, key)
+    if not v:
+        return default
+    try:
+        return int(float(v))
+    except ValueError:
+        return default
+
+# All bulk-import columns in canonical order (used for the sample CSV download too)
+BULK_CSV_COLUMNS = [
+    "id", "name", "description", "price", "original_price", "category", "categories",
+    "brand", "image", "gallery", "stock", "rating", "featured", "is_published",
+    "is_best_seller", "is_new_arrival", "discount_percent", "discount_flat", "gst_percent",
+    "tags", "car_brands", "car_models", "years", "compatible_variants",
+    "meta_title", "meta_description", "seo_slug",
+]
+
+@api_router.get("/admin/products/bulk/columns")
+async def bulk_csv_columns(_=Depends(get_admin)):
+    return {
+        "columns": BULK_CSV_COLUMNS,
+        "required": ["name", "description", "price", "category", "image"],
+        "list_separator": "|",
+        "notes": "Provide id or seo_slug to UPDATE an existing product; otherwise a new one is created. "
+                 "List fields (categories, gallery, tags, car_brands, car_models, years, compatible_variants) "
+                 "use '|' as separator. Boolean fields accept true/false/1/0/yes/no.",
+    }
+
 @api_router.post("/admin/products/bulk")
 async def bulk_import_products(file: UploadFile = File(...), _=Depends(get_admin)):
     if not (file.filename or "").lower().endswith(".csv"):
@@ -1227,30 +1291,70 @@ async def bulk_import_products(file: UploadFile = File(...), _=Depends(get_admin
     reader = csv.DictReader(io.StringIO(text))
     required = {"name", "description", "price", "category", "image"}
     if not reader.fieldnames or not required.issubset({h.strip() for h in reader.fieldnames}):
-        raise HTTPException(400, f"CSV must have columns: {', '.join(sorted(required))} (optional: original_price, brand, stock, rating, featured)")
+        raise HTTPException(400, f"CSV must have columns: {', '.join(sorted(required))}. "
+                                  f"Optional columns: {', '.join(c for c in BULK_CSV_COLUMNS if c not in required and c != 'id')}")
 
     created = 0
+    updated = 0
     errors = []
     for i, row in enumerate(reader, start=2):  # row 1 is header
+        # Skip blank lines and accidentally-included comment rows
+        name_raw = (row.get("name") or "").strip()
+        if not name_raw or name_raw.startswith("#"):
+            continue
         try:
-            p_in = ProductIn(
-                name=row["name"].strip(),
-                description=row["description"].strip(),
-                price=float(row["price"]),
-                original_price=float(row["original_price"]) if row.get("original_price") else None,
-                category=row["category"].strip(),
-                brand=row.get("brand", "").strip() or None,
-                image=row["image"].strip(),
-                stock=int(row.get("stock") or 50),
-                rating=float(row.get("rating") or 4.5),
-                featured=str(row.get("featured", "")).strip().lower() in ("true", "1", "yes", "y"),
+            data = dict(
+                name=_csv_str(row, "name"),
+                description=_csv_str(row, "description"),
+                price=_csv_float(row, "price", 0) or 0,
+                original_price=_csv_float(row, "original_price"),
+                category=_csv_str(row, "category"),
+                categories=_csv_list(row, "categories"),
+                brand=_csv_str(row, "brand") or None,
+                image=_csv_str(row, "image"),
+                gallery=_csv_list(row, "gallery"),
+                stock=_csv_int(row, "stock", 50),
+                rating=_csv_float(row, "rating", 4.5) or 4.5,
+                featured=_csv_bool(row, "featured"),
+                is_published=_csv_bool(row, "is_published", True),
+                is_best_seller=_csv_bool(row, "is_best_seller"),
+                is_new_arrival=_csv_bool(row, "is_new_arrival"),
+                discount_percent=_csv_float(row, "discount_percent", 0) or 0,
+                discount_flat=_csv_float(row, "discount_flat", 0) or 0,
+                gst_percent=_csv_int(row, "gst_percent", 18),
+                tags=_csv_list(row, "tags"),
+                car_brands=_csv_list(row, "car_brands"),
+                car_models=_csv_list(row, "car_models"),
+                years=_csv_int_list(row, "years"),
+                compatible_variants=_csv_list(row, "compatible_variants"),
+                meta_title=_csv_str(row, "meta_title"),
+                meta_description=_csv_str(row, "meta_description"),
+                seo_slug=_csv_str(row, "seo_slug"),
             )
-            prod = Product(**p_in.model_dump())
-            await db.products.insert_one(prod.model_dump())
-            created += 1
+            p_in = ProductIn(**data)
+            # Upsert: lookup by id first, then seo_slug
+            existing_id = _csv_str(row, "id")
+            existing = None
+            if existing_id:
+                existing = await db.products.find_one({"id": existing_id}, {"_id": 0, "id": 1})
+            if not existing and data["seo_slug"]:
+                existing = await db.products.find_one({"seo_slug": data["seo_slug"]}, {"_id": 0, "id": 1})
+            if existing:
+                await db.products.update_one(
+                    {"id": existing["id"]},
+                    {"$set": p_in.model_dump()},
+                )
+                updated += 1
+            else:
+                prod = Product(**p_in.model_dump())
+                if existing_id:
+                    # Allow caller to pin a specific ID for new product
+                    prod.id = existing_id
+                await db.products.insert_one(prod.model_dump())
+                created += 1
         except Exception as e:
-            errors.append({"row": i, "error": str(e)[:120]})
-    return {"created": created, "errors": errors[:20], "error_count": len(errors)}
+            errors.append({"row": i, "error": str(e)[:160]})
+    return {"created": created, "updated": updated, "errors": errors[:20], "error_count": len(errors)}
 
 # ============ File Upload (Emergent Object Storage) ============
 def init_storage():
