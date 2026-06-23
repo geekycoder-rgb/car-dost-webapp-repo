@@ -6,8 +6,9 @@ import requests
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://stereo-connect-2.preview.emergentagent.com').rstrip('/')
 API = f"{BASE_URL}/api"
 
-ADMIN_EMAIL = "admin@cardost.com"
-ADMIN_PASSWORD = "Admin@123"
+# Test credentials (seeded admin) — overridable via env
+ADMIN_EMAIL = os.environ.get("TEST_ADMIN_EMAIL", "admin@cardost.com")
+ADMIN_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD", "Admin@123")
 
 EXPECTED_MAKES = {"Honda", "Hyundai", "Kia", "Mahindra", "Maruti Suzuki", "Skoda", "Tata Motors", "Toyota", "Volkswagen"}
 

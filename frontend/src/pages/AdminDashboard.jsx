@@ -613,7 +613,7 @@ export default function AdminDashboard() {
               {(form.gallery || []).length > 0 && (
                 <div className="grid grid-cols-5 gap-2 mt-3">
                   {form.gallery.map((g, i) => (
-                    <div key={i} className="relative aspect-square">
+                    <div key={`${g}-${i}`} className="relative aspect-square">
                       <img src={resolveImg(g)} alt="" className="w-full h-full object-cover rounded-lg border border-stone-200"/>
                       <button onClick={() => setForm({ ...form, gallery: form.gallery.filter((_, idx) => idx !== i) })} className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-stone-900 text-white rounded-full grid place-items-center hover:bg-rose-600">
                         <X className="w-3 h-3"/>

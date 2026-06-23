@@ -10,8 +10,9 @@ import requests
 
 BASE_URL = os.environ["REACT_APP_BACKEND_URL"].rstrip("/")
 API = f"{BASE_URL}/api"
-ADMIN_EMAIL = "admin@cardost.com"
-ADMIN_PASSWORD = "Admin@123"
+# Test credentials (seeded admin) — overridable via env
+ADMIN_EMAIL = os.environ.get("TEST_ADMIN_EMAIL", "admin@cardost.com")
+ADMIN_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD", "Admin@123")
 
 
 @pytest.fixture(scope="module")

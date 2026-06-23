@@ -1,0 +1,50 @@
+{
+  "summary": "Iteration 5 regression sweep — verified the 3 defensive fixes (payload/result/data/ct var inits, env-var test creds, gallery key={`${g}-${i}`}). NEW: /app/backend/tests/test_cardost_iteration5_regression.py with 21/21 PASS covering JWT auth paths (admin login + /auth/me with/without/invalid token), all 5 admin endpoints reachable, RBAC 403 for non-admin, product list ≥19 + 404 for bogus id, /admin/upload JPEG → /api/files/{path} serve roundtrip with image/jpeg content-type (verifies upload_image + serve_file data,ct init), CSV export returns 27-column header in canonical BULK_CSV_COLUMNS order, export→reimport gives updated≥1 / created=0 (upsert by id works), new-row import gives created=1 / updated=0, admin product CRUD POST→GET→PUT(stock=99)→DELETE→404, PATCH /admin/orders/{id}/status accepts valid status (200) and rejects bogus (400). EXISTING suite re-run: 67/69 PASS — 2 unrelated pre-existing failures (Razorpay LIVE mode means orders/create returns mock=False and orders/verify requires signature; NOT regressions). Frontend Playwright: admin/login → admin dashboard loads, Products tab shows export-csv-btn + Sample CSV, Edit dialog opens for first product with NO duplicate-key console warnings, Integrations tab shows set-low-stock-enabled toggle + set-low-stock-threshold input. Backend log confirms `[email] Sent from update@cardost.in` lines (order status email trigger live).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/orders/create + /api/orders/verify", "issue": "Razorpay MOCK_MODE is OFF on this preview env, so the 2 checkout tests in test_cardost_api.py (test_guest_create_and_verify_order, test_logged_in_order_linked_to_user) fail because data['mock'] is False and orders/verify rejects without signature. Pre-existing — NOT introduced by current fixes. To unblock: flip MOCK_MODE=true in Admin > Integrations > Razorpay or relax the assertion in the test."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Browser tab title", "issues": ["Still 'Emergent | Fullstack App' (carried over from iter4) — minor branding miss"]},
+      {"screen": "/admin", "issues": ["3 × console errors on page load (carried over from iter4, non-blocking)"]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_cardost_iteration5_regression.py",
+    "/app/test_reports/pytest/iteration_5.xml",
+    "/app/test_reports/pytest/iteration_5_existing.xml"
+  ],
+  "action_items": [
+    "(Optional) Pre-existing: the 2 checkout pytest cases assume MOCK_MODE; either set MOCK_MODE=true on the preview or make the assertion tolerant of LIVE mode (skip when mock=false).",
+    "(Optional) review_request mentioned data-testid='admin-product-edit-{id}' and 'product-form-modal' but the actual code uses data-testid='edit-{id}' and no testid on the Dialog. Consider standardising selectors if downstream tests rely on the documented names."
+  ],
+  "critical_code_review_comments": [
+    "server.py get_current_user (line 162-170): payload pre-init is harmless — the except branch still raises HTTPException(401) before reading payload, so the empty-dict default is unreachable. Behaviour unchanged. ✅",
+    "server.py upload_image (line 1437): result={} init is harmless because put_object failure path raises before result is used; on success, result is overwritten. ✅",
+    "server.py serve_file (line 1467): data=b'' / ct='application/octet-stream' inits are similarly unreachable (except branch raises). ✅",
+    "AdminDashboard.jsx line 616 gallery key={`${g}-${i}`}: correct fix. Combines URL+index so when the i-th tile is removed, React rekeys the remaining tiles and re-renders the correct <img src>. Verified visually — no duplicate-key console warnings on modal open. ✅",
+    "Test files now correctly read TEST_ADMIN_EMAIL/TEST_ADMIN_PASSWORD env with seeded defaults — all 4 test files authenticate successfully (21/21 + 67/69 PASS). ✅",
+    "CSV bulk export/import roundtrip is solid: 27 columns in canonical order, export→import yields updated only, fresh slug yields created only. ✅",
+    "Order status email — log line `[email] Sent from update@cardost.in to ['…']: ⚙️ Order #… · Your order is being prepared` confirmed; same-status PATCH does NOT emit a new log line (idempotency holds via `if order.get('status') != body.status`). ✅",
+    "Low-Stock Alerts UI present in AdminSettings.jsx (set-low-stock-enabled, set-low-stock-threshold); backend check_and_send_low_stock_alert uses per-product 24h debounce via low_stock_alerted_at — code path is intact (could not trigger a fresh alert without a stock-decrementing real order on the preview env, but the function & toggle are wired). ✅",
+    "Carry-over from iter3/4: server.py still does os.environ['RAZORPAY_KEY_ID'] at module level — would crash startup if unset. Suggest .get(...) fallback."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_cardost_iteration5_regression.py (new, 21 tests — all PASS)"
+  ],
+  "success_rate": {
+    "backend": "100% on new regression (21/21) + 97% on prior existing suite (67/69, 2 failures pre-existing & Razorpay-LIVE-mode related, NOT regressions)",
+    "frontend": "100% on tested flows (admin login, Products tab CSV buttons, Edit modal open w/ no duplicate-key warnings, Integrations tab low-stock UI)"
+  },
+  "test_credentials": "admin@cardost.com / Admin@123 (env-overridable via TEST_ADMIN_EMAIL/TEST_ADMIN_PASSWORD). Auth endpoint: POST /api/auth/login.",
+  "seed_data_creation": "TEST_-prefixed regress products created and cleaned up in CSV-import and admin-CRUD tests; throwaway TEST_regress_* user created for RBAC 403 check (not deleted — low impact).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "4 backend test suites live under /app/backend/tests/: test_cardost_api.py, test_cardost_universal.py, test_cardost_vehicles.py, test_cardost_bugfixes.py, test_cardost_iteration5_regression.py. Run with: REACT_APP_BACKEND_URL=https://stereo-connect-2.preview.emergentagent.com python -m pytest backend/tests/ -v. Razorpay MOCK_MODE is OFF on this preview, so the 2 checkout tests in test_cardost_api.py will fail until either MOCK_MODE is flipped or the assertions are relaxed. Frontend admin edit-button testid is `edit-{id}` (NOT `admin-product-edit-{id}` as the review_request hinted); the product edit Dialog has no `product-form-modal` data-testid — tests should detect the modal via `text=Edit Product` instead. Backend log file /var/log/supervisor/backend.err.log contains `[email] Sent from update@cardost.in` lines confirming order-status emails fire.",
+  "rca of the issue": "No new regression detected. All 3 defensive fixes are behaviourally identical to the pre-fix code (the new var-init lines are never read because the except branches raise first). The CSV export/import, order-status email, and low-stock alert features ship as documented in the review_request. The only failing tests are 2 pre-existing checkout-flow assertions that assume Razorpay MOCK_MODE=true — they fail today because the live preview has MOCK_MODE=false (real Razorpay key). This is environment config, not code."
+}

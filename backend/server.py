@@ -162,6 +162,7 @@ def make_token(uid: str, role: str = "user") -> str:
 async def get_current_user(creds: Optional[HTTPAuthorizationCredentials] = Depends(security)):
     if not creds:
         raise HTTPException(401, "Not authenticated")
+    payload: dict = {}
     try:
         payload = jwt.decode(creds.credentials, JWT_SECRET, algorithms=["HS256"])
     except jwt.PyJWTError:
@@ -1443,6 +1444,7 @@ async def upload_image(file: UploadFile = File(...), user=Depends(get_admin)):
     ext = (file.filename.rsplit(".", 1)[-1] if "." in (file.filename or "") else "bin").lower()
     file_id = str(uuid.uuid4())
     path = f"{APP_NAME}/products/{file_id}.{ext}"
+    result: dict = {}
     try:
         result = put_object(path, data, file.content_type)
     except Exception as e:
@@ -1467,6 +1469,8 @@ async def serve_file(path: str):
     record = await db.files.find_one({"storage_path": path, "is_deleted": False}, {"_id": 0})
     if not record:
         raise HTTPException(404, "File not found")
+    data: bytes = b""
+    ct: str = "application/octet-stream"
     try:
         data, ct = get_object(path)
     except Exception as e:
