@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
-import { Plus, Edit, Trash2, ShoppingCart, Package, DollarSign, Users, Upload, Loader2, FileText, ExternalLink, X, Settings as SettingsIcon } from "lucide-react";
+import { Plus, Edit, Trash2, ShoppingCart, Package, DollarSign, Users, Upload, Download, Loader2, FileText, ExternalLink, X, Settings as SettingsIcon } from "lucide-react";
 import { toast } from "sonner";
 import AdminSettings from "@/components/AdminSettings";
 import AdminCategories from "@/components/AdminCategories";
@@ -38,6 +38,7 @@ export default function AdminDashboard() {
   const csvInputRef = useRef(null);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
+  const [exporting, setExporting] = useState(false);
   const [carBrands, setCarBrands] = useState([]);
   const [carModelsByBrand, setCarModelsByBrand] = useState({});
   const [yearList, setYearList] = useState([]);
@@ -270,6 +271,27 @@ export default function AdminDashboard() {
     a.click();
   };
 
+  const exportProductsCSV = async () => {
+    setExporting(true);
+    try {
+      const { data } = await api.get("/admin/products/export", { responseType: "blob" });
+      const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+      const url = URL.createObjectURL(data);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `cardost-products-${ts}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success(`Exported ${products.length} product${products.length === 1 ? "" : "s"}`);
+    } catch (err) {
+      toast.error("Export failed");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const c = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
   return (
@@ -321,6 +343,9 @@ export default function AdminDashboard() {
                   <input ref={csvInputRef} data-testid="csv-input" type="file" accept=".csv" onChange={importCSV} className="hidden"/>
                   <Button data-testid="sample-csv-btn" onClick={downloadSampleCSV} variant="outline" className="border-neutral-300 text-xs font-bold uppercase">
                     <FileText className="w-4 h-4 mr-1"/> Sample CSV
+                  </Button>
+                  <Button data-testid="export-csv-btn" disabled={exporting || products.length === 0} onClick={exportProductsCSV} variant="outline" className="border-neutral-300 text-xs font-bold uppercase">
+                    {exporting ? <Loader2 className="w-4 h-4 mr-1 animate-spin"/> : <Download className="w-4 h-4 mr-1"/>} Export CSV
                   </Button>
                   <Button data-testid="import-csv-btn" disabled={importing} onClick={() => csvInputRef.current?.click()} variant="outline" className="border-neutral-300 text-xs font-bold uppercase">
                     {importing ? <Loader2 className="w-4 h-4 mr-1 animate-spin"/> : <Upload className="w-4 h-4 mr-1"/>} Import CSV

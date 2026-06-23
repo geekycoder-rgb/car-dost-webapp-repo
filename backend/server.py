@@ -1279,6 +1279,33 @@ async def bulk_csv_columns(_=Depends(get_admin)):
                  "use '|' as separator. Boolean fields accept true/false/1/0/yes/no.",
     }
 
+
+def _csv_serialize_cell(v) -> str:
+    """Serialize a Python value back to a CSV-safe string in the bulk-import format."""
+    if v is None:
+        return ""
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    if isinstance(v, (list, tuple)):
+        return "|".join(_csv_serialize_cell(x) for x in v)
+    return str(v)
+
+
+@api_router.get("/admin/products/export")
+async def export_products_csv(_=Depends(get_admin)):
+    products = await db.products.find({}, {"_id": 0}).sort("created_at", -1).to_list(10000)
+    buf = io.StringIO()
+    writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL)
+    writer.writerow(BULK_CSV_COLUMNS)
+    for p in products:
+        writer.writerow([_csv_serialize_cell(p.get(col)) for col in BULK_CSV_COLUMNS])
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="cardost-products-{ts}.csv"'},
+    )
+
 @api_router.post("/admin/products/bulk")
 async def bulk_import_products(file: UploadFile = File(...), _=Depends(get_admin)):
     if not (file.filename or "").lower().endswith(".csv"):
