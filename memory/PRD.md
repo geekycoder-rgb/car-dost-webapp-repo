@@ -73,12 +73,21 @@ DO NOT delete/modify Razorpay & Shiprocket live credentials saved in DB settings
 - Admin Customers module (CRM view, order history)
 - Admin Shipping module (Shiprocket dashboard within app)
 - Refactor: split AdminDashboard.jsx into per-tab page components
+- Abandoned cart recovery (server-side cart persistence + scheduler) — P1 deferred
 
 **P2**
-- Low-stock email alerts (background task)
 - Shop sidebar — cascading Make→Model→Variant filter (UI exists in product form, port to shop)
 - Phase 5 QA report
 - Verified-purchase badge on reviews
+- Refactor /app/backend/server.py into modular routers (file is ~1900 lines)
+
+## Email Notification Triggers (Feb 2026)
+- **Order confirmation** → customer, from `order@cardost.in` (on payment verify)
+- **New-order admin alert** → admin@, from `order@cardost.in`
+- **Order status update** → customer, from `update@cardost.in` (on PATCH /admin/orders/{id}/status)
+- **Shiprocket auto-shipped/delivered** → customer, from `update@cardost.in` (on Shiprocket poll detecting AWB / "shipped"/"delivered" status; also bumps order.status)
+- **Low-stock alert** → admin@, debounced 24h/product, threshold configurable in Admin Settings (default 5)
+- **Contact form enquiry** → sales@, from `support@cardost.in`
 
 ## Test Coverage
 - /app/backend/tests/test_cardost_api.py (24 tests)

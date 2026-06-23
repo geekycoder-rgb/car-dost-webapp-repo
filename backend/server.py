@@ -3,7 +3,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
-from email_service import send_email, order_confirmation_email, admin_order_email, admin_contact_email
+from email_service import send_email, order_confirmation_email, admin_order_email, admin_contact_email, order_status_email, low_stock_email
 
 import os
 import re
@@ -245,6 +245,9 @@ DEFAULT_SETTINGS = {
     "email_admin_to": "",         # e.g. admin@cardost.in    — new-order alerts
     "email_sales_to": "",         # e.g. sales@cardost.in    — contact form enquiries
     "email_support_to": "",       # e.g. support@cardost.in  — generic support
+    # Low-stock alert config
+    "low_stock_threshold": 5,
+    "low_stock_alerts_enabled": True,
 }
 
 async def get_settings_doc():
@@ -295,6 +298,8 @@ class SettingsUpdate(BaseModel):
     email_admin_to: Optional[str] = None
     email_sales_to: Optional[str] = None
     email_support_to: Optional[str] = None
+    low_stock_threshold: Optional[int] = None
+    low_stock_alerts_enabled: Optional[bool] = None
 
 @api_router.get("/admin/settings")
 async def admin_get_settings(_=Depends(get_admin)):
@@ -483,11 +488,131 @@ async def shiprocket_refresh_tracking(order: dict) -> dict:
                 {"id": order["id"]},
                 {"$set": {"shiprocket": new_sr, "shiprocket_refreshed_at": datetime.now(timezone.utc).isoformat()}}
             )
+            # Detect shipped/delivered transition from Shiprocket and auto-update order status + email customer
+            try:
+                await _auto_transition_from_shiprocket(order, sr, new_sr)
+            except Exception as e:
+                logger.error(f"[email] shiprocket auto-transition failed: {e}")
             return new_sr
         return sr
     except Exception as e:
         logger.error(f"shiprocket refresh failed: {e}")
         return {"error": str(e)}
+
+
+def _shiprocket_phase(sr_status: str) -> Optional[str]:
+    """Map a Shiprocket status string into one of our order statuses (shipped/delivered)."""
+    if not sr_status:
+        return None
+    s = sr_status.lower()
+    if "deliver" in s:
+        return "delivered"
+    if any(k in s for k in ("shipped", "in transit", "in-transit", "out for delivery", "pickup", "picked up", "manifest", "dispatched")):
+        return "shipped"
+    return None
+
+
+async def _auto_transition_from_shiprocket(order: dict, old_sr: dict, new_sr: dict):
+    """If Shiprocket reports the parcel as shipped/delivered, bump the order status and
+    send the corresponding customer email — but only once per transition."""
+    current = order.get("status")
+    if current in ("cancelled", "delivered"):
+        return
+    new_phase = _shiprocket_phase(new_sr.get("sr_status", ""))
+    # Treat AWB just appearing as a 'shipped' signal even if status field is empty
+    awb_just_appeared = (not old_sr.get("awb_code")) and bool(new_sr.get("awb_code"))
+    if not new_phase and awb_just_appeared:
+        new_phase = "shipped"
+    if not new_phase:
+        return
+    # Don't downgrade: shipped -> delivered ok, but not delivered -> shipped
+    if current == "shipped" and new_phase == "shipped":
+        return
+    if current == "delivered":
+        return
+    # Apply status update
+    now_iso = datetime.now(timezone.utc).isoformat()
+    await db.orders.update_one(
+        {"id": order["id"]},
+        {"$set": {"status": new_phase, f"{new_phase}_at": now_iso}}
+    )
+    refreshed = await db.orders.find_one({"id": order["id"]}, {"_id": 0})
+    if refreshed:
+        asyncio.create_task(send_order_status_email(refreshed, new_phase))
+
+
+async def send_order_status_email(order: dict, new_status: str):
+    """Send a status-change email to the customer from the update@ alias."""
+    settings = await get_settings_doc()
+    if not settings.get("smtp_enabled"):
+        return False
+    addr = order.get("address") or {}
+    to_email = addr.get("email")
+    if not to_email:
+        return False
+    update_from = (settings.get("email_update_from")
+                   or settings.get("email_order_from")
+                   or settings.get("smtp_from"))
+    support_reply = (settings.get("email_support_from")
+                     or settings.get("email_support_to")
+                     or settings.get("support_email"))
+    try:
+        subj, html = order_status_email(order, new_status, base_url=FRONTEND_URL)
+        return await send_email(
+            settings, to_email, subj, html,
+            reply_to=support_reply, from_alias=update_from,
+            from_name="CarDost Updates",
+        )
+    except Exception as e:
+        logger.error(f"[email] status email failed: {e}")
+        return False
+
+
+async def check_and_send_low_stock_alert(product_ids: list):
+    """After stock decrement, check the given products and, if any have fallen to/below
+    the threshold, email the admin. Per-product debounce: don't re-alert within 24h."""
+    if not product_ids:
+        return
+    settings = await get_settings_doc()
+    if not settings.get("smtp_enabled") or not settings.get("low_stock_alerts_enabled", True):
+        return
+    threshold = int(settings.get("low_stock_threshold") or 5)
+    admin_to = (settings.get("email_admin_to")
+                or settings.get("smtp_admin_email")
+                or settings.get("support_email"))
+    if not admin_to:
+        return
+    now = datetime.now(timezone.utc)
+    flagged = []
+    for pid in set(product_ids):
+        p = await db.products.find_one({"id": pid}, {"_id": 0})
+        if not p:
+            continue
+        if int(p.get("stock", 0)) > threshold:
+            continue
+        last = p.get("low_stock_alerted_at")
+        if last:
+            try:
+                last_dt = datetime.fromisoformat(last.replace("Z", "+00:00"))
+                if (now - last_dt).total_seconds() < 24 * 3600:
+                    continue  # debounce
+            except Exception:
+                pass
+        flagged.append(p)
+        await db.products.update_one({"id": pid}, {"$set": {"low_stock_alerted_at": now.isoformat()}})
+    if not flagged:
+        return
+    try:
+        admin_from = (settings.get("email_admin_to")  # alias-as-sender is acceptable; falls back below
+                      or settings.get("smtp_from")
+                      or settings.get("smtp_username"))
+        subj, html = low_stock_email(flagged, base_url=FRONTEND_URL)
+        asyncio.create_task(send_email(
+            settings, admin_to, subj, html,
+            from_alias=admin_from, from_name="CarDost Inventory",
+        ))
+    except Exception as e:
+        logger.error(f"[email] low-stock alert failed: {e}")
 
 # ============ Coupons ============
 class CouponIn(BaseModel):
@@ -1352,6 +1477,8 @@ async def verify_payment(req: VerifyPaymentReq):
                 {"id": it["product_id"]},
                 {"$inc": {"stock": -it["quantity"]}}
             )
+        # Low-stock alert after decrement (non-blocking, debounced)
+        asyncio.create_task(check_and_send_low_stock_alert([it["product_id"] for it in order["items"]]))
 
     if MOCK_PAYMENT or order.get("mock"):
         if order.get("status") != "paid":
@@ -1440,6 +1567,7 @@ async def razorpay_webhook(request: Request, x_razorpay_signature: Optional[str]
     if event_type in ("payment.captured", "payment.authorized", "order.paid"):
         for it in order["items"]:
             await db.products.update_one({"id": it["product_id"]}, {"$inc": {"stock": -it["quantity"]}})
+        asyncio.create_task(check_and_send_low_stock_alert([it["product_id"] for it in order["items"]]))
         await db.orders.update_one(
             {"id": order["id"]},
             {"$set": {
@@ -1478,6 +1606,11 @@ async def update_order_status(oid: str, body: OrderStatusUpdate, _=Depends(get_a
             )
     update = {"status": body.status, f"{body.status}_at": datetime.now(timezone.utc).isoformat()}
     await db.orders.update_one({"id": oid}, {"$set": update})
+    # Fire customer email if the status actually changed (from update@cardost.in)
+    if order.get("status") != body.status:
+        refreshed = await db.orders.find_one({"id": oid}, {"_id": 0})
+        if refreshed:
+            asyncio.create_task(send_order_status_email(refreshed, body.status))
     return {"ok": True, "status": body.status}
 
 @api_router.get("/orders/{oid}")

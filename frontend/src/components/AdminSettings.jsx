@@ -293,6 +293,33 @@ export default function AdminSettings() {
             </div>
           </div>
         </div>
+        <div className="mt-5 pt-5 border-t border-stone-200">
+          <p className="text-xs font-bold text-stone-700 uppercase tracking-wider mb-1">⚠️ Low-Stock Alerts</p>
+          <p className="text-[10px] text-stone-500 mb-4">Email admin when product stock falls to/below the threshold (debounced 24h per product).</p>
+          <div className="grid sm:grid-cols-3 gap-4 items-end">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                data-testid="set-low-stock-enabled"
+                type="checkbox"
+                checked={s.low_stock_alerts_enabled !== false}
+                onChange={(e) => setS({ ...s, low_stock_alerts_enabled: e.target.checked })}
+                className="w-4 h-4"
+              />
+              <Label className="text-xs uppercase font-bold text-stone-700 cursor-pointer">Enable alerts</Label>
+            </label>
+            <div>
+              <Label className="text-[10px] uppercase font-bold text-stone-600">Threshold (units)</Label>
+              <Input
+                data-testid="set-low-stock-threshold"
+                type="number"
+                min="1"
+                value={s.low_stock_threshold ?? 5}
+                onChange={(e) => setS({ ...s, low_stock_threshold: parseInt(e.target.value || "5", 10) })}
+                className="border-stone-300 mt-1"
+              />
+            </div>
+          </div>
+        </div>
         <div className="flex flex-wrap items-center justify-between gap-3 mt-4 px-4 py-3 bg-stone-50 rounded-lg border border-stone-200">
           <label className="flex items-center gap-2 cursor-pointer">
             <input
