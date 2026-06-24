@@ -1,0 +1,28 @@
+# ─────────── CarDost Frontend (React CRA build) ───────────
+FROM node:20-alpine AS builder
+
+WORKDIR /srv/app
+
+# Install deps with frozen lockfile
+COPY frontend/package.json frontend/yarn.lock ./
+RUN corepack enable && yarn install --frozen-lockfile
+
+# Copy source & build. REACT_APP_BACKEND_URL is baked at build time.
+ARG REACT_APP_BACKEND_URL
+ENV REACT_APP_BACKEND_URL=${REACT_APP_BACKEND_URL}
+COPY frontend/ ./
+RUN yarn build
+
+# ─────────── Runtime: nginx static ───────────
+FROM nginx:1.27-alpine
+
+# Built static assets
+COPY --from=builder /srv/app/build /usr/share/nginx/html
+
+# Site config (proxy /api → backend, gzip, security headers)
+COPY deploy/nginx/cardost.frontend.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD wget -qO- http://localhost/ > /dev/null || exit 1

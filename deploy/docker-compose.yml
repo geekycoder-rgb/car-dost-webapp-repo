@@ -1,0 +1,78 @@
+# ─────────────────────────────────────────────────────────────
+# CarDost — self-hosted Docker Compose stack
+#   • MongoDB 7   (data persisted in named volume)
+#   • Backend     (FastAPI / uvicorn on :8001 — internal only)
+#   • Frontend    (nginx-served React build on :80 — internal only)
+#
+# Public traffic enters via the HOST nginx (deploy/nginx/cardost.conf)
+# which terminates SSL and proxies to the frontend container on :8080.
+# ─────────────────────────────────────────────────────────────
+version: "3.9"
+
+name: cardost
+
+services:
+  mongo:
+    image: mongo:7
+    container_name: cardost-mongo
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:?set in .env}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?set in .env}
+    volumes:
+      - mongo_data:/data/db
+      - mongo_config:/data/configdb
+    networks:
+      - cardost_net
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ ping: 1 }).ok"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  backend:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.backend
+    image: cardost/backend:latest
+    container_name: cardost-backend
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+    env_file:
+      - ./.env.backend
+    environment:
+      # Override MONGO_URL so it points at the mongo service inside the network
+      MONGO_URL: mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongo:27017/${DB_NAME}?authSource=admin
+    networks:
+      - cardost_net
+    expose:
+      - "8001"
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.frontend
+      args:
+        # IMPORTANT: REACT_APP_BACKEND_URL is baked into the JS bundle at build time.
+        # Set it to your public HTTPS domain (e.g. https://cardost.in).
+        REACT_APP_BACKEND_URL: ${REACT_APP_BACKEND_URL:?set in .env}
+    image: cardost/frontend:latest
+    container_name: cardost-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    networks:
+      - cardost_net
+    ports:
+      - "127.0.0.1:8080:80"   # bind to loopback only — host nginx is the public face
+
+volumes:
+  mongo_data:
+  mongo_config:
+
+networks:
+  cardost_net:
+    driver: bridge
