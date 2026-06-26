@@ -72,9 +72,15 @@ function writeMinimalFallback() {
     if (!/^<\?xml/.test(xml.trim()) || !xml.includes("<urlset")) {
       throw new Error("Backend response is not a valid sitemap XML");
     }
-    // Rewrite any preview-domain locs to the production SITE so the file Google
-    // crawls always points at the canonical host, regardless of where it's built.
-    const rewritten = xml.replace(/<loc>https?:\/\/[^\/]+/g, `<loc>${SITE}`);
+    // Rewrite every <loc> to the canonical SITE host and ensure a trailing
+    // slash for bare-host URLs (so home is `https://cardost.in/`, not
+    // `https://cardost.in`). Using a callback avoids regex-escaping bugs
+    // and prevents the earlier `[^/]+` greediness that consumed `<` of `</loc>`.
+    const rewritten = xml.replace(/<loc>([^<]*)<\/loc>/g, (_, raw) => {
+      let url = raw.replace(/^https?:\/\/[^\/]+/, SITE);
+      if (url === SITE) url = SITE + "/";
+      return `<loc>${url}</loc>`;
+    });
     fs.writeFileSync(OUT_PATH, rewritten, "utf8");
     const urlCount = (rewritten.match(/<url>/g) || []).length;
     console.log(`[sitemap] wrote ${urlCount} URLs to public/sitemap.xml (source: ${SOURCE_URL})`);

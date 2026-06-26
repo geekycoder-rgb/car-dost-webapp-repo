@@ -1,0 +1,35 @@
+{
+  "summary": "Verified the surgical regex fix in /app/frontend/scripts/generate-sitemap.js. Confirmed /app/frontend/public/sitemap.xml is well-formed XML (35 URLs), preview env serves it correctly to both browser & Googlebot UA, robots.txt is correct, generator handles missing-trailing-slash input AND backend-down fallback correctly, and backend pytest regression is still 107 passed + 2 skipped + 0 failed.",
+  "verification_results": {
+    "xml_well_formed": "PASS — python ET.parse() succeeded (would have hard-failed on previous /loc> corruption)",
+    "first_url_correct": "PASS — first <loc> is exactly 'https://cardost.in/' with proper </loc> closing tag",
+    "all_35_locs_canonical": "PASS — all 35 locs start with 'https://cardost.in/'; no host leaks; 35 <loc> opens / 35 </loc> closes (balanced)",
+    "generator_run_against_preview_backend": "PASS — exit 0, wrote 35 URLs, parses cleanly, mtime updated, first <loc>=https://cardost.in/",
+    "regression_input_simulation": "PASS — node test harness fed `<loc>https://preview.example</loc>` (no trailing slash) and `<loc>https://preview.example/</loc>` (with slash) and `<loc>https://preview.example/shop</loc>`. All three rewrote to `https://cardost.in/`, `https://cardost.in/`, `https://cardost.in/shop` with intact </loc> tags. No /loc> artefact. 3 opens / 3 closes balanced.",
+    "preview_smoke_browser": "PASS — GET https://stereo-connect-2.preview.emergentagent.com/sitemap.xml → HTTP 200, Content-Type=application/xml, valid XML, 35 URLs, first=https://cardost.in/",
+    "preview_smoke_googlebot": "PASS — same URL with Googlebot UA → HTTP 200, identical body (diff = no difference)",
+    "robots_txt_regression": "PASS — robots.txt contains 'Sitemap: https://cardost.in/sitemap.xml' and Disallow rules for /api/, /admin, /admin/, /checkout, /cart, /my-orders, /order/. No /api/seo/ reference.",
+    "fallback_unreachable_backend": "PASS — REACT_APP_BACKEND_URL=https://does-not-exist-12345.invalid → exit 0, mtime UNCHANGED, existing public/sitemap.xml preserved, stderr logged 'keeping existing public/sitemap.xml'",
+    "backend_pytest_regression": "PASS — 107 passed, 2 skipped, 0 failed (baseline preserved, no backend code touched)"
+  },
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/test_reports/pytest/iteration_10.xml",
+    "/app/backend/tests/"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "The callback-based regex in generate-sitemap.js (lines 79-83) is now safe. The capture group [^<]* correctly stops at '<', and the host-rewrite sub-regex /^https?:\\/\\/[^\\/]+/ operates ONLY on the captured loc-text (which contains no angle brackets), so the earlier bleed into </loc> is structurally impossible.",
+    "Minor: pytest collection requires REACT_APP_BACKEND_URL env var to be set at shell level (test_cardost_universal.py uses os.environ[...] without a default — by design per env-var rules, so this is correct behavior, just noting it for future runners).",
+    "robots.txt regression check confirms Sitemap directive still points to https://cardost.in/sitemap.xml — consistent with the fix scope."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (107/107 + 2 skipped)", "frontend": "N/A (skipped per request)"},
+  "test_credentials": "Not needed for this regex fix verification — admin login not exercised.",
+  "seed_data_creation": "None.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Sitemap regex fix is verified. The previous bug (greedy /[^\\/]+/ that consumed '<' of </loc>) is structurally fixed by switching to a callback-based replacer that operates only on the [^<]* captured content. Preview env serves a valid 35-URL sitemap. If you need to re-verify after a future regen, run: python3 -c 'import xml.etree.ElementTree as ET; ET.parse(\"/app/frontend/public/sitemap.xml\"); print(\"OK\")' and curl the preview URL. Production at https://cardost.in still has the broken file until user redeploys — by design, not in scope here.",
+  "rca of the issue": "RCA: the original regex `xml.replace(/<loc>https?:\\/\\/[^\\/]+/g, '<loc>'+SITE)` had a character class [^/]+ that matched any char except '/'. When source XML was `<loc>https://host</loc>` (no trailing slash on bare host), the regex greedily consumed `https://host<` (the '<' of </loc> is not '/'), replacing it with `https://cardost.in` and leaving the malformed remainder `/loc>`. Mitigation: replaced with a callback regex /<loc>([^<]*)<\\/loc>/g that captures the entire loc content (the [^<] class stops at '<', so it cannot consume the closing tag), then rewrites the host portion of the captured text and re-emits a well-formed <loc>...</loc> tag. Also normalizes bare-host URLs to include trailing slash. Verified via Python ET.parse() and via node test harness against the exact regression input — both pass."
+}
