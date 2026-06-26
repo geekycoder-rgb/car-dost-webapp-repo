@@ -1916,6 +1916,114 @@ async def unread_messages_count(_=Depends(get_admin)):
     n = await db.contacts.count_documents({"is_read": {"$ne": True}})
     return {"count": n}
 
+
+# ============ SEO — dynamic sitemap & robots.txt ============
+# Google indexes whatever URL you point to in robots.txt or submit in Search Console,
+# so it doesn't have to live at the literal /sitemap.xml path. We publish at
+# /api/seo/sitemap.xml and reference it from /robots.txt (static, in frontend/public/).
+
+_STATIC_SITEMAP_PAGES = [
+    # (path, priority, changefreq)
+    ("",            "1.0", "daily"),
+    ("shop",        "0.9", "daily"),
+    ("track-order", "0.6", "monthly"),
+    ("contact",     "0.6", "monthly"),
+    ("about",       "0.5", "monthly"),
+    ("faq",         "0.5", "monthly"),
+    ("reviews",     "0.5", "weekly"),
+]
+
+def _xml_escape(s: str) -> str:
+    return (s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;").replace("'", "&apos;")
+
+def _iso_date(value) -> str:
+    """Extract YYYY-MM-DD from a stored datetime/ISO string."""
+    if isinstance(value, str) and len(value) >= 10:
+        return value[:10]
+    if isinstance(value, datetime):
+        return value.strftime("%Y-%m-%d")
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+@api_router.get("/seo/sitemap.xml")
+async def seo_sitemap():
+    base = (FRONTEND_URL or "").rstrip("/") or "https://cardost.in"
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    products = await db.products.find(
+        {"is_published": {"$ne": False}},
+        {"_id": 0, "id": 1, "updated_at": 1, "created_at": 1},
+    ).to_list(20000)
+    categories = await db.categories.find(
+        {"is_active": {"$ne": False}},
+        {"_id": 0, "slug": 1},
+    ).to_list(2000)
+
+    urls = []
+    for path, prio, freq in _STATIC_SITEMAP_PAGES:
+        loc = f"{base}/{path}".rstrip("/")
+        urls.append(
+            f"  <url><loc>{_xml_escape(loc)}</loc>"
+            f"<lastmod>{today}</lastmod>"
+            f"<changefreq>{freq}</changefreq>"
+            f"<priority>{prio}</priority></url>"
+        )
+
+    for cat in categories:
+        slug = cat.get("slug")
+        if not slug:
+            continue
+        loc = f"{base}/shop?category={slug}"
+        urls.append(
+            f"  <url><loc>{_xml_escape(loc)}</loc>"
+            f"<lastmod>{today}</lastmod>"
+            f"<changefreq>weekly</changefreq>"
+            f"<priority>0.7</priority></url>"
+        )
+
+    for p in products:
+        pid = p.get("id")
+        if not pid:
+            continue
+        lastmod = _iso_date(p.get("updated_at") or p.get("created_at"))
+        loc = f"{base}/product/{pid}"
+        urls.append(
+            f"  <url><loc>{_xml_escape(loc)}</loc>"
+            f"<lastmod>{lastmod}</lastmod>"
+            f"<changefreq>weekly</changefreq>"
+            f"<priority>0.8</priority></url>"
+        )
+
+    xml = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        + "\n".join(urls)
+        + "\n</urlset>\n"
+    )
+    return Response(
+        content=xml,
+        media_type="application/xml; charset=utf-8",
+        headers={"Cache-Control": "public, max-age=3600"},  # 1h CDN/browser cache
+    )
+
+@api_router.get("/seo/robots.txt")
+async def seo_robots_txt():
+    base = (FRONTEND_URL or "").rstrip("/") or "https://cardost.in"
+    body = (
+        "User-agent: *\n"
+        "Allow: /\n"
+        "Disallow: /admin\n"
+        "Disallow: /admin/\n"
+        "Disallow: /checkout\n"
+        "Disallow: /cart\n"
+        "Disallow: /my-orders\n"
+        "Disallow: /order/\n"
+        "Disallow: /api/\n"
+        "\n"
+        f"Sitemap: {base}/api/seo/sitemap.xml\n"
+    )
+    return Response(content=body, media_type="text/plain; charset=utf-8")
+
+
 # ============ Seed ============
 SEED_PRODUCTS = [
     # Android Stereos
