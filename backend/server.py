@@ -1,9 +1,26 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, UploadFile, File, Response, Header, Query
+from fastapi import (
+    FastAPI,
+    APIRouter,
+    HTTPException,
+    Depends,
+    UploadFile,
+    File,
+    Response,
+    Header,
+    Request,
+)
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
-from email_service import send_email, order_confirmation_email, admin_order_email, admin_contact_email, order_status_email, low_stock_email
+from email_service import (
+    send_email,
+    order_confirmation_email,
+    admin_order_email,
+    admin_contact_email,
+    order_status_email,
+    low_stock_email,
+)
 
 import os
 import re
@@ -13,38 +30,47 @@ import uuid
 import hmac
 import hashlib
 import json
+import csv
+import io
 import jwt
 import bcrypt
-import razorpay
+import razorpay  # type: ignore[import]
 import requests
+import httpx
 from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
-from typing import List, Optional
+from typing import Any, List, Optional, TypedDict, Union
 from datetime import datetime, timezone, timedelta
 
 ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
+load_dotenv(ROOT_DIR / ".env")
 
 FRONTEND_URL = os.environ["FRONTEND_URL"]
 
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+mongo_url = os.environ["MONGO_URL"]
+client: AsyncIOMotorClient = AsyncIOMotorClient(mongo_url)
+db = client[os.environ["DB_NAME"]]
 
-JWT_SECRET = os.environ['JWT_SECRET']
-ADMIN_EMAIL = os.environ['ADMIN_EMAIL']
-ADMIN_PASSWORD = os.environ['ADMIN_PASSWORD']
-RAZORPAY_KEY_ID = os.environ['RAZORPAY_KEY_ID']
-RAZORPAY_KEY_SECRET = os.environ['RAZORPAY_KEY_SECRET']
-MOCK_PAYMENT = os.environ.get('MOCK_PAYMENT', 'true').lower() == 'true'
-RAZORPAY_WEBHOOK_SECRET = os.environ.get('RAZORPAY_WEBHOOK_SECRET', '')
-EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
-STORAGE_URL = os.environ.get("STORAGE_URL", "https://integrations.emergentagent.com/objstore/api/v1/storage")
+JWT_SECRET = os.environ["JWT_SECRET"]
+ADMIN_EMAIL = os.environ["ADMIN_EMAIL"]
+ADMIN_PASSWORD = os.environ["ADMIN_PASSWORD"]
+RAZORPAY_KEY_ID = os.environ["RAZORPAY_KEY_ID"]
+RAZORPAY_KEY_SECRET = os.environ["RAZORPAY_KEY_SECRET"]
+MOCK_PAYMENT = os.environ.get("MOCK_PAYMENT", "true").lower() == "true"
+RAZORPAY_WEBHOOK_SECRET = os.environ.get("RAZORPAY_WEBHOOK_SECRET", "")
+EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY", "")
+STORAGE_URL = os.environ.get(
+    "STORAGE_URL", "https://integrations.emergentagent.com/objstore/api/v1/storage"
+)
 APP_NAME = "cardost"
 storage_key: Optional[str] = None
 
 try:
-    rzp_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET)) if not MOCK_PAYMENT else None
+    rzp_client = (
+        razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
+        if not MOCK_PAYMENT
+        else None
+    )
 except Exception:
     rzp_client = None
 
@@ -53,10 +79,10 @@ api_router = APIRouter(prefix="/api")
 security = HTTPBearer(auto_error=False)
 
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
 
 # ============ Models ============
 class SignupReq(BaseModel):
@@ -65,9 +91,11 @@ class SignupReq(BaseModel):
     password: str
     phone: Optional[str] = None
 
+
 class LoginReq(BaseModel):
     email: EmailStr
     password: str
+
 
 class ProductIn(BaseModel):
     name: str
@@ -99,10 +127,14 @@ class ProductIn(BaseModel):
     meta_description: Optional[str] = ""
     seo_slug: Optional[str] = ""
 
+
 class Product(ProductIn):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     review_count: int = 0
-    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    created_at: str = Field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
+
 
 class ReviewIn(BaseModel):
     name: str
@@ -110,17 +142,24 @@ class ReviewIn(BaseModel):
     title: str
     comment: str
 
+
 class Review(ReviewIn):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     product_id: str
     is_approved: bool = True
-    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    created_at: str = Field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
+
 
 class CartItem(BaseModel):
     product_id: str
     quantity: int
     vehicle_variant_id: Optional[str] = None
-    vehicle_label: Optional[str] = ""  # denormalized "Hyundai Creta · 2nd Gen 2020–2024"
+    vehicle_label: Optional[str] = (
+        ""  # denormalized "Hyundai Creta · 2nd Gen 2020–2024"
+    )
+
 
 class Address(BaseModel):
     full_name: str
@@ -132,11 +171,13 @@ class Address(BaseModel):
     state: str
     pincode: str
 
+
 class CreateOrderReq(BaseModel):
     items: List[CartItem]
     address: Address
     is_guest: bool = True
     coupon_code: Optional[str] = None
+
 
 class VerifyPaymentReq(BaseModel):
     order_id: str
@@ -144,22 +185,28 @@ class VerifyPaymentReq(BaseModel):
     razorpay_payment_id: Optional[str] = None
     razorpay_signature: Optional[str] = None
 
+
 # ============ Helpers ============
 def hash_pw(pw: str) -> str:
     return bcrypt.hashpw(pw.encode(), bcrypt.gensalt()).decode()
 
+
 def check_pw(pw: str, hashed: str) -> bool:
     return bcrypt.checkpw(pw.encode(), hashed.encode())
+
 
 def make_token(uid: str, role: str = "user") -> str:
     payload = {
         "uid": uid,
         "role": role,
-        "exp": datetime.now(timezone.utc) + timedelta(days=30)
+        "exp": datetime.now(timezone.utc) + timedelta(days=30),
     }
     return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
 
-async def get_current_user(creds: Optional[HTTPAuthorizationCredentials] = Depends(security)):
+
+async def get_current_user(
+    creds: Optional[HTTPAuthorizationCredentials] = Depends(security),
+):
     if not creds:
         raise HTTPException(401, "Not authenticated")
     payload: dict = {}
@@ -169,15 +216,18 @@ async def get_current_user(creds: Optional[HTTPAuthorizationCredentials] = Depen
         raise HTTPException(401, "Invalid token")
     return payload
 
+
 async def get_admin(user=Depends(get_current_user)):
     if user.get("role") != "admin":
         raise HTTPException(403, "Admin only")
     return user
 
+
 def clean(doc):
     if doc and "_id" in doc:
         doc.pop("_id")
     return doc
+
 
 # ============ Auth ============
 @api_router.post("/auth/signup")
@@ -193,11 +243,15 @@ async def signup(req: SignupReq):
         "phone": req.phone or "",
         "password": hash_pw(req.password),
         "role": "user",
-        "created_at": datetime.now(timezone.utc).isoformat()
+        "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.users.insert_one(user)
     token = make_token(uid, "user")
-    return {"token": token, "user": {"id": uid, "name": req.name, "email": req.email, "role": "user"}}
+    return {
+        "token": token,
+        "user": {"id": uid, "name": req.name, "email": req.email, "role": "user"},
+    }
+
 
 @api_router.post("/auth/login")
 async def login(req: LoginReq):
@@ -205,7 +259,16 @@ async def login(req: LoginReq):
     if not user or not check_pw(req.password, user["password"]):
         raise HTTPException(401, "Invalid credentials")
     token = make_token(user["id"], user.get("role", "user"))
-    return {"token": token, "user": {"id": user["id"], "name": user["name"], "email": user["email"], "role": user.get("role", "user")}}
+    return {
+        "token": token,
+        "user": {
+            "id": user["id"],
+            "name": user["name"],
+            "email": user["email"],
+            "role": user.get("role", "user"),
+        },
+    }
+
 
 @api_router.get("/auth/me")
 async def me(user=Depends(get_current_user)):
@@ -213,6 +276,7 @@ async def me(user=Depends(get_current_user)):
     if not u:
         raise HTTPException(404, "Not found")
     return u
+
 
 # ============ Settings (Admin-controlled config) ============
 DEFAULT_SETTINGS = {
@@ -233,23 +297,24 @@ DEFAULT_SETTINGS = {
     "smtp_host": "smtpout.secureserver.net",
     "smtp_port": 587,
     "smtp_use_ssl": False,
-    "smtp_username": "",          # auth mailbox (e.g. customercare@cardost.in)
+    "smtp_username": "",  # auth mailbox (e.g. customercare@cardost.in)
     "smtp_password": "",
-    "smtp_from": "",              # legacy default sender (still used as fallback)
-    "smtp_admin_email": "",       # legacy admin recipient (still used as fallback)
+    "smtp_from": "",  # legacy default sender (still used as fallback)
+    "smtp_admin_email": "",  # legacy admin recipient (still used as fallback)
     # Purpose-specific sender aliases
-    "email_order_from": "",       # e.g. order@cardost.in    — order confirmation/cancel/delivery
-    "email_update_from": "",      # e.g. update@cardost.in   — order status updates
-    "email_info_from": "",        # e.g. info@cardost.in     — promotional/newsletter
-    "email_support_from": "",     # e.g. support@cardost.in  — replies to enquiries
+    "email_order_from": "",  # e.g. order@cardost.in    — order confirmation/cancel/delivery
+    "email_update_from": "",  # e.g. update@cardost.in   — order status updates
+    "email_info_from": "",  # e.g. info@cardost.in     — promotional/newsletter
+    "email_support_from": "",  # e.g. support@cardost.in  — replies to enquiries
     # Purpose-specific admin inboxes (where alerts land)
-    "email_admin_to": "",         # e.g. admin@cardost.in    — new-order alerts
-    "email_sales_to": "",         # e.g. sales@cardost.in    — contact form enquiries
-    "email_support_to": "",       # e.g. support@cardost.in  — generic support
+    "email_admin_to": "",  # e.g. admin@cardost.in    — new-order alerts
+    "email_sales_to": "",  # e.g. sales@cardost.in    — contact form enquiries
+    "email_support_to": "",  # e.g. support@cardost.in  — generic support
     # Low-stock alert config
     "low_stock_threshold": 5,
     "low_stock_alerts_enabled": True,
 }
+
 
 async def get_settings_doc():
     s = await db.settings.find_one({"id": "global"}, {"_id": 0})
@@ -263,7 +328,12 @@ async def get_settings_doc():
     # Auto-migrate legacy / wrong SMTP hosts to the working GoDaddy gateway.
     # Titan's smtp.titan.email is blocked by GoDaddy upstream for this domain,
     # so any historical setting must be corrected. Username/password are preserved.
-    legacy_smtp_hosts = {"smtp.titan.email", "smtp.titan.mail", "smtp.titan.in", "smtp.titanemail.com"}
+    legacy_smtp_hosts = {
+        "smtp.titan.email",
+        "smtp.titan.mail",
+        "smtp.titan.in",
+        "smtp.titanemail.com",
+    }
     if (s.get("smtp_host") or "").strip().lower() in legacy_smtp_hosts:
         new_host = "smtpout.secureserver.net"
         await db.settings.update_one(
@@ -273,17 +343,26 @@ async def get_settings_doc():
         s["smtp_host"] = new_host
         s["smtp_port"] = 587
         s["smtp_use_ssl"] = False
-        logger.info(f"[settings] auto-migrated legacy SMTP host → {new_host}:587 (username/password preserved)")
+        logger.info(
+            f"[settings] auto-migrated legacy SMTP host → {new_host}:587 (username/password preserved)"
+        )
     return s
+
 
 def get_active_razorpay_creds(settings: dict):
     kid = settings.get("razorpay_key_id") or RAZORPAY_KEY_ID
     ksec = settings.get("razorpay_key_secret") or RAZORPAY_KEY_SECRET
-    mock = settings.get("mock_payment", False) if settings.get("razorpay_key_id") else MOCK_PAYMENT
+    mock = (
+        settings.get("mock_payment", False)
+        if settings.get("razorpay_key_id")
+        else MOCK_PAYMENT
+    )
     return kid, ksec, mock
+
 
 def get_active_webhook_secret(settings: dict):
     return settings.get("razorpay_webhook_secret") or RAZORPAY_WEBHOOK_SECRET
+
 
 class SettingsUpdate(BaseModel):
     razorpay_key_id: Optional[str] = None
@@ -316,11 +395,15 @@ class SettingsUpdate(BaseModel):
     low_stock_threshold: Optional[int] = None
     low_stock_alerts_enabled: Optional[bool] = None
 
+
 @api_router.get("/admin/settings")
 async def admin_get_settings(_=Depends(get_admin)):
     s = await get_settings_doc()
+
     # Mask secrets in response
-    def mask(v): return ("•" * 6 + v[-4:]) if v and len(v) > 6 else ""
+    def mask(v):
+        return ("•" * 6 + v[-4:]) if v and len(v) > 6 else ""
+
     s["razorpay_key_secret_masked"] = mask(s.get("razorpay_key_secret", ""))
     s["razorpay_webhook_secret_masked"] = mask(s.get("razorpay_webhook_secret", ""))
     s["shiprocket_password_masked"] = mask(s.get("shiprocket_password", ""))
@@ -331,12 +414,17 @@ async def admin_get_settings(_=Depends(get_admin)):
     s.pop("smtp_password", None)
     return s
 
+
 # Sensitive fields that must NEVER be overwritten with an empty string.
 # Saving the settings form with these fields blank should be a no-op (so a partial
 # save doesn't accidentally wipe stored secrets).
 PROTECTED_SECRET_FIELDS = {
-    "smtp_password", "razorpay_key_secret", "razorpay_webhook_secret", "shiprocket_password",
+    "smtp_password",
+    "razorpay_key_secret",
+    "razorpay_webhook_secret",
+    "shiprocket_password",
 }
+
 
 @api_router.put("/admin/settings")
 async def admin_update_settings(body: SettingsUpdate, _=Depends(get_admin)):
@@ -355,25 +443,32 @@ async def admin_update_settings(body: SettingsUpdate, _=Depends(get_admin)):
         await db.settings.update_one({"id": "global"}, {"$set": update}, upsert=True)
     return {"ok": True}
 
+
 class TestEmailReq(BaseModel):
     to: str
+
 
 @api_router.post("/admin/test-email")
 async def admin_test_email(req: TestEmailReq, _=Depends(get_admin)):
     s = await get_settings_doc()
     if not s.get("smtp_enabled"):
-        raise HTTPException(400, "SMTP is not enabled. Toggle it on and save settings first.")
+        raise HTTPException(
+            400, "SMTP is not enabled. Toggle it on and save settings first."
+        )
     if not s.get("smtp_username") or not s.get("smtp_password"):
         raise HTTPException(400, "SMTP username/password missing")
     html = f"""<!doctype html><html><body style="font-family:Arial">
       <h2>✅ SMTP test successful</h2>
-      <p>Your CarDost backend is correctly configured to send transactional emails via <b>{s.get('smtp_host')}:{s.get('smtp_port')}</b>.</p>
-      <p style="color:#78716c">Sent from: {s.get('smtp_from') or s.get('smtp_username')}</p>
+      <p>Your CarDost backend is correctly configured to send transactional emails via <b>{s.get("smtp_host")}:{s.get("smtp_port")}</b>.</p>
+      <p style="color:#78716c">Sent from: {s.get("smtp_from") or s.get("smtp_username")}</p>
     </body></html>"""
     ok = await send_email(s, req.to, "✅ CarDost SMTP Test", html)
     if not ok:
-        raise HTTPException(500, "Send failed — check backend logs and SMTP credentials")
+        raise HTTPException(
+            500, "Send failed — check backend logs and SMTP credentials"
+        )
     return {"ok": True}
+
 
 @api_router.get("/settings/public")
 async def public_settings():
@@ -384,32 +479,51 @@ async def public_settings():
         "support_phone": s.get("support_phone"),
     }
 
+
 # ============ Shiprocket Integration ============
 SHIPROCKET_BASE = "https://apiv2.shiprocket.in/v1/external"
-_shiprocket_token = {"token": None, "expires_at": None}
+class _ShiprocketToken(TypedDict, total=False):
+    token: Optional[str]
+    expires_at: Optional[datetime]
+
+
+_shiprocket_token: _ShiprocketToken = {"token": None, "expires_at": None}
+
 
 async def shiprocket_login(email: str, password: str) -> Optional[str]:
     if not email or not password:
         return None
-    if _shiprocket_token["token"] and _shiprocket_token["expires_at"] and _shiprocket_token["expires_at"] > datetime.now(timezone.utc):
-        return _shiprocket_token["token"]
+    expires_at = _shiprocket_token["expires_at"]
+    token = _shiprocket_token["token"]
+    if token and isinstance(expires_at, datetime):
+        if expires_at > datetime.now(timezone.utc):
+            return token
     try:
-        r = requests.post(f"{SHIPROCKET_BASE}/auth/login", json={"email": email, "password": password}, timeout=20)
+        async with httpx.AsyncClient(timeout=20) as client:
+            r = await client.post(
+                f"{SHIPROCKET_BASE}/auth/login",
+                json={"email": email, "password": password},
+            )
         r.raise_for_status()
         token = r.json().get("token")
         if token:
             _shiprocket_token["token"] = token
-            _shiprocket_token["expires_at"] = datetime.now(timezone.utc) + timedelta(days=8)
+            _shiprocket_token["expires_at"] = datetime.now(timezone.utc) + timedelta(
+                days=8
+            )
         return token
     except Exception as e:
         logger.error(f"Shiprocket login failed: {e}")
         return None
 
+
 async def shiprocket_create_order(order: dict) -> dict:
     settings = await get_settings_doc()
     if not settings.get("shiprocket_enabled"):
         return {"skipped": True, "reason": "shiprocket disabled"}
-    token = await shiprocket_login(settings.get("shiprocket_email", ""), settings.get("shiprocket_password", ""))
+    token = await shiprocket_login(
+        settings.get("shiprocket_email", ""), settings.get("shiprocket_password", "")
+    )
     if not token:
         return {"error": "auth failed"}
     addr = order["address"]
@@ -431,23 +545,37 @@ async def shiprocket_create_order(order: dict) -> dict:
         "billing_email": addr["email"],
         "billing_phone": addr["phone"],
         "shipping_is_billing": True,
-        "order_items": [{
-            "name": i["name"][:60],
-            "sku": i["product_id"][:30],
-            "units": i["quantity"],
-            "selling_price": i["price"],
-            "discount": "",
-            "tax": "",
-            "hsn": 851829
-        } for i in items],
+        "order_items": [
+            {
+                "name": i["name"][:60],
+                "sku": i["product_id"][:30],
+                "units": i["quantity"],
+                "selling_price": i["price"],
+                "discount": "",
+                "tax": "",
+                "hsn": 851829,
+            }
+            for i in items
+        ],
         "payment_method": "Prepaid",
         "sub_total": order["total"],
-        "length": 30, "breadth": 20, "height": 10, "weight": total_weight,
+        "length": 30,
+        "breadth": 20,
+        "height": 10,
+        "weight": total_weight,
     }
     try:
-        r = requests.post(f"{SHIPROCKET_BASE}/orders/create/adhoc",
-                          json=payload, headers={"Authorization": f"Bearer {token}"}, timeout=30)
-        data = r.json() if r.headers.get("content-type", "").startswith("application/json") else {"raw": r.text}
+        async with httpx.AsyncClient(timeout=30) as client:
+            r = await client.post(
+                f"{SHIPROCKET_BASE}/orders/create/adhoc",
+                json=payload,
+                headers={"Authorization": f"Bearer {token}"},
+            )
+        data = (
+            r.json()
+            if r.headers.get("content-type", "").startswith("application/json")
+            else {"raw": r.text}
+        )
         if r.status_code >= 400:
             logger.error(f"Shiprocket order create error: {data}")
             return {"error": data}
@@ -456,16 +584,23 @@ async def shiprocket_create_order(order: dict) -> dict:
         logger.error(f"Shiprocket request failed: {e}")
         return {"error": str(e)}
 
+
 async def trigger_shiprocket(order_doc: dict):
     """Fire-and-forget shiprocket order creation; updates order doc with shiprocket response."""
     try:
         result = await shiprocket_create_order(order_doc)
         await db.orders.update_one(
             {"id": order_doc["id"]},
-            {"$set": {"shiprocket": result, "shiprocket_at": datetime.now(timezone.utc).isoformat()}}
+            {
+                "$set": {
+                    "shiprocket": result,
+                    "shiprocket_at": datetime.now(timezone.utc).isoformat(),
+                }
+            },
         )
     except Exception as e:
         logger.error(f"shiprocket trigger failed: {e}")
+
 
 async def shiprocket_refresh_tracking(order: dict) -> dict:
     """Poll Shiprocket for latest AWB, courier and tracking URL for the order."""
@@ -477,48 +612,68 @@ async def shiprocket_refresh_tracking(order: dict) -> dict:
     awb = sr.get("awb_code") or ""
     if not shipment_id and not awb:
         return {"skipped": True, "reason": "no shipment id or awb yet"}
-    token = await shiprocket_login(settings.get("shiprocket_email", ""), settings.get("shiprocket_password", ""))
+    token = await shiprocket_login(
+        settings.get("shiprocket_email", ""), settings.get("shiprocket_password", "")
+    )
     if not token:
         return {"error": "shiprocket auth failed"}
     headers = {"Authorization": f"Bearer {token}"}
     update = {}
     try:
-        # 1) Fetch order details to discover/refresh AWB & courier
-        if shipment_id:
-            r = requests.get(f"{SHIPROCKET_BASE}/orders/show/{shipment_id}", headers=headers, timeout=15)
-            if r.status_code == 200:
-                data = r.json().get("data", {})
-                if data.get("awb_code") or data.get("awb"):
-                    update["awb_code"] = data.get("awb_code") or data.get("awb")
-                if data.get("courier_name"):
-                    update["courier_name"] = data.get("courier_name")
-                if data.get("status"):
-                    update["sr_status"] = data.get("status")
-                if data.get("shipments", [{}])[0].get("awb"):
-                    update["awb_code"] = data["shipments"][0]["awb"]
-        # 2) Fetch live tracking for the AWB if available
-        awb = update.get("awb_code") or awb
-        if awb:
-            r2 = requests.get(f"{SHIPROCKET_BASE}/courier/track/awb/{awb}", headers=headers, timeout=15)
-            if r2.status_code == 200:
-                d2 = r2.json().get("tracking_data", {})
-                update["tracking_url"] = d2.get("track_url") or f"https://shiprocket.co/tracking/{awb}"
-                shipment_track = d2.get("shipment_track", [{}])
-                if shipment_track and isinstance(shipment_track, list):
-                    st = shipment_track[0]
-                    update["courier_name"] = st.get("courier_name", update.get("courier_name", ""))
-                    update["sr_status"] = st.get("current_status", update.get("sr_status", ""))
-                    update["edd"] = st.get("edd", "")
-                # Latest scan activity
-                acts = d2.get("shipment_track_activities", [])
-                if acts:
-                    update["latest_activity"] = acts[0].get("activity", "")
-                    update["latest_activity_date"] = acts[0].get("date", "")
+        async with httpx.AsyncClient(timeout=15) as client:
+            # 1) Fetch order details to discover/refresh AWB & courier
+            if shipment_id:
+                r = await client.get(
+                    f"{SHIPROCKET_BASE}/orders/show/{shipment_id}", headers=headers
+                )
+                if r.status_code == 200:
+                    data = r.json().get("data", {})
+                    if data.get("awb_code") or data.get("awb"):
+                        update["awb_code"] = data.get("awb_code") or data.get("awb")
+                    if data.get("courier_name"):
+                        update["courier_name"] = data.get("courier_name")
+                    if data.get("status"):
+                        update["sr_status"] = data.get("status")
+                    if data.get("shipments", [{}])[0].get("awb"):
+                        update["awb_code"] = data["shipments"][0]["awb"]
+            # 2) Fetch live tracking for the AWB if available
+            awb = update.get("awb_code") or awb
+            if awb:
+                r2 = await client.get(
+                    f"{SHIPROCKET_BASE}/courier/track/awb/{awb}", headers=headers
+                )
+                if r2.status_code == 200:
+                    d2 = r2.json().get("tracking_data", {})
+                    update["tracking_url"] = (
+                        d2.get("track_url") or f"https://shiprocket.co/tracking/{awb}"
+                    )
+                    shipment_track = d2.get("shipment_track", [{}])
+                    if shipment_track and isinstance(shipment_track, list):
+                        st = shipment_track[0]
+                        update["courier_name"] = st.get(
+                            "courier_name", update.get("courier_name", "")
+                        )
+                        update["sr_status"] = st.get(
+                            "current_status", update.get("sr_status", "")
+                        )
+                        update["edd"] = st.get("edd", "")
+                    # Latest scan activity
+                    acts = d2.get("shipment_track_activities", [])
+                    if acts:
+                        update["latest_activity"] = acts[0].get("activity", "")
+                        update["latest_activity_date"] = acts[0].get("date", "")
         if update:
             new_sr = {**sr, **update}
             await db.orders.update_one(
                 {"id": order["id"]},
-                {"$set": {"shiprocket": new_sr, "shiprocket_refreshed_at": datetime.now(timezone.utc).isoformat()}}
+                {
+                    "$set": {
+                        "shiprocket": new_sr,
+                        "shiprocket_refreshed_at": datetime.now(
+                            timezone.utc
+                        ).isoformat(),
+                    }
+                },
             )
             # Detect shipped/delivered transition from Shiprocket and auto-update order status + email customer
             try:
@@ -539,7 +694,19 @@ def _shiprocket_phase(sr_status: str) -> Optional[str]:
     s = sr_status.lower()
     if "deliver" in s:
         return "delivered"
-    if any(k in s for k in ("shipped", "in transit", "in-transit", "out for delivery", "pickup", "picked up", "manifest", "dispatched")):
+    if any(
+        k in s
+        for k in (
+            "shipped",
+            "in transit",
+            "in-transit",
+            "out for delivery",
+            "pickup",
+            "picked up",
+            "manifest",
+            "dispatched",
+        )
+    ):
         return "shipped"
     return None
 
@@ -565,8 +732,7 @@ async def _auto_transition_from_shiprocket(order: dict, old_sr: dict, new_sr: di
     # Apply status update
     now_iso = datetime.now(timezone.utc).isoformat()
     await db.orders.update_one(
-        {"id": order["id"]},
-        {"$set": {"status": new_phase, f"{new_phase}_at": now_iso}}
+        {"id": order["id"]}, {"$set": {"status": new_phase, f"{new_phase}_at": now_iso}}
     )
     refreshed = await db.orders.find_one({"id": order["id"]}, {"_id": 0})
     if refreshed:
@@ -582,17 +748,25 @@ async def send_order_status_email(order: dict, new_status: str):
     to_email = addr.get("email")
     if not to_email:
         return False
-    update_from = (settings.get("email_update_from")
-                   or settings.get("email_order_from")
-                   or settings.get("smtp_from"))
-    support_reply = (settings.get("email_support_from")
-                     or settings.get("email_support_to")
-                     or settings.get("support_email"))
+    update_from = (
+        settings.get("email_update_from")
+        or settings.get("email_order_from")
+        or settings.get("smtp_from")
+    )
+    support_reply = (
+        settings.get("email_support_from")
+        or settings.get("email_support_to")
+        or settings.get("support_email")
+    )
     try:
         subj, html = order_status_email(order, new_status, base_url=FRONTEND_URL)
         return await send_email(
-            settings, to_email, subj, html,
-            reply_to=support_reply, from_alias=update_from,
+            settings,
+            to_email,
+            subj,
+            html,
+            reply_to=support_reply,
+            from_alias=update_from,
             from_name="CarDost Updates",
         )
     except Exception as e:
@@ -606,12 +780,16 @@ async def check_and_send_low_stock_alert(product_ids: list):
     if not product_ids:
         return
     settings = await get_settings_doc()
-    if not settings.get("smtp_enabled") or not settings.get("low_stock_alerts_enabled", True):
+    if not settings.get("smtp_enabled") or not settings.get(
+        "low_stock_alerts_enabled", True
+    ):
         return
     threshold = int(settings.get("low_stock_threshold") or 5)
-    admin_to = (settings.get("email_admin_to")
-                or settings.get("smtp_admin_email")
-                or settings.get("support_email"))
+    admin_to = (
+        settings.get("email_admin_to")
+        or settings.get("smtp_admin_email")
+        or settings.get("support_email")
+    )
     if not admin_to:
         return
     now = datetime.now(timezone.utc)
@@ -631,20 +809,33 @@ async def check_and_send_low_stock_alert(product_ids: list):
             except Exception:
                 pass
         flagged.append(p)
-        await db.products.update_one({"id": pid}, {"$set": {"low_stock_alerted_at": now.isoformat()}})
+        await db.products.update_one(
+            {"id": pid}, {"$set": {"low_stock_alerted_at": now.isoformat()}}
+        )
     if not flagged:
         return
     try:
-        admin_from = (settings.get("email_admin_to")  # alias-as-sender is acceptable; falls back below
-                      or settings.get("smtp_from")
-                      or settings.get("smtp_username"))
+        admin_from = (
+            settings.get(
+                "email_admin_to"
+            )  # alias-as-sender is acceptable; falls back below
+            or settings.get("smtp_from")
+            or settings.get("smtp_username")
+        )
         subj, html = low_stock_email(flagged, base_url=FRONTEND_URL)
-        asyncio.create_task(send_email(
-            settings, admin_to, subj, html,
-            from_alias=admin_from, from_name="CarDost Inventory",
-        ))
+        asyncio.create_task(
+            send_email(
+                settings,
+                admin_to,
+                subj,
+                html,
+                from_alias=admin_from,
+                from_name="CarDost Inventory",
+            )
+        )
     except Exception as e:
         logger.error(f"[email] low-stock alert failed: {e}")
+
 
 # ============ Coupons ============
 class CouponIn(BaseModel):
@@ -659,8 +850,10 @@ class CouponIn(BaseModel):
     description: Optional[str] = ""
     customer_emails: List[str] = []  # empty = all customers
 
+
 def normalize_code(c: str) -> str:
     return (c or "").strip().upper()
+
 
 async def validate_coupon(code: str, subtotal: float, email: Optional[str] = None):
     if not code:
@@ -696,6 +889,7 @@ async def validate_coupon(code: str, subtotal: float, email: Optional[str] = Non
         discount = 0  # shipping is free in app — coupon valid but no extra discount
     return c, round(discount, 2)
 
+
 @api_router.post("/coupons/validate")
 async def validate_coupon_endpoint(body: dict):
     code = body.get("code", "")
@@ -710,9 +904,11 @@ async def validate_coupon_endpoint(body: dict):
         "description": c.get("description", ""),
     }
 
+
 @api_router.get("/admin/coupons")
 async def admin_list_coupons(_=Depends(get_admin)):
     return await db.coupons.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+
 
 @api_router.post("/admin/coupons")
 async def admin_create_coupon(body: CouponIn, _=Depends(get_admin)):
@@ -721,10 +917,16 @@ async def admin_create_coupon(body: CouponIn, _=Depends(get_admin)):
     code = normalize_code(body.code)
     if await db.coupons.find_one({"code": code}):
         raise HTTPException(400, "Coupon code already exists")
-    doc = {"id": str(uuid.uuid4()), **body.model_dump(), "code": code, "used_count": 0,
-           "created_at": datetime.now(timezone.utc).isoformat()}
+    doc = {
+        "id": str(uuid.uuid4()),
+        **body.model_dump(),
+        "code": code,
+        "used_count": 0,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
     await db.coupons.insert_one(doc)
     return {"ok": True}
+
 
 @api_router.put("/admin/coupons/{code}")
 async def admin_update_coupon(code: str, body: CouponIn, _=Depends(get_admin)):
@@ -735,10 +937,12 @@ async def admin_update_coupon(code: str, body: CouponIn, _=Depends(get_admin)):
         raise HTTPException(404, "Not found")
     return {"ok": True}
 
+
 @api_router.delete("/admin/coupons/{code}")
 async def admin_delete_coupon(code: str, _=Depends(get_admin)):
     await db.coupons.delete_one({"code": normalize_code(code)})
     return {"ok": True}
+
 
 # ============ Banners / Homepage Slides ============
 class BannerIn(BaseModel):
@@ -747,27 +951,41 @@ class BannerIn(BaseModel):
     badge: Optional[str] = ""
     cta_text: Optional[str] = "Shop Now"
     cta_link: Optional[str] = "/shop"
-    mesh: Optional[str] = "mesh-indigo"  # mesh-indigo, mesh-stereo, mesh-speakers, mesh-amber, mesh-emerald
+    mesh: Optional[str] = (
+        "mesh-indigo"  # mesh-indigo, mesh-stereo, mesh-speakers, mesh-amber, mesh-emerald
+    )
     accent: Optional[str] = "#A5B4FC"
     image: Optional[str] = ""
     sort_order: int = 0
     is_active: bool = True
 
+
 @api_router.get("/banners")
 async def list_banners():
-    items = await db.banners.find({"is_active": True}, {"_id": 0}).sort("sort_order", 1).to_list(50)
+    items = (
+        await db.banners.find({"is_active": True}, {"_id": 0})
+        .sort("sort_order", 1)
+        .to_list(50)
+    )
     return items
+
 
 @api_router.get("/admin/banners")
 async def admin_list_banners(_=Depends(get_admin)):
     items = await db.banners.find({}, {"_id": 0}).sort("sort_order", 1).to_list(100)
     return items
 
+
 @api_router.post("/admin/banners")
 async def admin_create_banner(body: BannerIn, _=Depends(get_admin)):
-    doc = {"id": str(uuid.uuid4()), **body.model_dump(), "created_at": datetime.now(timezone.utc).isoformat()}
+    doc = {
+        "id": str(uuid.uuid4()),
+        **body.model_dump(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
     await db.banners.insert_one(doc)
     return {"ok": True, "id": doc["id"]}
+
 
 @api_router.put("/admin/banners/{bid}")
 async def admin_update_banner(bid: str, body: BannerIn, _=Depends(get_admin)):
@@ -776,10 +994,12 @@ async def admin_update_banner(bid: str, body: BannerIn, _=Depends(get_admin)):
         raise HTTPException(404, "Not found")
     return {"ok": True}
 
+
 @api_router.delete("/admin/banners/{bid}")
 async def admin_delete_banner(bid: str, _=Depends(get_admin)):
     await db.banners.delete_one({"id": bid})
     return {"ok": True}
+
 
 # ============ Tax Rules ============
 class TaxRuleIn(BaseModel):
@@ -788,51 +1008,73 @@ class TaxRuleIn(BaseModel):
     is_default: bool = False
     description: Optional[str] = ""
 
+
 @api_router.get("/tax-rules")
 async def list_tax_rules():
     return await db.tax_rules.find({}, {"_id": 0}).sort("rate", 1).to_list(50)
+
 
 @api_router.post("/admin/tax-rules")
 async def create_tax_rule(body: TaxRuleIn, _=Depends(get_admin)):
     if body.is_default:
         await db.tax_rules.update_many({}, {"$set": {"is_default": False}})
-    doc = {"id": str(uuid.uuid4()), **body.model_dump(), "created_at": datetime.now(timezone.utc).isoformat()}
+    doc = {
+        "id": str(uuid.uuid4()),
+        **body.model_dump(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
     await db.tax_rules.insert_one(doc)
     return {"ok": True}
+
 
 @api_router.put("/admin/tax-rules/{rid}")
 async def update_tax_rule(rid: str, body: TaxRuleIn, _=Depends(get_admin)):
     if body.is_default:
-        await db.tax_rules.update_many({"id": {"$ne": rid}}, {"$set": {"is_default": False}})
+        await db.tax_rules.update_many(
+            {"id": {"$ne": rid}}, {"$set": {"is_default": False}}
+        )
     res = await db.tax_rules.update_one({"id": rid}, {"$set": body.model_dump()})
     if res.matched_count == 0:
         raise HTTPException(404, "Not found")
     return {"ok": True}
+
 
 @api_router.delete("/admin/tax-rules/{rid}")
 async def delete_tax_rule(rid: str, _=Depends(get_admin)):
     await db.tax_rules.delete_one({"id": rid})
     return {"ok": True}
 
+
 # ============ Reviews ============
 async def recalculate_product_rating(product_id: str):
-    pipe = [
+    pipe: list[dict[str, Any]] = [
         {"$match": {"product_id": product_id, "is_approved": True}},
-        {"$group": {"_id": None, "avg": {"$avg": "$rating"}, "cnt": {"$sum": 1}}}
+        {"$group": {"_id": None, "avg": {"$avg": "$rating"}, "cnt": {"$sum": 1}}},
     ]
     agg = await db.reviews.aggregate(pipe).to_list(1)
     if agg:
         await db.products.update_one(
             {"id": product_id},
-            {"$set": {"rating": round(float(agg[0]["avg"]), 2), "review_count": int(agg[0]["cnt"])}}
+            {
+                "$set": {
+                    "rating": round(float(agg[0]["avg"]), 2),
+                    "review_count": int(agg[0]["cnt"]),
+                }
+            },
         )
     else:
         await db.products.update_one({"id": product_id}, {"$set": {"review_count": 0}})
 
+
 @api_router.get("/products/{pid}/reviews")
 async def list_reviews(pid: str):
-    reviews = await db.reviews.find({"product_id": pid, "is_approved": True}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    reviews = (
+        await db.reviews.find({"product_id": pid, "is_approved": True}, {"_id": 0})
+        .sort("created_at", -1)
+        .to_list(500)
+    )
     return reviews
+
 
 @api_router.post("/products/{pid}/reviews")
 async def create_review(pid: str, body: ReviewIn):
@@ -848,10 +1090,12 @@ async def create_review(pid: str, body: ReviewIn):
     await recalculate_product_rating(pid)
     return {"ok": True, "review": review.model_dump()}
 
+
 @api_router.get("/admin/reviews")
 async def admin_list_reviews(_=Depends(get_admin)):
     reviews = await db.reviews.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
     return reviews
+
 
 @api_router.patch("/admin/reviews/{rid}")
 async def admin_toggle_review(rid: str, is_approved: bool, _=Depends(get_admin)):
@@ -862,6 +1106,7 @@ async def admin_toggle_review(rid: str, is_approved: bool, _=Depends(get_admin))
     await recalculate_product_rating(r["product_id"])
     return {"ok": True}
 
+
 @api_router.delete("/admin/reviews/{rid}")
 async def admin_delete_review(rid: str, _=Depends(get_admin)):
     r = await db.reviews.find_one({"id": rid}, {"_id": 0})
@@ -871,12 +1116,18 @@ async def admin_delete_review(rid: str, _=Depends(get_admin)):
     await recalculate_product_rating(r["product_id"])
     return {"ok": True}
 
+
 # ============ Products ============
 @api_router.get("/products")
-async def list_products(category: Optional[str] = None, featured: Optional[bool] = None, q: Optional[str] = None,
-                        best_seller: Optional[bool] = None, new_arrival: Optional[bool] = None,
-                        published_only: bool = True):
-    query = {}
+async def list_products(
+    category: Optional[str] = None,
+    featured: Optional[bool] = None,
+    q: Optional[str] = None,
+    best_seller: Optional[bool] = None,
+    new_arrival: Optional[bool] = None,
+    published_only: bool = True,
+):
+    query: dict[str, Any] = {}
     if published_only:
         query["is_published"] = {"$ne": False}
     if category and category != "all":
@@ -893,6 +1144,7 @@ async def list_products(category: Optional[str] = None, featured: Optional[bool]
     items = await db.products.find(query, {"_id": 0}).to_list(500)
     return items
 
+
 @api_router.get("/products/filter")
 async def filter_products(
     category: Optional[str] = None,
@@ -907,84 +1159,148 @@ async def filter_products(
     max_price: Optional[float] = None,
     q: Optional[str] = None,
 ):
-    query = {"is_published": {"$ne": False}}
-    and_clauses = []
+    query: Any = {"is_published": {"$ne": False}}
+    and_clauses: list[Any] = []
     if category and category != "all":
         and_clauses.append({"$or": [{"category": category}, {"categories": category}]})
     if car_brand:
-        brands_q = [b.strip() for b in car_brand.split(",") if b.strip() and b.strip().upper() != "ALL"]
+        brands_q = [
+            b.strip()
+            for b in car_brand.split(",")
+            if b.strip() and b.strip().upper() != "ALL"
+        ]
         # Resolve brand names to make_ids → all variants under those makes
-        mk_docs = await db.car_makes.find({"name": {"$in": brands_q}}, {"id": 1, "_id": 0}).to_list(20)
+        mk_docs = await db.car_makes.find(
+            {"name": {"$in": brands_q}}, {"id": 1, "_id": 0}
+        ).to_list(20)
         mk_ids = [m["id"] for m in mk_docs]
         bridged_variant_ids = []
         if mk_ids:
-            md_docs = await db.car_models.find({"make_id": {"$in": mk_ids}}, {"id": 1, "_id": 0}).to_list(500)
+            md_docs = await db.car_models.find(
+                {"make_id": {"$in": mk_ids}}, {"id": 1, "_id": 0}
+            ).to_list(500)
             md_ids = [m["id"] for m in md_docs]
             if md_ids:
-                vt_docs = await db.car_variants.find({"model_id": {"$in": md_ids}}, {"id": 1, "_id": 0}).to_list(2000)
+                vt_docs = await db.car_variants.find(
+                    {"model_id": {"$in": md_ids}}, {"id": 1, "_id": 0}
+                ).to_list(2000)
                 bridged_variant_ids = [v["id"] for v in vt_docs]
         # Match legacy flat car_brands OR new compatible_variants OR Universal
-        and_clauses.append({"$or": [
-            {"car_brands": {"$in": brands_q + ["ALL"]}},
-            {"compatible_variants": {"$in": bridged_variant_ids}} if bridged_variant_ids else {"car_brands": "ALL"},
-        ]})
+        and_clauses.append(
+            {
+                "$or": [
+                    {"car_brands": {"$in": brands_q + ["ALL"]}},
+                    {"compatible_variants": {"$in": bridged_variant_ids}}
+                    if bridged_variant_ids
+                    else {"car_brands": "ALL"},
+                ]
+            }
+        )
     if car_model:
         models_q = [m.strip() for m in car_model.split(",") if m.strip()]
         # Resolve model names → model_ids → variants
-        md_docs = await db.car_models.find({"name": {"$in": models_q}}, {"id": 1, "_id": 0}).to_list(100)
+        md_docs = await db.car_models.find(
+            {"name": {"$in": models_q}}, {"id": 1, "_id": 0}
+        ).to_list(100)
         md_ids = [m["id"] for m in md_docs]
         bridged_variant_ids = []
         if md_ids:
-            vt_docs = await db.car_variants.find({"model_id": {"$in": md_ids}}, {"id": 1, "_id": 0}).to_list(500)
+            vt_docs = await db.car_variants.find(
+                {"model_id": {"$in": md_ids}}, {"id": 1, "_id": 0}
+            ).to_list(500)
             bridged_variant_ids = [v["id"] for v in vt_docs]
-        and_clauses.append({"$or": [
-            {"car_models": {"$in": models_q}},
-            {"compatible_variants": {"$in": bridged_variant_ids}} if bridged_variant_ids else {"car_brands": "ALL"},
-            {"car_brands": "ALL"},
-        ]})
+        and_clauses.append(
+            {
+                "$or": [
+                    {"car_models": {"$in": models_q}},
+                    {"compatible_variants": {"$in": bridged_variant_ids}}
+                    if bridged_variant_ids
+                    else {"car_brands": "ALL"},
+                    {"car_brands": "ALL"},
+                ]
+            }
+        )
     if year:
         # Resolve year → variants whose [start_year, end_year] covers this year
         vt_docs = await db.car_variants.find(
-            {"$and": [
-                {"start_year": {"$lte": year}},
-                {"$or": [{"end_year": None}, {"end_year": {"$gte": year}}]},
-            ]}, {"id": 1, "_id": 0}
+            {
+                "$and": [
+                    {"start_year": {"$lte": year}},
+                    {"$or": [{"end_year": None}, {"end_year": {"$gte": year}}]},
+                ]
+            },
+            {"id": 1, "_id": 0},
         ).to_list(2000)
         bridged_variant_ids = [v["id"] for v in vt_docs]
-        and_clauses.append({"$or": [
-            {"years": year},
-            {"compatible_variants": {"$in": bridged_variant_ids}} if bridged_variant_ids else {"car_brands": "ALL"},
-            {"car_brands": "ALL"},
-        ]})
+        and_clauses.append(
+            {
+                "$or": [
+                    {"years": year},
+                    {"compatible_variants": {"$in": bridged_variant_ids}}
+                    if bridged_variant_ids
+                    else {"car_brands": "ALL"},
+                    {"car_brands": "ALL"},
+                ]
+            }
+        )
     # Hierarchical v2 filters
     if variant_id:
-        and_clauses.append({"$or": [{"compatible_variants": variant_id}, {"car_brands": "ALL"}]})
+        and_clauses.append(
+            {"$or": [{"compatible_variants": variant_id}, {"car_brands": "ALL"}]}
+        )
     if model_id:
         # Resolve all variant IDs under this model
-        vids = [v["id"] for v in await db.car_variants.find({"model_id": model_id}, {"id": 1, "_id": 0}).to_list(500)]
-        and_clauses.append({"$or": [{"compatible_variants": {"$in": vids}}, {"car_brands": "ALL"}]})
+        vids = [
+            v["id"]
+            for v in await db.car_variants.find(
+                {"model_id": model_id}, {"id": 1, "_id": 0}
+            ).to_list(500)
+        ]
+        and_clauses.append(
+            {"$or": [{"compatible_variants": {"$in": vids}}, {"car_brands": "ALL"}]}
+        )
     if make_id:
-        mids = [m["id"] for m in await db.car_models.find({"make_id": make_id}, {"id": 1, "_id": 0}).to_list(500)]
-        vids = [v["id"] for v in await db.car_variants.find({"model_id": {"$in": mids}}, {"id": 1, "_id": 0}).to_list(2000)]
-        and_clauses.append({"$or": [{"compatible_variants": {"$in": vids}}, {"car_brands": "ALL"}]})
-    if tag: query["tags"] = tag
+        mids = [
+            m["id"]
+            for m in await db.car_models.find(
+                {"make_id": make_id}, {"id": 1, "_id": 0}
+            ).to_list(500)
+        ]
+        vids = [
+            v["id"]
+            for v in await db.car_variants.find(
+                {"model_id": {"$in": mids}}, {"id": 1, "_id": 0}
+            ).to_list(2000)
+        ]
+        and_clauses.append(
+            {"$or": [{"compatible_variants": {"$in": vids}}, {"car_brands": "ALL"}]}
+        )
+    if tag:
+        query["tags"] = tag
     if min_price is not None or max_price is not None:
         query["price"] = {}
-        if min_price is not None: query["price"]["$gte"] = min_price
-        if max_price is not None: query["price"]["$lte"] = max_price
+        if min_price is not None:
+            query["price"]["$gte"] = min_price
+        if max_price is not None:
+            query["price"]["$lte"] = max_price
     if q:
         # Multi-field case-insensitive search: name, description, brand, tags
         regex = {"$regex": q.strip(), "$options": "i"}
-        and_clauses.append({"$or": [
-            {"name": regex},
-            {"description": regex},
-            {"brand": regex},
-            {"tags": regex},
-        ]})
+        and_clauses.append(
+            {
+                "$or": [
+                    {"name": regex},
+                    {"description": regex},
+                    {"brand": regex},
+                    {"tags": regex},
+                ]
+            }
+        )
     if and_clauses:
         query["$and"] = and_clauses
     items = await db.products.find(query, {"_id": 0}).to_list(500)
     return items
+
 
 @api_router.get("/products/{pid}")
 async def get_product(pid: str):
@@ -993,15 +1309,22 @@ async def get_product(pid: str):
         raise HTTPException(404, "Not found")
     return p
 
+
 @api_router.get("/categories")
 async def categories():
-    items = await db.categories.find({"is_active": True}, {"_id": 0}).sort("sort_order", 1).to_list(200)
+    items = (
+        await db.categories.find({"is_active": True}, {"_id": 0})
+        .sort("sort_order", 1)
+        .to_list(200)
+    )
     return items
+
 
 @api_router.get("/admin/categories")
 async def admin_list_categories(_=Depends(get_admin)):
     items = await db.categories.find({}, {"_id": 0}).sort("sort_order", 1).to_list(500)
     return items
+
 
 class CategoryIn(BaseModel):
     slug: str
@@ -1015,49 +1338,129 @@ class CategoryIn(BaseModel):
     meta_title: Optional[str] = ""
     meta_description: Optional[str] = ""
 
+
 @api_router.post("/admin/categories")
 async def admin_create_category(body: CategoryIn, _=Depends(get_admin)):
     if await db.categories.find_one({"slug": body.slug}):
         raise HTTPException(400, "Slug already exists")
-    doc = {"id": str(uuid.uuid4()), **body.model_dump(), "created_at": datetime.now(timezone.utc).isoformat()}
+    doc = {
+        "id": str(uuid.uuid4()),
+        **body.model_dump(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
     await db.categories.insert_one(doc)
     schedule_sitemap_refresh("category-create")
     return {"ok": True}
 
+
 @api_router.put("/admin/categories/{slug}")
 async def admin_update_category(slug: str, body: CategoryIn, _=Depends(get_admin)):
     if body.slug != slug:
-        await db.products.update_many({"categories": slug}, {"$set": {"categories.$": body.slug}})
-        await db.products.update_many({"category": slug}, {"$set": {"category": body.slug}})
+        await db.products.update_many(
+            {"categories": slug}, {"$set": {"categories.$": body.slug}}
+        )
+        await db.products.update_many(
+            {"category": slug}, {"$set": {"category": body.slug}}
+        )
     res = await db.categories.update_one({"slug": slug}, {"$set": body.model_dump()})
     if res.matched_count == 0:
         raise HTTPException(404, "Not found")
     schedule_sitemap_refresh("category-update")
     return {"ok": True}
 
+
 @api_router.patch("/admin/categories/reorder")
 async def admin_reorder_categories(orders: List[dict], _=Depends(get_admin)):
     for o in orders:
-        await db.categories.update_one({"slug": o["slug"]}, {"$set": {"sort_order": int(o.get("sort_order", 0))}})
+        await db.categories.update_one(
+            {"slug": o["slug"]}, {"$set": {"sort_order": int(o.get("sort_order", 0))}}
+        )
     return {"ok": True}
+
 
 @api_router.delete("/admin/categories/{slug}")
 async def admin_delete_category(slug: str, _=Depends(get_admin)):
-    in_use = await db.products.count_documents({"$or": [{"category": slug}, {"categories": slug}]})
+    in_use = await db.products.count_documents(
+        {"$or": [{"category": slug}, {"categories": slug}]}
+    )
     if in_use > 0:
-        raise HTTPException(400, f"Category in use by {in_use} product(s). Reassign first.")
+        raise HTTPException(
+            400, f"Category in use by {in_use} product(s). Reassign first."
+        )
     await db.categories.delete_one({"slug": slug})
     schedule_sitemap_refresh("category-delete")
     return {"ok": True}
 
+
 # ============ Automotive Catalog ============
 CAR_BRANDS_MODELS = {
-    "Maruti Suzuki": ["Swift", "Baleno", "Brezza", "WagonR", "Alto", "Dzire", "Ertiga", "XL6", "Ciaz", "S-Presso", "Celerio", "Ignis", "Grand Vitara", "Jimny", "Fronx", "Invicto"],
-    "Hyundai": ["i20", "i10", "Creta", "Venue", "Verna", "Aura", "Alcazar", "Tucson", "Kona Electric", "Exter", "Ioniq 5"],
-    "Tata": ["Nexon", "Punch", "Harrier", "Safari", "Altroz", "Tiago", "Tigor", "Curvv", "Nexon EV", "Punch EV"],
-    "Mahindra": ["Thar", "XUV700", "XUV300", "XUV400", "Scorpio-N", "Scorpio Classic", "Bolero", "Bolero Neo", "Marazzo", "BE 6", "XEV 9e"],
+    "Maruti Suzuki": [
+        "Swift",
+        "Baleno",
+        "Brezza",
+        "WagonR",
+        "Alto",
+        "Dzire",
+        "Ertiga",
+        "XL6",
+        "Ciaz",
+        "S-Presso",
+        "Celerio",
+        "Ignis",
+        "Grand Vitara",
+        "Jimny",
+        "Fronx",
+        "Invicto",
+    ],
+    "Hyundai": [
+        "i20",
+        "i10",
+        "Creta",
+        "Venue",
+        "Verna",
+        "Aura",
+        "Alcazar",
+        "Tucson",
+        "Kona Electric",
+        "Exter",
+        "Ioniq 5",
+    ],
+    "Tata": [
+        "Nexon",
+        "Punch",
+        "Harrier",
+        "Safari",
+        "Altroz",
+        "Tiago",
+        "Tigor",
+        "Curvv",
+        "Nexon EV",
+        "Punch EV",
+    ],
+    "Mahindra": [
+        "Thar",
+        "XUV700",
+        "XUV300",
+        "XUV400",
+        "Scorpio-N",
+        "Scorpio Classic",
+        "Bolero",
+        "Bolero Neo",
+        "Marazzo",
+        "BE 6",
+        "XEV 9e",
+    ],
     "Honda": ["City", "Amaze", "Elevate", "WR-V", "Jazz", "Civic"],
-    "Toyota": ["Innova Crysta", "Innova Hycross", "Fortuner", "Hilux", "Glanza", "Urban Cruiser Hyryder", "Camry", "Vellfire"],
+    "Toyota": [
+        "Innova Crysta",
+        "Innova Hycross",
+        "Fortuner",
+        "Hilux",
+        "Glanza",
+        "Urban Cruiser Hyryder",
+        "Camry",
+        "Vellfire",
+    ],
     "Kia": ["Seltos", "Sonet", "Carens", "Carnival", "EV6"],
     "Volkswagen": ["Virtus", "Taigun", "Tiguan"],
     "Skoda": ["Kushaq", "Slavia", "Kodiaq", "Superb"],
@@ -1065,17 +1468,30 @@ CAR_BRANDS_MODELS = {
     "Nissan": ["Magnite", "X-Trail"],
     "MG": ["Hector", "Astor", "Gloster", "ZS EV", "Comet EV", "Windsor EV"],
     "Ford": ["EcoSport", "Endeavour", "Figo", "Aspire"],
-    "Mercedes-Benz": ["A-Class", "C-Class", "E-Class", "S-Class", "GLA", "GLC", "GLE", "GLS"],
+    "Mercedes-Benz": [
+        "A-Class",
+        "C-Class",
+        "E-Class",
+        "S-Class",
+        "GLA",
+        "GLC",
+        "GLE",
+        "GLS",
+    ],
     "BMW": ["3 Series", "5 Series", "7 Series", "X1", "X3", "X5", "X7"],
     "Audi": ["A4", "A6", "Q3", "Q5", "Q7", "Q8"],
 }
+
 
 @api_router.get("/catalog/car-brands")
 async def car_brands():
     # "ALL" is a universal sentinel meaning the product fits every car
     items = [{"name": "ALL", "model_count": 0, "universal": True}]
-    items.extend([{"name": b, "model_count": len(m)} for b, m in CAR_BRANDS_MODELS.items()])
+    items.extend(
+        [{"name": b, "model_count": len(m)} for b, m in CAR_BRANDS_MODELS.items()]
+    )
     return items
+
 
 @api_router.get("/catalog/car-models")
 async def car_models(brand: Optional[str] = None):
@@ -1088,20 +1504,24 @@ async def car_models(brand: Optional[str] = None):
         return result
     return [{"brand": b, "model": m} for b, ms in CAR_BRANDS_MODELS.items() for m in ms]
 
+
 @api_router.get("/catalog/years")
 async def years():
     current = datetime.now().year
     return list(range(current, 1999, -1))
+
 
 # ============ Vehicle Catalog v2 (Hierarchical Make → Model → Variant) ============
 class MakeIn(BaseModel):
     name: str
     slug: Optional[str] = ""
 
+
 class ModelIn(BaseModel):
     make_id: str
     name: str
     slug: Optional[str] = ""
+
 
 class VariantIn(BaseModel):
     model_id: str
@@ -1112,29 +1532,37 @@ class VariantIn(BaseModel):
     facelift_years: Optional[str] = ""
     notes: Optional[str] = ""
 
+
 def _slugify(s: str) -> str:
     import re
+
     return re.sub(r"[^a-z0-9]+", "-", s.lower()).strip("-")
+
 
 @api_router.get("/catalog/makes")
 async def list_makes():
     return await db.car_makes.find({}, {"_id": 0}).sort("name", 1).to_list(200)
+
 
 @api_router.get("/catalog/models")
 async def list_models(make_id: Optional[str] = None):
     q = {"make_id": make_id} if make_id else {}
     return await db.car_models.find(q, {"_id": 0}).sort("name", 1).to_list(500)
 
+
 @api_router.get("/catalog/variants")
 async def list_variants(model_id: Optional[str] = None):
     q = {"model_id": model_id} if model_id else {}
     return await db.car_variants.find(q, {"_id": 0}).sort("start_year", 1).to_list(1000)
 
+
 @api_router.get("/catalog/tree")
 async def catalog_tree():
     makes = await db.car_makes.find({}, {"_id": 0}).sort("name", 1).to_list(200)
     models = await db.car_models.find({}, {"_id": 0}).sort("name", 1).to_list(500)
-    variants = await db.car_variants.find({}, {"_id": 0}).sort("start_year", 1).to_list(1000)
+    variants = (
+        await db.car_variants.find({}, {"_id": 0}).sort("start_year", 1).to_list(1000)
+    )
     # Group
     by_model = {}
     for v in variants:
@@ -1147,42 +1575,76 @@ async def catalog_tree():
         mk["models"] = by_make.get(mk["id"], [])
     return makes
 
+
 # Admin CRUD
 @api_router.post("/admin/catalog/makes")
 async def create_make(body: MakeIn, _=Depends(get_admin)):
-    doc = {"id": str(uuid.uuid4()), "name": body.name.strip(), "slug": body.slug or _slugify(body.name)}
+    doc = {
+        "id": str(uuid.uuid4()),
+        "name": body.name.strip(),
+        "slug": body.slug or _slugify(body.name),
+    }
     await db.car_makes.insert_one(doc)
     return clean(doc)
 
+
 @api_router.put("/admin/catalog/makes/{mid}")
 async def update_make(mid: str, body: MakeIn, _=Depends(get_admin)):
-    res = await db.car_makes.update_one({"id": mid}, {"$set": {"name": body.name.strip(), "slug": body.slug or _slugify(body.name)}})
-    if res.matched_count == 0: raise HTTPException(404, "Not found")
+    res = await db.car_makes.update_one(
+        {"id": mid},
+        {"$set": {"name": body.name.strip(), "slug": body.slug or _slugify(body.name)}},
+    )
+    if res.matched_count == 0:
+        raise HTTPException(404, "Not found")
     return {"ok": True}
+
 
 @api_router.delete("/admin/catalog/makes/{mid}")
 async def delete_make(mid: str, _=Depends(get_admin)):
     # Also cascade delete children
-    model_ids = [m["id"] for m in await db.car_models.find({"make_id": mid}, {"id": 1, "_id": 0}).to_list(500)]
+    model_ids = [
+        m["id"]
+        for m in await db.car_models.find(
+            {"make_id": mid}, {"id": 1, "_id": 0}
+        ).to_list(500)
+    ]
     if model_ids:
         await db.car_variants.delete_many({"model_id": {"$in": model_ids}})
         await db.car_models.delete_many({"make_id": mid})
     await db.car_makes.delete_one({"id": mid})
     return {"ok": True}
 
+
 @api_router.post("/admin/catalog/models")
 async def create_model(body: ModelIn, _=Depends(get_admin)):
     if not await db.car_makes.find_one({"id": body.make_id}):
         raise HTTPException(404, "Make not found")
-    doc = {"id": str(uuid.uuid4()), "make_id": body.make_id, "name": body.name.strip(), "slug": body.slug or _slugify(body.name)}
+    doc = {
+        "id": str(uuid.uuid4()),
+        "make_id": body.make_id,
+        "name": body.name.strip(),
+        "slug": body.slug or _slugify(body.name),
+    }
     await db.car_models.insert_one(doc)
     return clean(doc)
 
+
 @api_router.put("/admin/catalog/models/{mid}")
 async def update_model(mid: str, body: ModelIn, _=Depends(get_admin)):
-    res = await db.car_models.update_one({"id": mid}, {"$set": {"make_id": body.make_id, "name": body.name.strip(), "slug": body.slug or _slugify(body.name)}})
-    if res.matched_count == 0: raise HTTPException(404, "Not found")
+    res = await db.car_models.update_one(
+        {"id": mid},
+        {
+            "$set": {
+                "make_id": body.make_id,
+                "name": body.name.strip(),
+                "slug": body.slug or _slugify(body.name),
+            }
+        },
+    )
+    if res.matched_count == 0:
+        raise HTTPException(404, "Not found")
     return {"ok": True}
+
 
 @api_router.delete("/admin/catalog/models/{mid}")
 async def delete_model(mid: str, _=Depends(get_admin)):
@@ -1190,43 +1652,69 @@ async def delete_model(mid: str, _=Depends(get_admin)):
     await db.car_models.delete_one({"id": mid})
     return {"ok": True}
 
+
 @api_router.post("/admin/catalog/variants")
 async def create_variant(body: VariantIn, _=Depends(get_admin)):
     if not await db.car_models.find_one({"id": body.model_id}):
         raise HTTPException(404, "Model not found")
     doc = {
-        "id": str(uuid.uuid4()), "model_id": body.model_id, "name": body.name.strip(),
-        "slug": body.slug or _slugify(f"{body.name}-{body.start_year}-{body.end_year or 'present'}"),
-        "start_year": body.start_year, "end_year": body.end_year,
-        "facelift_years": body.facelift_years or "", "notes": body.notes or ""
+        "id": str(uuid.uuid4()),
+        "model_id": body.model_id,
+        "name": body.name.strip(),
+        "slug": body.slug
+        or _slugify(f"{body.name}-{body.start_year}-{body.end_year or 'present'}"),
+        "start_year": body.start_year,
+        "end_year": body.end_year,
+        "facelift_years": body.facelift_years or "",
+        "notes": body.notes or "",
     }
     await db.car_variants.insert_one(doc)
     return clean(doc)
 
+
 @api_router.put("/admin/catalog/variants/{vid}")
 async def update_variant(vid: str, body: VariantIn, _=Depends(get_admin)):
-    res = await db.car_variants.update_one({"id": vid}, {"$set": {
-        "model_id": body.model_id, "name": body.name.strip(),
-        "slug": body.slug or _slugify(f"{body.name}-{body.start_year}-{body.end_year or 'present'}"),
-        "start_year": body.start_year, "end_year": body.end_year,
-        "facelift_years": body.facelift_years or "", "notes": body.notes or ""
-    }})
-    if res.matched_count == 0: raise HTTPException(404, "Not found")
+    res = await db.car_variants.update_one(
+        {"id": vid},
+        {
+            "$set": {
+                "model_id": body.model_id,
+                "name": body.name.strip(),
+                "slug": body.slug
+                or _slugify(
+                    f"{body.name}-{body.start_year}-{body.end_year or 'present'}"
+                ),
+                "start_year": body.start_year,
+                "end_year": body.end_year,
+                "facelift_years": body.facelift_years or "",
+                "notes": body.notes or "",
+            }
+        },
+    )
+    if res.matched_count == 0:
+        raise HTTPException(404, "Not found")
     return {"ok": True}
+
 
 @api_router.delete("/admin/catalog/variants/{vid}")
 async def delete_variant(vid: str, _=Depends(get_admin)):
     await db.car_variants.delete_one({"id": vid})
     return {"ok": True}
 
+
 # Resolve variant IDs → human label (used by cart/order)
 @api_router.get("/catalog/variant/{vid}/label")
 async def variant_label(vid: str):
     v = await db.car_variants.find_one({"id": vid}, {"_id": 0})
-    if not v: raise HTTPException(404, "Variant not found")
+    if not v:
+        raise HTTPException(404, "Variant not found")
     m = await db.car_models.find_one({"id": v["model_id"]}, {"_id": 0})
     mk = await db.car_makes.find_one({"id": m["make_id"]}, {"_id": 0}) if m else None
-    label = f"{mk['name']} {m['name']} · {v['name']} ({v['start_year']}–{v['end_year'] or 'Present'})" if mk and m else v["name"]
+    label = (
+        f"{mk['name']} {m['name']} · {v['name']} ({v['start_year']}–{v['end_year'] or 'Present'})"
+        if mk and m
+        else v["name"]
+    )
     return {"id": vid, "label": label, "variant": v, "model": m, "make": mk}
 
 
@@ -1237,6 +1725,7 @@ async def create_product(p: ProductIn, _=Depends(get_admin)):
     schedule_sitemap_refresh("product-create")
     return clean(prod.model_dump())
 
+
 @api_router.put("/admin/products/{pid}")
 async def update_product(pid: str, p: ProductIn, _=Depends(get_admin)):
     res = await db.products.update_one({"id": pid}, {"$set": p.model_dump()})
@@ -1245,19 +1734,21 @@ async def update_product(pid: str, p: ProductIn, _=Depends(get_admin)):
     schedule_sitemap_refresh("product-update")
     return {"ok": True}
 
+
 @api_router.delete("/admin/products/{pid}")
 async def delete_product(pid: str, _=Depends(get_admin)):
     await db.products.delete_one({"id": pid})
     schedule_sitemap_refresh("product-delete")
     return {"ok": True}
 
+
 # ============ Bulk CSV Import ============
-import csv
-import io
+
 
 def _csv_str(row, key, default=""):
     v = row.get(key)
     return (v.strip() if isinstance(v, str) else default) or default
+
 
 def _csv_list(row, key, sep="|"):
     """Pipe-separated list. Returns [] if empty."""
@@ -1265,6 +1756,7 @@ def _csv_list(row, key, sep="|"):
     if not v:
         return []
     return [s.strip() for s in v.split(sep) if s.strip()]
+
 
 def _csv_int_list(row, key, sep="|"):
     out = []
@@ -1275,11 +1767,13 @@ def _csv_int_list(row, key, sep="|"):
             pass
     return out
 
+
 def _csv_bool(row, key, default=False):
     v = _csv_str(row, key)
     if not v:
         return default
     return v.lower() in ("true", "1", "yes", "y", "t")
+
 
 def _csv_float(row, key, default=None):
     v = _csv_str(row, key)
@@ -1290,6 +1784,7 @@ def _csv_float(row, key, default=None):
     except ValueError:
         return default
 
+
 def _csv_int(row, key, default=0):
     v = _csv_str(row, key)
     if not v:
@@ -1299,14 +1794,38 @@ def _csv_int(row, key, default=0):
     except ValueError:
         return default
 
+
 # All bulk-import columns in canonical order (used for the sample CSV download too)
 BULK_CSV_COLUMNS = [
-    "id", "name", "description", "price", "original_price", "category", "categories",
-    "brand", "image", "gallery", "stock", "rating", "featured", "is_published",
-    "is_best_seller", "is_new_arrival", "discount_percent", "discount_flat", "gst_percent",
-    "tags", "car_brands", "car_models", "years", "compatible_variants",
-    "meta_title", "meta_description", "seo_slug",
+    "id",
+    "name",
+    "description",
+    "price",
+    "original_price",
+    "category",
+    "categories",
+    "brand",
+    "image",
+    "gallery",
+    "stock",
+    "rating",
+    "featured",
+    "is_published",
+    "is_best_seller",
+    "is_new_arrival",
+    "discount_percent",
+    "discount_flat",
+    "gst_percent",
+    "tags",
+    "car_brands",
+    "car_models",
+    "years",
+    "compatible_variants",
+    "meta_title",
+    "meta_description",
+    "seo_slug",
 ]
+
 
 @api_router.get("/admin/products/bulk/columns")
 async def bulk_csv_columns(_=Depends(get_admin)):
@@ -1315,8 +1834,8 @@ async def bulk_csv_columns(_=Depends(get_admin)):
         "required": ["name", "description", "price", "category", "image"],
         "list_separator": "|",
         "notes": "Provide id or seo_slug to UPDATE an existing product; otherwise a new one is created. "
-                 "List fields (categories, gallery, tags, car_brands, car_models, years, compatible_variants) "
-                 "use '|' as separator. Boolean fields accept true/false/1/0/yes/no.",
+        "List fields (categories, gallery, tags, car_brands, car_models, years, compatible_variants) "
+        "use '|' as separator. Boolean fields accept true/false/1/0/yes/no.",
     }
 
 
@@ -1333,7 +1852,9 @@ def _csv_serialize_cell(v) -> str:
 
 @api_router.get("/admin/products/export")
 async def export_products_csv(_=Depends(get_admin)):
-    products = await db.products.find({}, {"_id": 0}).sort("created_at", -1).to_list(10000)
+    products = (
+        await db.products.find({}, {"_id": 0}).sort("created_at", -1).to_list(10000)
+    )
     buf = io.StringIO()
     writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL)
     writer.writerow(BULK_CSV_COLUMNS)
@@ -1343,8 +1864,11 @@ async def export_products_csv(_=Depends(get_admin)):
     return Response(
         content=buf.getvalue(),
         media_type="text/csv; charset=utf-8",
-        headers={"Content-Disposition": f'attachment; filename="cardost-products-{ts}.csv"'},
+        headers={
+            "Content-Disposition": f'attachment; filename="cardost-products-{ts}.csv"'
+        },
     )
+
 
 @api_router.post("/admin/products/bulk")
 async def bulk_import_products(file: UploadFile = File(...), _=Depends(get_admin)):
@@ -1357,9 +1881,14 @@ async def bulk_import_products(file: UploadFile = File(...), _=Depends(get_admin
         raise HTTPException(400, "CSV must be UTF-8 encoded")
     reader = csv.DictReader(io.StringIO(text))
     required = {"name", "description", "price", "category", "image"}
-    if not reader.fieldnames or not required.issubset({h.strip() for h in reader.fieldnames}):
-        raise HTTPException(400, f"CSV must have columns: {', '.join(sorted(required))}. "
-                                  f"Optional columns: {', '.join(c for c in BULK_CSV_COLUMNS if c not in required and c != 'id')}")
+    if not reader.fieldnames or not required.issubset(
+        {h.strip() for h in reader.fieldnames}
+    ):
+        raise HTTPException(
+            400,
+            f"CSV must have columns: {', '.join(sorted(required))}. "
+            f"Optional columns: {', '.join(c for c in BULK_CSV_COLUMNS if c not in required and c != 'id')}",
+        )
 
     created = 0
     updated = 0
@@ -1403,9 +1932,13 @@ async def bulk_import_products(file: UploadFile = File(...), _=Depends(get_admin
             existing_id = _csv_str(row, "id")
             existing = None
             if existing_id:
-                existing = await db.products.find_one({"id": existing_id}, {"_id": 0, "id": 1})
+                existing = await db.products.find_one(
+                    {"id": existing_id}, {"_id": 0, "id": 1}
+                )
             if not existing and data["seo_slug"]:
-                existing = await db.products.find_one({"seo_slug": data["seo_slug"]}, {"_id": 0, "id": 1})
+                existing = await db.products.find_one(
+                    {"seo_slug": data["seo_slug"]}, {"_id": 0, "id": 1}
+                )
             if existing:
                 await db.products.update_one(
                     {"id": existing["id"]},
@@ -1423,24 +1956,34 @@ async def bulk_import_products(file: UploadFile = File(...), _=Depends(get_admin
             errors.append({"row": i, "error": str(e)[:160]})
     if created or updated:
         schedule_sitemap_refresh("bulk-import")
-    return {"created": created, "updated": updated, "errors": errors[:20], "error_count": len(errors)}
+    return {
+        "created": created,
+        "updated": updated,
+        "errors": errors[:20],
+        "error_count": len(errors),
+    }
+
 
 # ============ File Upload (Emergent Object Storage) ============
 def init_storage():
     global storage_key
     if storage_key:
         return storage_key
-    resp = requests.post(f"{STORAGE_URL}/init", json={"emergent_key": EMERGENT_LLM_KEY}, timeout=30)
+    resp = requests.post(
+        f"{STORAGE_URL}/init", json={"emergent_key": EMERGENT_LLM_KEY}, timeout=30
+    )
     resp.raise_for_status()
     storage_key = resp.json()["storage_key"]
     return storage_key
+
 
 def put_object(path: str, data: bytes, content_type: str) -> dict:
     key = init_storage()
     resp = requests.put(
         f"{STORAGE_URL}/objects/{path}",
         headers={"X-Storage-Key": key, "Content-Type": content_type},
-        data=data, timeout=120
+        data=data,
+        timeout=120,
     )
     if resp.status_code == 403:
         # refresh key once and retry
@@ -1450,30 +1993,32 @@ def put_object(path: str, data: bytes, content_type: str) -> dict:
         resp = requests.put(
             f"{STORAGE_URL}/objects/{path}",
             headers={"X-Storage-Key": key, "Content-Type": content_type},
-            data=data, timeout=120
+            data=data,
+            timeout=120,
         )
     resp.raise_for_status()
     return resp.json()
 
+
 def get_object(path: str):
     key = init_storage()
     resp = requests.get(
-        f"{STORAGE_URL}/objects/{path}",
-        headers={"X-Storage-Key": key}, timeout=60
+        f"{STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": key}, timeout=60
     )
     if resp.status_code == 403:
         global storage_key
         storage_key = None
         key = init_storage()
         resp = requests.get(
-            f"{STORAGE_URL}/objects/{path}",
-            headers={"X-Storage-Key": key}, timeout=60
+            f"{STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": key}, timeout=60
         )
     resp.raise_for_status()
     return resp.content, resp.headers.get("Content-Type", "application/octet-stream")
 
+
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 MAX_UPLOAD_BYTES = 5 * 1024 * 1024  # 5MB
+
 
 @api_router.post("/admin/upload")
 async def upload_image(file: UploadFile = File(...), user=Depends(get_admin)):
@@ -1482,7 +2027,8 @@ async def upload_image(file: UploadFile = File(...), user=Depends(get_admin)):
     data = await file.read()
     if len(data) > MAX_UPLOAD_BYTES:
         raise HTTPException(400, "Max file size is 5MB")
-    ext = (file.filename.rsplit(".", 1)[-1] if "." in (file.filename or "") else "bin").lower()
+    filename = file.filename or ""
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "bin"
     file_id = str(uuid.uuid4())
     path = f"{APP_NAME}/products/{file_id}.{ext}"
     result: dict = {}
@@ -1491,23 +2037,28 @@ async def upload_image(file: UploadFile = File(...), user=Depends(get_admin)):
     except Exception as e:
         logger.error(f"Upload failed: {e}")
         raise HTTPException(500, "Upload failed")
-    await db.files.insert_one({
-        "id": file_id,
-        "storage_path": result["path"],
-        "original_filename": file.filename,
-        "content_type": file.content_type,
-        "size": len(data),
-        "uploaded_by": user["uid"],
-        "is_deleted": False,
-        "created_at": datetime.now(timezone.utc).isoformat()
-    })
+    await db.files.insert_one(
+        {
+            "id": file_id,
+            "storage_path": result["path"],
+            "original_filename": file.filename,
+            "content_type": file.content_type,
+            "size": len(data),
+            "uploaded_by": user["uid"],
+            "is_deleted": False,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
     # Public URL via our backend
     public_url = f"/api/files/{result['path']}"
     return {"url": public_url, "path": result["path"], "size": len(data)}
 
+
 @api_router.get("/files/{path:path}")
 async def serve_file(path: str):
-    record = await db.files.find_one({"storage_path": path, "is_deleted": False}, {"_id": 0})
+    record = await db.files.find_one(
+        {"storage_path": path, "is_deleted": False}, {"_id": 0}
+    )
     if not record:
         raise HTTPException(404, "File not found")
     data: bytes = b""
@@ -1517,11 +2068,19 @@ async def serve_file(path: str):
     except Exception as e:
         logger.error(f"File fetch failed: {e}")
         raise HTTPException(500, "File fetch failed")
-    return Response(content=data, media_type=record.get("content_type") or ct, headers={"Cache-Control": "public, max-age=86400"})
+    return Response(
+        content=data,
+        media_type=record.get("content_type") or ct,
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
+
 
 # ============ Orders / Payment ============
 @api_router.post("/orders/create")
-async def create_order(req: CreateOrderReq, creds: Optional[HTTPAuthorizationCredentials] = Depends(security)):
+async def create_order(
+    req: CreateOrderReq,
+    creds: Optional[HTTPAuthorizationCredentials] = Depends(security),
+):
     settings = await get_settings_doc()
     active_kid, active_ksec, active_mock = get_active_razorpay_creds(settings)
 
@@ -1544,19 +2103,24 @@ async def create_order(req: CreateOrderReq, creds: Optional[HTTPAuthorizationCre
         if not p:
             raise HTTPException(400, f"Product {item.product_id} not found")
         if p.get("stock", 0) < item.quantity:
-            raise HTTPException(400, f"Insufficient stock for {p['name']}. Only {p.get('stock', 0)} left.")
+            raise HTTPException(
+                400,
+                f"Insufficient stock for {p['name']}. Only {p.get('stock', 0)} left.",
+            )
         line_total = p["price"] * item.quantity
         total += line_total
-        items_detail.append({
-            "product_id": p["id"],
-            "name": p["name"],
-            "image": p["image"],
-            "price": p["price"],
-            "quantity": item.quantity,
-            "line_total": line_total,
-            "vehicle_variant_id": item.vehicle_variant_id,
-            "vehicle_label": item.vehicle_label or "",
-        })
+        items_detail.append(
+            {
+                "product_id": p["id"],
+                "name": p["name"],
+                "image": p["image"],
+                "price": p["price"],
+                "quantity": item.quantity,
+                "line_total": line_total,
+                "vehicle_variant_id": item.vehicle_variant_id,
+                "vehicle_label": item.vehicle_label or "",
+            }
+        )
 
     if total <= 0:
         raise HTTPException(400, "Empty order")
@@ -1566,7 +2130,12 @@ async def create_order(req: CreateOrderReq, creds: Optional[HTTPAuthorizationCre
     discount = 0.0
     if req.coupon_code:
         c, discount = await validate_coupon(req.coupon_code, total, req.address.email)
-        coupon_data = {"code": c["code"], "type": c["type"], "discount": discount, "description": c.get("description", "")}
+        coupon_data = {
+            "code": c["code"],
+            "type": c["type"],
+            "discount": discount,
+            "description": c.get("description", ""),
+        }
         total = max(0, total - discount)
 
     order_id = str(uuid.uuid4())
@@ -1576,12 +2145,14 @@ async def create_order(req: CreateOrderReq, creds: Optional[HTTPAuthorizationCre
     if not active_mock and active_kid and active_ksec:
         try:
             client = razorpay.Client(auth=(active_kid, active_ksec))
-            r_order = client.order.create({
-                "amount": amount_paise,
-                "currency": "INR",
-                "receipt": order_id[:40],
-                "payment_capture": 1
-            })
+            r_order = client.order.create(
+                {
+                    "amount": amount_paise,
+                    "currency": "INR",
+                    "receipt": order_id[:40],
+                    "payment_capture": 1,
+                }
+            )
             razorpay_order_id = r_order["id"]
         except Exception as e:
             logger.error(f"Razorpay error: {e}")
@@ -1602,11 +2173,13 @@ async def create_order(req: CreateOrderReq, creds: Optional[HTTPAuthorizationCre
         "razorpay_payment_id": None,
         "status": "created",
         "mock": active_mock,
-        "created_at": datetime.now(timezone.utc).isoformat()
+        "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.orders.insert_one(order_doc)
     if coupon_data:
-        await db.coupons.update_one({"code": coupon_data["code"]}, {"$inc": {"used_count": 1}})
+        await db.coupons.update_one(
+            {"code": coupon_data["code"]}, {"$inc": {"used_count": 1}}
+        )
 
     # Fire customer + admin notification emails (non-blocking)
     try:
@@ -1614,20 +2187,41 @@ async def create_order(req: CreateOrderReq, creds: Optional[HTTPAuthorizationCre
             # Customer order confirmation FROM order@cardost.in (with support@ as reply-to)
             subj_c, html_c = order_confirmation_email(order_doc, base_url=FRONTEND_URL)
             order_from = settings.get("email_order_from") or settings.get("smtp_from")
-            support_reply = settings.get("email_support_from") or settings.get("email_support_to") or settings.get("support_email")
-            asyncio.create_task(send_email(
-                settings, order_doc["address"]["email"], subj_c, html_c,
-                reply_to=support_reply, from_alias=order_from, from_name="CarDost Orders",
-            ))
+            support_reply = (
+                settings.get("email_support_from")
+                or settings.get("email_support_to")
+                or settings.get("support_email")
+            )
+            asyncio.create_task(
+                send_email(
+                    settings,
+                    order_doc["address"]["email"],
+                    subj_c,
+                    html_c,
+                    reply_to=support_reply,
+                    from_alias=order_from,
+                    from_name="CarDost Orders",
+                )
+            )
             # Admin new-order alert TO admin@cardost.in FROM order@cardost.in
-            admin_to = settings.get("email_admin_to") or settings.get("smtp_admin_email") or settings.get("support_email")
+            admin_to = (
+                settings.get("email_admin_to")
+                or settings.get("smtp_admin_email")
+                or settings.get("support_email")
+            )
             if admin_to:
                 subj_a, html_a = admin_order_email(order_doc, base_url=FRONTEND_URL)
-                asyncio.create_task(send_email(
-                    settings, admin_to, subj_a, html_a,
-                    reply_to=order_doc["address"]["email"],
-                    from_alias=order_from, from_name="CarDost Orders",
-                ))
+                asyncio.create_task(
+                    send_email(
+                        settings,
+                        admin_to,
+                        subj_a,
+                        html_a,
+                        reply_to=order_doc["address"]["email"],
+                        from_alias=order_from,
+                        from_name="CarDost Orders",
+                    )
+                )
     except Exception as e:
         logger.error(f"[email] order confirmation failed: {e}")
 
@@ -1638,8 +2232,9 @@ async def create_order(req: CreateOrderReq, creds: Optional[HTTPAuthorizationCre
         "amount": amount_paise,
         "currency": "INR",
         "mock": active_mock,
-        "total": total
+        "total": total,
     }
+
 
 @api_router.post("/orders/verify")
 async def verify_payment(req: VerifyPaymentReq):
@@ -1650,28 +2245,34 @@ async def verify_payment(req: VerifyPaymentReq):
     async def decrement_stock():
         for it in order["items"]:
             await db.products.update_one(
-                {"id": it["product_id"]},
-                {"$inc": {"stock": -it["quantity"]}}
+                {"id": it["product_id"]}, {"$inc": {"stock": -it["quantity"]}}
             )
         # Low-stock alert after decrement (non-blocking, debounced)
-        asyncio.create_task(check_and_send_low_stock_alert([it["product_id"] for it in order["items"]]))
+        asyncio.create_task(
+            check_and_send_low_stock_alert([it["product_id"] for it in order["items"]])
+        )
 
     if MOCK_PAYMENT or order.get("mock"):
         if order.get("status") != "paid":
             await decrement_stock()
         await db.orders.update_one(
             {"id": req.order_id},
-            {"$set": {
-                "status": "paid",
-                "razorpay_payment_id": f"mock_pay_{uuid.uuid4().hex[:12]}",
-                "paid_at": datetime.now(timezone.utc).isoformat()
-            }}
+            {
+                "$set": {
+                    "status": "paid",
+                    "razorpay_payment_id": f"mock_pay_{uuid.uuid4().hex[:12]}",
+                    "paid_at": datetime.now(timezone.utc).isoformat(),
+                }
+            },
         )
         updated = await db.orders.find_one({"id": req.order_id}, {"_id": 0})
-        if updated: await trigger_shiprocket(updated)
+        if updated:
+            await trigger_shiprocket(updated)
         return {"ok": True, "status": "paid", "order_id": req.order_id}
 
-    if not (req.razorpay_order_id and req.razorpay_payment_id and req.razorpay_signature):
+    if not (
+        req.razorpay_order_id and req.razorpay_payment_id and req.razorpay_signature
+    ):
         raise HTTPException(400, "Missing payment fields")
 
     body_bytes = f"{req.razorpay_order_id}|{req.razorpay_payment_id}".encode()
@@ -1686,23 +2287,29 @@ async def verify_payment(req: VerifyPaymentReq):
         await decrement_stock()
     await db.orders.update_one(
         {"id": req.order_id},
-        {"$set": {
-            "status": "paid",
-            "razorpay_payment_id": req.razorpay_payment_id,
-            "paid_at": datetime.now(timezone.utc).isoformat()
-        }}
+        {
+            "$set": {
+                "status": "paid",
+                "razorpay_payment_id": req.razorpay_payment_id,
+                "paid_at": datetime.now(timezone.utc).isoformat(),
+            }
+        },
     )
     updated = await db.orders.find_one({"id": req.order_id}, {"_id": 0})
-    if updated: await trigger_shiprocket(updated)
+    if updated:
+        await trigger_shiprocket(updated)
     return {"ok": True, "status": "paid", "order_id": req.order_id}
+
 
 ALLOWED_STATUSES = ["paid", "processing", "shipped", "delivered", "cancelled"]
 
 # ============ Razorpay Webhook ============
-from fastapi import Request
+
 
 @api_router.post("/razorpay/webhook")
-async def razorpay_webhook(request: Request, x_razorpay_signature: Optional[str] = Header(None)):
+async def razorpay_webhook(
+    request: Request, x_razorpay_signature: Optional[str] = Header(None)
+):
     body = await request.body()
     settings = await get_settings_doc()
     active_webhook_secret = get_active_webhook_secret(settings)
@@ -1712,12 +2319,15 @@ async def razorpay_webhook(request: Request, x_razorpay_signature: Optional[str]
         raise HTTPException(503, "Webhook secret not configured")
     if not x_razorpay_signature:
         raise HTTPException(400, "Missing signature")
-    expected = hmac.new(active_webhook_secret.encode(), body, hashlib.sha256).hexdigest()
+    expected = hmac.new(
+        active_webhook_secret.encode(), body, hashlib.sha256
+    ).hexdigest()
     if not hmac.compare_digest(expected, x_razorpay_signature):
         logger.warning("Webhook signature mismatch")
         raise HTTPException(400, "Invalid signature")
 
     import json as _json
+
     try:
         event = _json.loads(body)
     except Exception:
@@ -1727,7 +2337,9 @@ async def razorpay_webhook(request: Request, x_razorpay_signature: Optional[str]
     payment = event.get("payload", {}).get("payment", {}).get("entity", {}) or {}
     rzp_order_id = payment.get("order_id")
     rzp_payment_id = payment.get("id")
-    logger.info(f"Razorpay webhook: {event_type} order={rzp_order_id} payment={rzp_payment_id}")
+    logger.info(
+        f"Razorpay webhook: {event_type} order={rzp_order_id} payment={rzp_payment_id}"
+    )
 
     if not rzp_order_id:
         return {"ok": True, "handled": False}
@@ -1737,34 +2349,52 @@ async def razorpay_webhook(request: Request, x_razorpay_signature: Optional[str]
         return {"ok": True, "handled": False, "reason": "order not found"}
 
     # Idempotent
-    if order.get("status") == "paid" and event_type in ("payment.captured", "payment.authorized"):
+    if order.get("status") == "paid" and event_type in (
+        "payment.captured",
+        "payment.authorized",
+    ):
         return {"ok": True, "handled": True, "already_paid": True}
 
     if event_type in ("payment.captured", "payment.authorized", "order.paid"):
         for it in order["items"]:
-            await db.products.update_one({"id": it["product_id"]}, {"$inc": {"stock": -it["quantity"]}})
-        asyncio.create_task(check_and_send_low_stock_alert([it["product_id"] for it in order["items"]]))
+            await db.products.update_one(
+                {"id": it["product_id"]}, {"$inc": {"stock": -it["quantity"]}}
+            )
+        asyncio.create_task(
+            check_and_send_low_stock_alert([it["product_id"] for it in order["items"]])
+        )
         await db.orders.update_one(
             {"id": order["id"]},
-            {"$set": {
-                "status": "paid",
-                "razorpay_payment_id": rzp_payment_id,
-                "paid_at": datetime.now(timezone.utc).isoformat(),
-                "webhook_event": event_type
-            }}
+            {
+                "$set": {
+                    "status": "paid",
+                    "razorpay_payment_id": rzp_payment_id,
+                    "paid_at": datetime.now(timezone.utc).isoformat(),
+                    "webhook_event": event_type,
+                }
+            },
         )
         updated = await db.orders.find_one({"id": order["id"]}, {"_id": 0})
-        if updated: await trigger_shiprocket(updated)
+        if updated:
+            await trigger_shiprocket(updated)
     elif event_type == "payment.failed":
         await db.orders.update_one(
             {"id": order["id"]},
-            {"$set": {"status": "failed", "webhook_event": event_type, "failure_reason": payment.get("error_description")}}
+            {
+                "$set": {
+                    "status": "failed",
+                    "webhook_event": event_type,
+                    "failure_reason": payment.get("error_description"),
+                }
+            },
         )
 
     return {"ok": True, "handled": True, "event": event_type}
 
+
 class OrderStatusUpdate(BaseModel):
     status: str
+
 
 @api_router.patch("/admin/orders/{oid}/status")
 async def update_order_status(oid: str, body: OrderStatusUpdate, _=Depends(get_admin)):
@@ -1774,13 +2404,19 @@ async def update_order_status(oid: str, body: OrderStatusUpdate, _=Depends(get_a
     if not order:
         raise HTTPException(404, "Order not found")
     # If cancelling a previously-paid order, restock items
-    if body.status == "cancelled" and order.get("status") in ("paid", "processing", "shipped"):
+    if body.status == "cancelled" and order.get("status") in (
+        "paid",
+        "processing",
+        "shipped",
+    ):
         for it in order["items"]:
             await db.products.update_one(
-                {"id": it["product_id"]},
-                {"$inc": {"stock": it["quantity"]}}
+                {"id": it["product_id"]}, {"$inc": {"stock": it["quantity"]}}
             )
-    update = {"status": body.status, f"{body.status}_at": datetime.now(timezone.utc).isoformat()}
+    update = {
+        "status": body.status,
+        f"{body.status}_at": datetime.now(timezone.utc).isoformat(),
+    }
     await db.orders.update_one({"id": oid}, {"$set": update})
     # Fire customer email if the status actually changed (from update@cardost.in)
     if order.get("status") != body.status:
@@ -1789,6 +2425,7 @@ async def update_order_status(oid: str, body: OrderStatusUpdate, _=Depends(get_a
             asyncio.create_task(send_order_status_email(refreshed, body.status))
     return {"ok": True, "status": body.status}
 
+
 @api_router.get("/orders/{oid}")
 async def get_order(oid: str):
     o = await db.orders.find_one({"id": oid}, {"_id": 0})
@@ -1796,10 +2433,16 @@ async def get_order(oid: str):
         raise HTTPException(404, "Not found")
     return o
 
+
 @api_router.get("/my/orders")
 async def my_orders(user=Depends(get_current_user)):
-    orders = await db.orders.find({"user_id": user["uid"]}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    orders = (
+        await db.orders.find({"user_id": user["uid"]}, {"_id": 0})
+        .sort("created_at", -1)
+        .to_list(200)
+    )
     return orders
+
 
 # Guest order tracking — lookup by order ID + (email OR phone)
 class TrackOrderReq(BaseModel):
@@ -1807,40 +2450,59 @@ class TrackOrderReq(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None
 
+
 @api_router.post("/orders/track")
 async def track_order(req: TrackOrderReq):
     if not req.order_id and not req.email and not req.phone:
         raise HTTPException(400, "Please provide an order ID, email, or phone number")
-    query = {}
+    query: dict[str, Any] = {}
     if req.order_id:
         query["id"] = req.order_id.strip()
     if req.email:
-        query["address.email"] = {"$regex": f"^{re.escape(req.email.strip())}$", "$options": "i"}
+        query["address.email"] = {
+            "$regex": f"^{re.escape(req.email.strip())}$",
+            "$options": "i",
+        }
     if req.phone:
         # Match phone ignoring spaces / dashes / leading + or 91 — keep last 10 digits
         phone = "".join(ch for ch in req.phone if ch.isdigit())[-10:]
         if phone:
             query["address.phone"] = {"$regex": re.escape(phone)}
-    orders = await db.orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(50)
+    orders: list[dict[str, Any]] = await db.orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(50)
     if not orders:
-        raise HTTPException(404, "No orders found matching those details. Please check and try again.")
+        raise HTTPException(
+            404, "No orders found matching those details. Please check and try again."
+        )
     # Best-effort: refresh shiprocket tracking for in-flight orders so AWB/courier are up-to-date
     for o in orders:
         sr = o.get("shiprocket") or {}
-        if o.get("status") in ("paid", "shipped", "processing") and sr and not sr.get("error") and not sr.get("skipped"):
+        if (
+            o.get("status") in ("paid", "shipped", "processing")
+            and sr
+            and not sr.get("error")
+            and not sr.get("skipped")
+        ):
             # Refresh only if last refresh is older than 10 minutes
             last = o.get("shiprocket_refreshed_at")
             stale = True
             if last:
                 try:
-                    stale = (datetime.now(timezone.utc) - datetime.fromisoformat(last.replace("Z", "+00:00"))).total_seconds() > 600
+                    stale = (
+                        datetime.now(timezone.utc)
+                        - datetime.fromisoformat(last.replace("Z", "+00:00"))
+                    ).total_seconds() > 600
                 except Exception:
                     stale = True
             if stale:
                 fresh = await shiprocket_refresh_tracking(o)
-                if isinstance(fresh, dict) and not fresh.get("error") and not fresh.get("skipped"):
+                if (
+                    isinstance(fresh, dict)
+                    and not fresh.get("error")
+                    and not fresh.get("skipped")
+                ):
                     o["shiprocket"] = fresh
     return orders
+
 
 @api_router.post("/orders/{oid}/refresh-shiprocket")
 async def refresh_shiprocket_endpoint(oid: str):
@@ -1850,16 +2512,21 @@ async def refresh_shiprocket_endpoint(oid: str):
     sr = await shiprocket_refresh_tracking(o)
     return {"ok": True, "shiprocket": sr}
 
+
 @api_router.get("/admin/orders")
 async def admin_orders(_=Depends(get_admin)):
     orders = await db.orders.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
     return orders
 
+
 @api_router.get("/admin/stats")
 async def admin_stats(_=Depends(get_admin)):
     total_orders = await db.orders.count_documents({})
     paid_orders = await db.orders.count_documents({"status": "paid"})
-    pipe = [{"$match": {"status": "paid"}}, {"$group": {"_id": None, "total": {"$sum": "$total"}}}]
+    pipe = [
+        {"$match": {"status": "paid"}},
+        {"$group": {"_id": None, "total": {"$sum": "$total"}}},
+    ]
     revenue_agg = await db.orders.aggregate(pipe).to_list(1)
     revenue = revenue_agg[0]["total"] if revenue_agg else 0
     product_count = await db.products.count_documents({})
@@ -1869,8 +2536,9 @@ async def admin_stats(_=Depends(get_admin)):
         "paid_orders": paid_orders,
         "revenue": revenue,
         "products": product_count,
-        "users": user_count
+        "users": user_count,
     }
+
 
 # ============ Contact ============
 class ContactReq(BaseModel):
@@ -1879,30 +2547,42 @@ class ContactReq(BaseModel):
     message: str
     phone: Optional[str] = ""
 
+
 @api_router.post("/contact")
 async def contact(req: ContactReq):
     doc = {
         "id": str(uuid.uuid4()),
         **req.model_dump(),
         "is_read": False,
-        "created_at": datetime.now(timezone.utc).isoformat()
+        "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.contacts.insert_one(doc)
     # Email admin about the new enquiry → sales@cardost.in FROM support@cardost.in
     try:
         settings = await get_settings_doc()
-        admin_to = settings.get("email_sales_to") or settings.get("smtp_admin_email") or settings.get("support_email")
+        admin_to = (
+            settings.get("email_sales_to")
+            or settings.get("smtp_admin_email")
+            or settings.get("support_email")
+        )
         sales_from = settings.get("email_support_from") or settings.get("smtp_from")
         if settings.get("smtp_enabled") and admin_to:
             subj, html = admin_contact_email(doc, base_url=FRONTEND_URL)
-            asyncio.create_task(send_email(
-                settings, admin_to, subj, html,
-                reply_to=doc.get("email") or None,
-                from_alias=sales_from, from_name="CarDost Sales",
-            ))
+            asyncio.create_task(
+                send_email(
+                    settings,
+                    admin_to,
+                    subj,
+                    html,
+                    reply_to=doc.get("email") or None,
+                    from_alias=sales_from,
+                    from_name="CarDost Sales",
+                )
+            )
     except Exception as e:
         logger.error(f"[email] contact notify failed: {e}")
     return {"ok": True}
+
 
 @api_router.get("/admin/messages")
 async def list_messages(_=Depends(get_admin), unread: Optional[bool] = None):
@@ -1911,15 +2591,20 @@ async def list_messages(_=Depends(get_admin), unread: Optional[bool] = None):
         q["is_read"] = False
     return await db.contacts.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
 
+
 @api_router.put("/admin/messages/{mid}")
 async def mark_message(mid: str, payload: dict, _=Depends(get_admin)):
-    await db.contacts.update_one({"id": mid}, {"$set": {"is_read": bool(payload.get("is_read", True))}})
+    await db.contacts.update_one(
+        {"id": mid}, {"$set": {"is_read": bool(payload.get("is_read", True))}}
+    )
     return {"ok": True}
+
 
 @api_router.delete("/admin/messages/{mid}")
 async def delete_message(mid: str, _=Depends(get_admin)):
     await db.contacts.delete_one({"id": mid})
     return {"ok": True}
+
 
 @api_router.get("/admin/messages/unread-count")
 async def unread_messages_count(_=Depends(get_admin)):
@@ -1934,17 +2619,26 @@ async def unread_messages_count(_=Depends(get_admin)):
 
 _STATIC_SITEMAP_PAGES = [
     # (path, priority, changefreq)
-    ("",            "1.0", "daily"),
-    ("shop",        "0.9", "daily"),
+    ("", "1.0", "daily"),
+    ("shop", "0.9", "daily"),
     ("track-order", "0.6", "monthly"),
-    ("contact",     "0.6", "monthly"),
-    ("about",       "0.5", "monthly"),
-    ("faq",         "0.5", "monthly"),
-    ("reviews",     "0.5", "weekly"),
+    ("contact", "0.6", "monthly"),
+    ("about", "0.5", "monthly"),
+    ("faq", "0.5", "monthly"),
+    ("reviews", "0.5", "weekly"),
 ]
 
+
 def _xml_escape(s: str) -> str:
-    return (s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;").replace("'", "&apos;")
+    return (
+        (s or "")
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+        .replace("'", "&apos;")
+    )
+
 
 def _iso_date(value) -> str:
     """Extract YYYY-MM-DD from a stored datetime/ISO string."""
@@ -1953,6 +2647,7 @@ def _iso_date(value) -> str:
     if isinstance(value, datetime):
         return value.strftime("%Y-%m-%d")
     return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
 
 @api_router.get("/seo/sitemap.xml")
 async def seo_sitemap():
@@ -2017,7 +2712,6 @@ async def build_sitemap_xml() -> str:
 
     return (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
-        '<?xml-stylesheet type="text/xsl" href="/sitemap.xsl"?>\n'
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
         + "\n".join(urls)
         + "\n</urlset>\n"
@@ -2054,8 +2748,16 @@ async def write_sitemap_to_disk(reason: str = "manual") -> dict:
         except Exception as e:
             skipped.append({"path": path, "reason": str(e)})
     url_count = xml.count("<url>")
-    logger.info(f"[sitemap] regenerated ({reason}): {url_count} URLs, wrote={len(written)}, skipped={len(skipped)}")
-    return {"ok": True, "reason": reason, "url_count": url_count, "written": written, "skipped": skipped}
+    logger.info(
+        f"[sitemap] regenerated ({reason}): {url_count} URLs, wrote={len(written)}, skipped={len(skipped)}"
+    )
+    return {
+        "ok": True,
+        "reason": reason,
+        "url_count": url_count,
+        "written": written,
+        "skipped": skipped,
+    }
 
 
 def schedule_sitemap_refresh(reason: str = "mutation"):
@@ -2069,6 +2771,7 @@ async def admin_regenerate_sitemap(_=Depends(get_admin)):
     """Admin-triggered manual sitemap refresh. Returns the write status so the
     admin UI can show 'wrote N URLs to public/sitemap.xml' feedback."""
     return await write_sitemap_to_disk(reason="admin")
+
 
 @api_router.get("/seo/robots.txt")
 async def seo_robots_txt():
@@ -2092,29 +2795,206 @@ async def seo_robots_txt():
 # ============ Seed ============
 SEED_PRODUCTS = [
     # Android Stereos
-    {"name": "CarDost X9 Pro 10\" Android Stereo", "description": "10.1-inch Full HD IPS touchscreen Android 13 head unit with 4GB RAM, 64GB storage, Wireless CarPlay & Android Auto, GPS, Bluetooth 5.0, FM/AM, AHD camera support.", "price": 18999, "original_price": 24999, "category": "android-stereos", "brand": "CarDost", "image": "https://images.pexels.com/photos/4141878/pexels-photo-4141878.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940", "stock": 25, "rating": 4.8, "featured": True},
-    {"name": "Autotek Multimedia 9\" Android Player", "description": "9-inch Android 12 touchscreen with WiFi, Bluetooth, Mirror Link, USB & SD card support. Universal double-din fit.", "price": 12499, "original_price": 16999, "category": "android-stereos", "brand": "Autotek", "image": "https://images.pexels.com/photos/28984412/pexels-photo-28984412.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940", "stock": 30, "rating": 4.5, "featured": True},
-    {"name": "RoadLink Android Multimedia Player 7\"", "description": "Compact 7-inch Android stereo with reverse camera input, steering control, 2GB RAM.", "price": 7499, "original_price": 9999, "category": "android-stereos", "brand": "RoadLink", "image": "https://images.pexels.com/photos/4078064/pexels-photo-4078064.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940", "stock": 40, "rating": 4.3, "featured": False},
+    {
+        "name": 'CarDost X9 Pro 10" Android Stereo',
+        "description": "10.1-inch Full HD IPS touchscreen Android 13 head unit with 4GB RAM, 64GB storage, Wireless CarPlay & Android Auto, GPS, Bluetooth 5.0, FM/AM, AHD camera support.",
+        "price": 18999,
+        "original_price": 24999,
+        "category": "android-stereos",
+        "brand": "CarDost",
+        "image": "https://images.pexels.com/photos/4141878/pexels-photo-4141878.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "stock": 25,
+        "rating": 4.8,
+        "featured": True,
+    },
+    {
+        "name": 'Autotek Multimedia 9" Android Player',
+        "description": "9-inch Android 12 touchscreen with WiFi, Bluetooth, Mirror Link, USB & SD card support. Universal double-din fit.",
+        "price": 12499,
+        "original_price": 16999,
+        "category": "android-stereos",
+        "brand": "Autotek",
+        "image": "https://images.pexels.com/photos/28984412/pexels-photo-28984412.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "stock": 30,
+        "rating": 4.5,
+        "featured": True,
+    },
+    {
+        "name": 'RoadLink Android Multimedia Player 7"',
+        "description": "Compact 7-inch Android stereo with reverse camera input, steering control, 2GB RAM.",
+        "price": 7499,
+        "original_price": 9999,
+        "category": "android-stereos",
+        "brand": "RoadLink",
+        "image": "https://images.pexels.com/photos/4078064/pexels-photo-4078064.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "stock": 40,
+        "rating": 4.3,
+        "featured": False,
+    },
     # Speakers
-    {"name": "Sony XS-FB1620E 6.5\" Coaxial Speakers", "description": "260W peak power, 6.5-inch 2-way coaxial speakers with mica reinforced cellular fibre cones.", "price": 2499, "original_price": 3499, "category": "speakers", "brand": "Sony", "image": "https://images.unsplash.com/photo-1608538770329-65941f62f9f8?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MTN8MHwxfHNlYXJjaHwxfHxjYXIlMjBhdWRpbyUyMHNwZWFrZXIlMjBtYWNyb3xlbnwwfHx8fDE3ODE4OTgwOTB8MA&ixlib=rb-4.1.0&q=85", "stock": 60, "rating": 4.7, "featured": True},
-    {"name": "Pioneer TS-A6976S 6x9\" 3-Way Speakers", "description": "450W max, 6x9-inch 3-way coaxial speakers with multilayer mica matrix cone for crystal-clear sound.", "price": 4999, "original_price": 6499, "category": "speakers", "brand": "Pioneer", "image": "https://images.pexels.com/photos/20703567/pexels-photo-20703567.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940", "stock": 35, "rating": 4.8, "featured": True},
-    {"name": "JBL Stage1621 6.5\" Coaxial", "description": "Premium JBL 6.5-inch speakers, 250W max power. Powerful bass and crisp highs.", "price": 3299, "original_price": 4299, "category": "speakers", "brand": "JBL", "image": "https://images.pexels.com/photos/8133495/pexels-photo-8133495.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940", "stock": 45, "rating": 4.6, "featured": False},
+    {
+        "name": 'Sony XS-FB1620E 6.5" Coaxial Speakers',
+        "description": "260W peak power, 6.5-inch 2-way coaxial speakers with mica reinforced cellular fibre cones.",
+        "price": 2499,
+        "original_price": 3499,
+        "category": "speakers",
+        "brand": "Sony",
+        "image": "https://images.unsplash.com/photo-1608538770329-65941f62f9f8?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MTN8MHwxfHNlYXJjaHwxfHxjYXIlMjBhdWRpbyUyMHNwZWFrZXIlMjBtYWNyb3xlbnwwfHx8fDE3ODE4OTgwOTB8MA&ixlib=rb-4.1.0&q=85",
+        "stock": 60,
+        "rating": 4.7,
+        "featured": True,
+    },
+    {
+        "name": 'Pioneer TS-A6976S 6x9" 3-Way Speakers',
+        "description": "450W max, 6x9-inch 3-way coaxial speakers with multilayer mica matrix cone for crystal-clear sound.",
+        "price": 4999,
+        "original_price": 6499,
+        "category": "speakers",
+        "brand": "Pioneer",
+        "image": "https://images.pexels.com/photos/20703567/pexels-photo-20703567.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "stock": 35,
+        "rating": 4.8,
+        "featured": True,
+    },
+    {
+        "name": 'JBL Stage1621 6.5" Coaxial',
+        "description": "Premium JBL 6.5-inch speakers, 250W max power. Powerful bass and crisp highs.",
+        "price": 3299,
+        "original_price": 4299,
+        "category": "speakers",
+        "brand": "JBL",
+        "image": "https://images.pexels.com/photos/8133495/pexels-photo-8133495.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "stock": 45,
+        "rating": 4.6,
+        "featured": False,
+    },
     # Amplifiers
-    {"name": "Xxygen ONAE 2727 3500W Mono Amp", "description": "Class D mono block amplifier, 3500W max power, perfect for subwoofers. Low-pass filter, bass boost.", "price": 8999, "original_price": 12999, "category": "amplifiers", "brand": "Xxygen", "image": "https://images.pexels.com/photos/13811121/pexels-photo-13811121.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940", "stock": 15, "rating": 4.6, "featured": True},
-    {"name": "Magnetz MGT-A160 4-Channel Amplifier", "description": "1600W 4-channel amplifier with built-in crossover, bridgeable channels.", "price": 6499, "original_price": 8999, "category": "amplifiers", "brand": "Magnetz", "image": "https://images.pexels.com/photos/13972228/pexels-photo-13972228.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940", "stock": 20, "rating": 4.4, "featured": False},
+    {
+        "name": "Xxygen ONAE 2727 3500W Mono Amp",
+        "description": "Class D mono block amplifier, 3500W max power, perfect for subwoofers. Low-pass filter, bass boost.",
+        "price": 8999,
+        "original_price": 12999,
+        "category": "amplifiers",
+        "brand": "Xxygen",
+        "image": "https://images.pexels.com/photos/13811121/pexels-photo-13811121.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "stock": 15,
+        "rating": 4.6,
+        "featured": True,
+    },
+    {
+        "name": "Magnetz MGT-A160 4-Channel Amplifier",
+        "description": "1600W 4-channel amplifier with built-in crossover, bridgeable channels.",
+        "price": 6499,
+        "original_price": 8999,
+        "category": "amplifiers",
+        "brand": "Magnetz",
+        "image": "https://images.pexels.com/photos/13972228/pexels-photo-13972228.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "stock": 20,
+        "rating": 4.4,
+        "featured": False,
+    },
     # Dash Cameras
-    {"name": "CarDost 4K Front + Rear Dash Cam", "description": "4K UHD dash camera with rear cam, WiFi, GPS, night vision, 170° wide angle, loop recording, G-sensor.", "price": 5999, "original_price": 8499, "category": "dash-cameras", "brand": "CarDost", "image": "https://images.unsplash.com/photo-1574649341254-c3cf3421df77?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1ODh8MHwxfHNlYXJjaHwxfHxkYXNoJTIwY2FtJTIwaW5zaWRlJTIwY2FyfGVufDB8fHx8MTc4MTg5ODA5Nnww&ixlib=rb-4.1.0&q=85", "stock": 30, "rating": 4.7, "featured": True},
-    {"name": "Car Rear View Reverse Camera HD", "description": "Waterproof HD reverse parking camera with night vision, 170° wide angle, universal fit.", "price": 1299, "original_price": 1999, "category": "dash-cameras", "brand": "Generic", "image": "https://images.pexels.com/photos/1970816/pexels-photo-1970816.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940", "stock": 80, "rating": 4.3, "featured": False},
+    {
+        "name": "CarDost 4K Front + Rear Dash Cam",
+        "description": "4K UHD dash camera with rear cam, WiFi, GPS, night vision, 170° wide angle, loop recording, G-sensor.",
+        "price": 5999,
+        "original_price": 8499,
+        "category": "dash-cameras",
+        "brand": "CarDost",
+        "image": "https://images.unsplash.com/photo-1574649341254-c3cf3421df77?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1ODh8MHwxfHNlYXJjaHwxfHxkYXNoJTIwY2FtJTIwaW5zaWRlJTIwY2FyfGVufDB8fHx8MTc4MTg5ODA5Nnww&ixlib=rb-4.1.0&q=85",
+        "stock": 30,
+        "rating": 4.7,
+        "featured": True,
+    },
+    {
+        "name": "Car Rear View Reverse Camera HD",
+        "description": "Waterproof HD reverse parking camera with night vision, 170° wide angle, universal fit.",
+        "price": 1299,
+        "original_price": 1999,
+        "category": "dash-cameras",
+        "brand": "Generic",
+        "image": "https://images.pexels.com/photos/1970816/pexels-photo-1970816.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "stock": 80,
+        "rating": 4.3,
+        "featured": False,
+    },
     # LED Lights
-    {"name": "Premium LED Headlight H4 200W", "description": "Ultra-bright H4 LED headlights, 20000LM, 6000K cool white, plug-and-play. Pair.", "price": 1899, "original_price": 2999, "category": "led-lights", "brand": "Generic", "image": "https://images.pexels.com/photos/9754665/pexels-photo-9754665.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940", "stock": 100, "rating": 4.5, "featured": False},
-    {"name": "RGB Interior Footwell LED Strip Kit", "description": "App-controlled RGB LED strips for car interior. Music sync, 16M colors, easy install.", "price": 1499, "original_price": 2299, "category": "led-lights", "brand": "Generic", "image": "https://images.pexels.com/photos/14101380/pexels-photo-14101380.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940", "stock": 60, "rating": 4.4, "featured": True},
+    {
+        "name": "Premium LED Headlight H4 200W",
+        "description": "Ultra-bright H4 LED headlights, 20000LM, 6000K cool white, plug-and-play. Pair.",
+        "price": 1899,
+        "original_price": 2999,
+        "category": "led-lights",
+        "brand": "Generic",
+        "image": "https://images.pexels.com/photos/9754665/pexels-photo-9754665.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "stock": 100,
+        "rating": 4.5,
+        "featured": False,
+    },
+    {
+        "name": "RGB Interior Footwell LED Strip Kit",
+        "description": "App-controlled RGB LED strips for car interior. Music sync, 16M colors, easy install.",
+        "price": 1499,
+        "original_price": 2299,
+        "category": "led-lights",
+        "brand": "Generic",
+        "image": "https://images.pexels.com/photos/14101380/pexels-photo-14101380.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "stock": 60,
+        "rating": 4.4,
+        "featured": True,
+    },
     # Perfumes
-    {"name": "Bullsone Premium Car Perfume", "description": "Long-lasting car air freshener with elegant fragrance. 110ml bottle, lasts 60+ days.", "price": 599, "original_price": 899, "category": "perfumes", "brand": "Bullsone", "image": "https://images.unsplash.com/photo-1778530207612-b46210636834?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1ODh8MHwxfHNlYXJjaHwxfHxjYXIlMjBwZXJmdW1lJTIwYWlyJTIwZnJlc2hlbmVyfGVufDB8fHx8MTc4MTg5ODA5Nnww&ixlib=rb-4.1.0&q=85", "stock": 200, "rating": 4.6, "featured": False},
-    {"name": "Hanging Wood Diffuser - Black Ice", "description": "Hanging car diffuser with Black Ice fragrance. Premium wooden cap design.", "price": 349, "original_price": 499, "category": "perfumes", "brand": "Generic", "image": "https://images.unsplash.com/photo-1778530207938-ab559649165a?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1ODh8MHwxfHNlYXJjaHwyfHxjYXIlMjBwZXJmdW1lJTIwYWlyJTIwZnJlc2hlbmVyfGVufDB8fHx8MTc4MTg5ODA5Nnww&ixlib=rb-4.1.0&q=85", "stock": 150, "rating": 4.3, "featured": False},
+    {
+        "name": "Bullsone Premium Car Perfume",
+        "description": "Long-lasting car air freshener with elegant fragrance. 110ml bottle, lasts 60+ days.",
+        "price": 599,
+        "original_price": 899,
+        "category": "perfumes",
+        "brand": "Bullsone",
+        "image": "https://images.unsplash.com/photo-1778530207612-b46210636834?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1ODh8MHwxfHNlYXJjaHwxfHxjYXIlMjBwZXJmdW1lJTIwYWlyJTIwZnJlc2hlbmVyfGVufDB8fHx8MTc4MTg5ODA5Nnww&ixlib=rb-4.1.0&q=85",
+        "stock": 200,
+        "rating": 4.6,
+        "featured": False,
+    },
+    {
+        "name": "Hanging Wood Diffuser - Black Ice",
+        "description": "Hanging car diffuser with Black Ice fragrance. Premium wooden cap design.",
+        "price": 349,
+        "original_price": 499,
+        "category": "perfumes",
+        "brand": "Generic",
+        "image": "https://images.unsplash.com/photo-1778530207938-ab559649165a?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1ODh8MHwxfHNlYXJjaHwyfHxjYXIlMjBwZXJmdW1lJTIwYWlyJTIwZnJlc2hlbmVyfGVufDB8fHx8MTc4MTg5ODA5Nnww&ixlib=rb-4.1.0&q=85",
+        "stock": 150,
+        "rating": 4.3,
+        "featured": False,
+    },
     # Accessories
-    {"name": "Blind Spot Mirror (Pair)", "description": "360° rotatable convex blind spot mirrors. Eliminate blind spots. Easy stick-on install.", "price": 299, "original_price": 499, "category": "accessories", "brand": "Generic", "image": "https://images.pexels.com/photos/2127613/pexels-photo-2127613.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940", "stock": 250, "rating": 4.2, "featured": False},
-    {"name": "Anti-Fog Film for Windshield", "description": "Premium anti-fog film. Keeps windshield clear in rainy/foggy weather. Pack of 4 sheets.", "price": 499, "original_price": 799, "category": "accessories", "brand": "Generic", "image": "https://images.pexels.com/photos/170811/pexels-photo-170811.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940", "stock": 120, "rating": 4.1, "featured": False},
+    {
+        "name": "Blind Spot Mirror (Pair)",
+        "description": "360° rotatable convex blind spot mirrors. Eliminate blind spots. Easy stick-on install.",
+        "price": 299,
+        "original_price": 499,
+        "category": "accessories",
+        "brand": "Generic",
+        "image": "https://images.pexels.com/photos/2127613/pexels-photo-2127613.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "stock": 250,
+        "rating": 4.2,
+        "featured": False,
+    },
+    {
+        "name": "Anti-Fog Film for Windshield",
+        "description": "Premium anti-fog film. Keeps windshield clear in rainy/foggy weather. Pack of 4 sheets.",
+        "price": 499,
+        "original_price": 799,
+        "category": "accessories",
+        "brand": "Generic",
+        "image": "https://images.pexels.com/photos/170811/pexels-photo-170811.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "stock": 120,
+        "rating": 4.1,
+        "featured": False,
+    },
 ]
+
 
 @app.on_event("startup")
 async def startup_event():
@@ -2127,30 +3007,95 @@ async def startup_event():
     # Seed admin
     admin = await db.users.find_one({"email": ADMIN_EMAIL})
     if not admin:
-        await db.users.insert_one({
-            "id": str(uuid.uuid4()),
-            "name": "Admin",
-            "email": ADMIN_EMAIL,
-            "phone": "",
-            "password": hash_pw(ADMIN_PASSWORD),
-            "role": "admin",
-            "created_at": datetime.now(timezone.utc).isoformat()
-        })
+        await db.users.insert_one(
+            {
+                "id": str(uuid.uuid4()),
+                "name": "Admin",
+                "email": ADMIN_EMAIL,
+                "phone": "",
+                "password": hash_pw(ADMIN_PASSWORD),
+                "role": "admin",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+        )
         logger.info("Admin user seeded")
 
     # Seed default categories if empty
     cat_count = await db.categories.count_documents({})
     if cat_count == 0:
         DEFAULT_CATS = [
-            {"slug": "android-stereos", "name": "Android Stereos", "icon": "Monitor", "sort_order": 1, "is_active": True, "description": "10\" Touchscreen, CarPlay, GPS"},
-            {"slug": "speakers", "name": "Speakers", "icon": "Speaker", "sort_order": 2, "is_active": True, "description": "Sony, JBL, Pioneer audio speakers"},
-            {"slug": "amplifiers", "name": "Amplifiers", "icon": "Zap", "sort_order": 3, "is_active": True, "description": "Mono and multi-channel amps"},
-            {"slug": "dash-cameras", "name": "Dash Cameras", "icon": "Camera", "sort_order": 4, "is_active": True, "description": "Front and rear dash cams"},
-            {"slug": "led-lights", "name": "LED Lights", "icon": "Lightbulb", "sort_order": 5, "is_active": True, "description": "Headlights and interior LEDs"},
-            {"slug": "perfumes", "name": "Car Perfumes", "icon": "Sparkles", "sort_order": 6, "is_active": True, "description": "Air fresheners and diffusers"},
-            {"slug": "accessories", "name": "Accessories", "icon": "Wrench", "sort_order": 7, "is_active": True, "description": "Blind spot mirrors, films, etc."},
-            {"slug": "key-chains", "name": "Key Chains", "icon": "Key", "sort_order": 8, "is_active": True, "description": "Premium key covers"},
-            {"slug": "body-covers", "name": "Body Covers", "icon": "Shirt", "sort_order": 9, "is_active": True, "description": "Custom-fit car body covers"},
+            {
+                "slug": "android-stereos",
+                "name": "Android Stereos",
+                "icon": "Monitor",
+                "sort_order": 1,
+                "is_active": True,
+                "description": '10" Touchscreen, CarPlay, GPS',
+            },
+            {
+                "slug": "speakers",
+                "name": "Speakers",
+                "icon": "Speaker",
+                "sort_order": 2,
+                "is_active": True,
+                "description": "Sony, JBL, Pioneer audio speakers",
+            },
+            {
+                "slug": "amplifiers",
+                "name": "Amplifiers",
+                "icon": "Zap",
+                "sort_order": 3,
+                "is_active": True,
+                "description": "Mono and multi-channel amps",
+            },
+            {
+                "slug": "dash-cameras",
+                "name": "Dash Cameras",
+                "icon": "Camera",
+                "sort_order": 4,
+                "is_active": True,
+                "description": "Front and rear dash cams",
+            },
+            {
+                "slug": "led-lights",
+                "name": "LED Lights",
+                "icon": "Lightbulb",
+                "sort_order": 5,
+                "is_active": True,
+                "description": "Headlights and interior LEDs",
+            },
+            {
+                "slug": "perfumes",
+                "name": "Car Perfumes",
+                "icon": "Sparkles",
+                "sort_order": 6,
+                "is_active": True,
+                "description": "Air fresheners and diffusers",
+            },
+            {
+                "slug": "accessories",
+                "name": "Accessories",
+                "icon": "Wrench",
+                "sort_order": 7,
+                "is_active": True,
+                "description": "Blind spot mirrors, films, etc.",
+            },
+            {
+                "slug": "key-chains",
+                "name": "Key Chains",
+                "icon": "Key",
+                "sort_order": 8,
+                "is_active": True,
+                "description": "Premium key covers",
+            },
+            {
+                "slug": "body-covers",
+                "name": "Body Covers",
+                "icon": "Shirt",
+                "sort_order": 9,
+                "is_active": True,
+                "description": "Custom-fit car body covers",
+            },
         ]
         for c in DEFAULT_CATS:
             c["id"] = str(uuid.uuid4())
@@ -2162,28 +3107,67 @@ async def startup_event():
 
     # Migrate existing products: backfill 'categories' array from legacy 'category' field
     products_to_migrate = await db.products.find(
-        {"$or": [{"categories": {"$exists": False}}, {"categories": {"$size": 0}}]}, {"_id": 0, "id": 1, "category": 1}
+        {"$or": [{"categories": {"$exists": False}}, {"categories": {"$size": 0}}]},
+        {"_id": 0, "id": 1, "category": 1},
     ).to_list(1000)
     for p in products_to_migrate:
         if p.get("category"):
-            await db.products.update_one({"id": p["id"]}, {"$set": {"categories": [p["category"]]}})
+            await db.products.update_one(
+                {"id": p["id"]}, {"$set": {"categories": [p["category"]]}}
+            )
     if products_to_migrate:
         logger.info(f"Migrated {len(products_to_migrate)} products to multi-category")
 
     # Backfill product flag defaults
-    await db.products.update_many({"is_published": {"$exists": False}}, {"$set": {"is_published": True}})
-    await db.products.update_many({"is_best_seller": {"$exists": False}}, {"$set": {"is_best_seller": False}})
-    await db.products.update_many({"is_new_arrival": {"$exists": False}}, {"$set": {"is_new_arrival": False}})
+    await db.products.update_many(
+        {"is_published": {"$exists": False}}, {"$set": {"is_published": True}}
+    )
+    await db.products.update_many(
+        {"is_best_seller": {"$exists": False}}, {"$set": {"is_best_seller": False}}
+    )
+    await db.products.update_many(
+        {"is_new_arrival": {"$exists": False}}, {"$set": {"is_new_arrival": False}}
+    )
 
     # Seed sample coupons if empty
     if await db.coupons.count_documents({}) == 0:
         sample = [
-            {"code": "SAVE5", "type": "percent", "value": 5, "min_order": 500, "max_discount": 500, "usage_limit": 0,
-             "expires_at": None, "is_active": True, "description": "5% off on prepaid orders ₹500+", "customer_emails": []},
-            {"code": "FIRST100", "type": "flat", "value": 100, "min_order": 1000, "max_discount": 100, "usage_limit": 0,
-             "expires_at": None, "is_active": True, "description": "Flat ₹100 off on first order ₹1000+", "customer_emails": []},
-            {"code": "BASS500", "type": "flat", "value": 500, "min_order": 5000, "max_discount": 500, "usage_limit": 0,
-             "expires_at": None, "is_active": True, "description": "₹500 off on speakers/amps ₹5000+", "customer_emails": []},
+            {
+                "code": "SAVE5",
+                "type": "percent",
+                "value": 5,
+                "min_order": 500,
+                "max_discount": 500,
+                "usage_limit": 0,
+                "expires_at": None,
+                "is_active": True,
+                "description": "5% off on prepaid orders ₹500+",
+                "customer_emails": [],
+            },
+            {
+                "code": "FIRST100",
+                "type": "flat",
+                "value": 100,
+                "min_order": 1000,
+                "max_discount": 100,
+                "usage_limit": 0,
+                "expires_at": None,
+                "is_active": True,
+                "description": "Flat ₹100 off on first order ₹1000+",
+                "customer_emails": [],
+            },
+            {
+                "code": "BASS500",
+                "type": "flat",
+                "value": 500,
+                "min_order": 5000,
+                "max_discount": 500,
+                "usage_limit": 0,
+                "expires_at": None,
+                "is_active": True,
+                "description": "₹500 off on speakers/amps ₹5000+",
+                "customer_emails": [],
+            },
         ]
         for c in sample:
             c["id"] = str(uuid.uuid4())
@@ -2195,18 +3179,42 @@ async def startup_event():
     # Seed banners if empty
     if await db.banners.count_documents({}) == 0:
         banners = [
-            {"title": "MEGA SOUND SALE", "subtitle": "Up to 76% OFF on selected products", "badge": "EXTRA 5% OFF ON PREPAID · CODE SAVE5",
-             "cta_text": "Shop Now", "cta_link": "/shop", "mesh": "mesh-indigo", "accent": "#A5B4FC",
-             "image": "https://images.pexels.com/photos/9530906/pexels-photo-9530906.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=720&w=1920",
-             "sort_order": 1, "is_active": True},
-            {"title": "ANDROID STEREOS", "subtitle": "10\" Touchscreen · CarPlay · GPS", "badge": "Starting ₹7,499",
-             "cta_text": "Explore Stereos", "cta_link": "/shop?category=android-stereos", "mesh": "mesh-stereo", "accent": "#FBBF24",
-             "image": "https://images.pexels.com/photos/4078064/pexels-photo-4078064.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=720&w=1920",
-             "sort_order": 2, "is_active": True},
-            {"title": "BASS LEGENDS", "subtitle": "Sony · JBL · Pioneer · Magnetz", "badge": "Free Shipping All India",
-             "cta_text": "Shop Speakers", "cta_link": "/shop?category=speakers", "mesh": "mesh-speakers", "accent": "#FBCFE8",
-             "image": "https://images.unsplash.com/photo-1608538770329-65941f62f9f8?crop=entropy&cs=srgb&fm=jpg&w=1920",
-             "sort_order": 3, "is_active": True},
+            {
+                "title": "MEGA SOUND SALE",
+                "subtitle": "Up to 76% OFF on selected products",
+                "badge": "EXTRA 5% OFF ON PREPAID · CODE SAVE5",
+                "cta_text": "Shop Now",
+                "cta_link": "/shop",
+                "mesh": "mesh-indigo",
+                "accent": "#A5B4FC",
+                "image": "https://images.pexels.com/photos/9530906/pexels-photo-9530906.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=720&w=1920",
+                "sort_order": 1,
+                "is_active": True,
+            },
+            {
+                "title": "ANDROID STEREOS",
+                "subtitle": '10" Touchscreen · CarPlay · GPS',
+                "badge": "Starting ₹7,499",
+                "cta_text": "Explore Stereos",
+                "cta_link": "/shop?category=android-stereos",
+                "mesh": "mesh-stereo",
+                "accent": "#FBBF24",
+                "image": "https://images.pexels.com/photos/4078064/pexels-photo-4078064.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=720&w=1920",
+                "sort_order": 2,
+                "is_active": True,
+            },
+            {
+                "title": "BASS LEGENDS",
+                "subtitle": "Sony · JBL · Pioneer · Magnetz",
+                "badge": "Free Shipping All India",
+                "cta_text": "Shop Speakers",
+                "cta_link": "/shop?category=speakers",
+                "mesh": "mesh-speakers",
+                "accent": "#FBCFE8",
+                "image": "https://images.unsplash.com/photo-1608538770329-65941f62f9f8?crop=entropy&cs=srgb&fm=jpg&w=1920",
+                "sort_order": 3,
+                "is_active": True,
+            },
         ]
         for b in banners:
             b["id"] = str(uuid.uuid4())
@@ -2217,11 +3225,36 @@ async def startup_event():
     # Seed tax rules if empty
     if await db.tax_rules.count_documents({}) == 0:
         rules = [
-            {"name": "GST 0% (Exempt)", "rate": 0, "is_default": False, "description": "Tax-exempt items"},
-            {"name": "GST 5%", "rate": 5, "is_default": False, "description": "Essential goods"},
-            {"name": "GST 12%", "rate": 12, "is_default": False, "description": "Standard"},
-            {"name": "GST 18%", "rate": 18, "is_default": True, "description": "Most car audio products"},
-            {"name": "GST 28%", "rate": 28, "is_default": False, "description": "Luxury items"},
+            {
+                "name": "GST 0% (Exempt)",
+                "rate": 0,
+                "is_default": False,
+                "description": "Tax-exempt items",
+            },
+            {
+                "name": "GST 5%",
+                "rate": 5,
+                "is_default": False,
+                "description": "Essential goods",
+            },
+            {
+                "name": "GST 12%",
+                "rate": 12,
+                "is_default": False,
+                "description": "Standard",
+            },
+            {
+                "name": "GST 18%",
+                "rate": 18,
+                "is_default": True,
+                "description": "Most car audio products",
+            },
+            {
+                "name": "GST 28%",
+                "rate": 28,
+                "is_default": False,
+                "description": "Luxury items",
+            },
         ]
         for r in rules:
             r["id"] = str(uuid.uuid4())
@@ -2247,35 +3280,53 @@ async def startup_event():
                 mk_count = md_count = vt_count = 0
                 for mk in seed.get("makes", []):
                     mk_id = str(uuid.uuid4())
-                    await db.car_makes.insert_one({"id": mk_id, "name": mk["name"], "slug": mk["slug"]})
+                    await db.car_makes.insert_one(
+                        {"id": mk_id, "name": mk["name"], "slug": mk["slug"]}
+                    )
                     mk_count += 1
                     for md in mk.get("models", []):
                         md_id = str(uuid.uuid4())
-                        await db.car_models.insert_one({"id": md_id, "make_id": mk_id, "name": md["name"], "slug": md["slug"]})
+                        await db.car_models.insert_one(
+                            {
+                                "id": md_id,
+                                "make_id": mk_id,
+                                "name": md["name"],
+                                "slug": md["slug"],
+                            }
+                        )
                         md_count += 1
                         for v in md.get("variants", []):
                             ey = v["end_year"] if v["end_year"] != "Present" else None
-                            await db.car_variants.insert_one({
-                                "id": str(uuid.uuid4()), "model_id": md_id,
-                                "name": v["name"], "slug": v["slug"],
-                                "start_year": v["start_year"], "end_year": ey,
-                                "facelift_years": v.get("facelift_years", ""),
-                                "notes": v.get("notes", "")
-                            })
+                            await db.car_variants.insert_one(
+                                {
+                                    "id": str(uuid.uuid4()),
+                                    "model_id": md_id,
+                                    "name": v["name"],
+                                    "slug": v["slug"],
+                                    "start_year": v["start_year"],
+                                    "end_year": ey,
+                                    "facelift_years": v.get("facelift_years", ""),
+                                    "notes": v.get("notes", ""),
+                                }
+                            )
                             vt_count += 1
-                logger.info(f"Seeded vehicle catalog: {mk_count} makes, {md_count} models, {vt_count} variants")
+                logger.info(
+                    f"Seeded vehicle catalog: {mk_count} makes, {md_count} models, {vt_count} variants"
+                )
         except Exception as e:
             logger.warning(f"Vehicle catalog seed failed: {e}")
+
 
 app.include_router(api_router)
 
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

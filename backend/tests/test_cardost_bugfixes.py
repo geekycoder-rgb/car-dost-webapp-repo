@@ -8,13 +8,17 @@ Run with:
   REACT_APP_BACKEND_URL=https://stereo-connect-2.preview.emergentagent.com \
     pytest backend/tests/test_cardost_bugfixes.py -v
 """
+
 import os
 import io
 import uuid
 import pytest
 import requests
 
-BASE_URL = (os.environ.get("REACT_APP_BACKEND_URL") or "https://stereo-connect-2.preview.emergentagent.com").rstrip("/")
+BASE_URL = (
+    os.environ.get("REACT_APP_BACKEND_URL")
+    or "https://stereo-connect-2.preview.emergentagent.com"
+).rstrip("/")
 ADMIN_EMAIL = "admin@cardost.com"
 ADMIN_PASS = "Admin@123"
 
@@ -24,7 +28,11 @@ PRODUCT_WITH_REVIEW_ID = "fb7ad847-b945-4df8-96ee-964e3cb0b77b"
 
 @pytest.fixture(scope="session")
 def admin_token():
-    r = requests.post(f"{BASE_URL}/api/auth/login", json={"email": ADMIN_EMAIL, "password": ADMIN_PASS}, timeout=20)
+    r = requests.post(
+        f"{BASE_URL}/api/auth/login",
+        json={"email": ADMIN_EMAIL, "password": ADMIN_PASS},
+        timeout=20,
+    )
     assert r.status_code == 200, f"admin login failed: {r.status_code} {r.text}"
     tok = r.json().get("token") or r.json().get("access_token")
     assert tok, f"no token in admin login response: {r.json()}"
@@ -49,14 +57,20 @@ class TestReviewCountField:
             assert p["review_count"] >= 0
 
     def test_product_with_one_review_reports_correct_counts(self):
-        r = requests.get(f"{BASE_URL}/api/products/{PRODUCT_WITH_REVIEW_ID}", timeout=20)
+        r = requests.get(
+            f"{BASE_URL}/api/products/{PRODUCT_WITH_REVIEW_ID}", timeout=20
+        )
         assert r.status_code == 200, r.text
         data = r.json()
         assert data["id"] == PRODUCT_WITH_REVIEW_ID
-        assert data["review_count"] >= 1, f"expected ≥1 review, got {data['review_count']}"
+        assert data["review_count"] >= 1, (
+            f"expected ≥1 review, got {data['review_count']}"
+        )
         assert data["rating"] and float(data["rating"]) > 0
         # GET /reviews returns approved reviews only
-        rr = requests.get(f"{BASE_URL}/api/products/{PRODUCT_WITH_REVIEW_ID}/reviews", timeout=20)
+        rr = requests.get(
+            f"{BASE_URL}/api/products/{PRODUCT_WITH_REVIEW_ID}/reviews", timeout=20
+        )
         assert rr.status_code == 200
         reviews = rr.json()
         assert isinstance(reviews, list)
@@ -70,7 +84,7 @@ class TestReviewCountField:
         items = r.json()
         zero_count = sum(1 for p in items if p.get("review_count", 0) == 0)
         assert zero_count >= len(items) - 2, (
-            f"expected ≥{len(items)-2} zero-review products, found {zero_count}/{len(items)}"
+            f"expected ≥{len(items) - 2} zero-review products, found {zero_count}/{len(items)}"
         )
 
 
@@ -80,7 +94,11 @@ class TestReviewSubmissionUpdatesCounters:
         # Pick a product with 0 reviews for clean delta math
         all_prods = requests.get(f"{BASE_URL}/api/products", timeout=20).json()
         target = next(
-            (p for p in all_prods if p.get("review_count", 0) == 0 and p["id"] != PRODUCT_WITH_REVIEW_ID),
+            (
+                p
+                for p in all_prods
+                if p.get("review_count", 0) == 0 and p["id"] != PRODUCT_WITH_REVIEW_ID
+            ),
             None,
         )
         assert target, "no zero-review product available for test"
@@ -94,15 +112,21 @@ class TestReviewSubmissionUpdatesCounters:
             "title": "TEST_AutoReview",
             "comment": "Automated regression review — please ignore / cleanup.",
         }
-        post = requests.post(f"{BASE_URL}/api/products/{pid}/reviews", json=payload, timeout=20)
+        post = requests.post(
+            f"{BASE_URL}/api/products/{pid}/reviews", json=payload, timeout=20
+        )
         assert post.status_code == 200, post.text
         body = post.json()
         assert body.get("ok") is True
         new_review_id = body["review"]["id"]
 
         after = requests.get(f"{BASE_URL}/api/products/{pid}", timeout=20).json()
-        assert after["review_count"] == 1, f"expected review_count=1 after POST, got {after['review_count']}"
-        assert float(after["rating"]) == 4.0, f"expected rating=4.0, got {after['rating']}"
+        assert after["review_count"] == 1, (
+            f"expected review_count=1 after POST, got {after['review_count']}"
+        )
+        assert float(after["rating"]) == 4.0, (
+            f"expected rating=4.0, got {after['rating']}"
+        )
 
         # also reflected in /products list endpoint
         list_after = requests.get(f"{BASE_URL}/api/products", timeout=20).json()
@@ -110,7 +134,11 @@ class TestReviewSubmissionUpdatesCounters:
         assert target_in_list["review_count"] == 1
 
         # cleanup: delete review via admin
-        r = requests.post(f"{BASE_URL}/api/auth/login", json={"email": ADMIN_EMAIL, "password": ADMIN_PASS}, timeout=20)
+        r = requests.post(
+            f"{BASE_URL}/api/auth/login",
+            json={"email": ADMIN_EMAIL, "password": ADMIN_PASS},
+            timeout=20,
+        )
         tok = r.json().get("token") or r.json().get("access_token")
         d = requests.delete(
             f"{BASE_URL}/api/admin/reviews/{new_review_id}",
@@ -134,12 +162,18 @@ class TestVehicleTaggingFilterBridge:
         # tree shape: [{id,name,models:[{id,name,variants:[{id,name,start_year,end_year}]}]}]
         hyundai = next((m for m in tree if m["name"].lower() == "hyundai"), None)
         assert hyundai, "Hyundai not in catalog"
-        creta = next((md for md in hyundai["models"] if md["name"].lower() == "creta"), None)
+        creta = next(
+            (md for md in hyundai["models"] if md["name"].lower() == "creta"), None
+        )
         assert creta, "Creta not in Hyundai catalog"
         # Find a variant whose range covers 2018 (1st gen 2015-2020)
         v = next(
-            (vt for vt in creta["variants"]
-             if vt.get("start_year", 9999) <= 2018 and (vt.get("end_year") is None or vt.get("end_year") >= 2018)),
+            (
+                vt
+                for vt in creta["variants"]
+                if vt.get("start_year", 9999) <= 2018
+                and (vt.get("end_year") is None or vt.get("end_year") >= 2018)
+            ),
             None,
         )
         assert v, f"no 2018-covering variant found in Creta: {creta['variants']}"
@@ -164,36 +198,61 @@ class TestVehicleTaggingFilterBridge:
             "years": [],
             "is_published": True,
         }
-        r = requests.post(f"{BASE_URL}/api/admin/products", json=payload, headers=admin_headers, timeout=20)
+        r = requests.post(
+            f"{BASE_URL}/api/admin/products",
+            json=payload,
+            headers=admin_headers,
+            timeout=20,
+        )
         assert r.status_code in (200, 201), r.text
         prod = r.json()
         yield prod
         # cleanup
-        requests.delete(f"{BASE_URL}/api/admin/products/{prod['id']}", headers=admin_headers, timeout=20)
+        requests.delete(
+            f"{BASE_URL}/api/admin/products/{prod['id']}",
+            headers=admin_headers,
+            timeout=20,
+        )
 
     def test_filter_by_car_brand_hyundai_returns_product(self, tagged_product):
-        r = requests.get(f"{BASE_URL}/api/products/filter", params={"car_brand": "Hyundai"}, timeout=20)
+        r = requests.get(
+            f"{BASE_URL}/api/products/filter",
+            params={"car_brand": "Hyundai"},
+            timeout=20,
+        )
         assert r.status_code == 200
         ids = [p["id"] for p in r.json()]
-        assert tagged_product["id"] in ids, f"Hyundai filter missed bridged product. got {ids[:8]}"
+        assert tagged_product["id"] in ids, (
+            f"Hyundai filter missed bridged product. got {ids[:8]}"
+        )
 
     def test_filter_by_car_model_creta_returns_product(self, tagged_product):
-        r = requests.get(f"{BASE_URL}/api/products/filter", params={"car_model": "Creta"}, timeout=20)
+        r = requests.get(
+            f"{BASE_URL}/api/products/filter", params={"car_model": "Creta"}, timeout=20
+        )
         assert r.status_code == 200
         ids = [p["id"] for p in r.json()]
         assert tagged_product["id"] in ids, "Creta model filter missed bridged product"
 
     def test_filter_by_year_2018_returns_product(self, tagged_product):
-        r = requests.get(f"{BASE_URL}/api/products/filter", params={"year": 2018}, timeout=20)
+        r = requests.get(
+            f"{BASE_URL}/api/products/filter", params={"year": 2018}, timeout=20
+        )
         assert r.status_code == 200
         ids = [p["id"] for p in r.json()]
-        assert tagged_product["id"] in ids, "year=2018 filter missed bridged product (variant covers 2015-2020)"
+        assert tagged_product["id"] in ids, (
+            "year=2018 filter missed bridged product (variant covers 2015-2020)"
+        )
 
     def test_filter_by_year_2030_excludes_product(self, tagged_product):
-        r = requests.get(f"{BASE_URL}/api/products/filter", params={"year": 2030}, timeout=20)
+        r = requests.get(
+            f"{BASE_URL}/api/products/filter", params={"year": 2030}, timeout=20
+        )
         assert r.status_code == 200
         ids = [p["id"] for p in r.json()]
-        assert tagged_product["id"] not in ids, "year=2030 must NOT surface a 2015-2020 variant product"
+        assert tagged_product["id"] not in ids, (
+            "year=2030 must NOT surface a 2015-2020 variant product"
+        )
 
     def test_combined_brand_model_year_filter(self, tagged_product):
         r = requests.get(
@@ -203,7 +262,9 @@ class TestVehicleTaggingFilterBridge:
         )
         assert r.status_code == 200
         ids = [p["id"] for p in r.json()]
-        assert tagged_product["id"] in ids, "combined Hyundai+Creta+2018 missed bridged product"
+        assert tagged_product["id"] in ids, (
+            "combined Hyundai+Creta+2018 missed bridged product"
+        )
 
     def test_universal_product_still_surfaces(self, admin_headers):
         """Universal product (car_brands=['ALL']) must surface in any filter."""
@@ -222,7 +283,12 @@ class TestVehicleTaggingFilterBridge:
             "years": [],
             "is_published": True,
         }
-        r = requests.post(f"{BASE_URL}/api/admin/products", json=payload, headers=admin_headers, timeout=20)
+        r = requests.post(
+            f"{BASE_URL}/api/admin/products",
+            json=payload,
+            headers=admin_headers,
+            timeout=20,
+        )
         assert r.status_code in (200, 201), r.text
         uid = r.json()["id"]
         try:
@@ -232,12 +298,18 @@ class TestVehicleTaggingFilterBridge:
                 {"year": 2018},
                 {"year": 2030},
             ):
-                rr = requests.get(f"{BASE_URL}/api/products/filter", params=params, timeout=20)
+                rr = requests.get(
+                    f"{BASE_URL}/api/products/filter", params=params, timeout=20
+                )
                 assert rr.status_code == 200
                 ids = [p["id"] for p in rr.json()]
                 assert uid in ids, f"Universal product missing for filter {params}"
         finally:
-            requests.delete(f"{BASE_URL}/api/admin/products/{uid}", headers=admin_headers, timeout=20)
+            requests.delete(
+                f"{BASE_URL}/api/admin/products/{uid}",
+                headers=admin_headers,
+                timeout=20,
+            )
 
 
 # ───────────────── (4) Admin upload endpoint sanity ─────────────────
@@ -249,7 +321,12 @@ class TestAdminUploadEndpoint:
             b"\x89\x00\x00\x00\rIDATx\x9cc\xfc\xcf\xc0P\x0f\x00\x05\x01\x01\x02p\xb0%9\x00\x00\x00\x00IEND\xaeB`\x82"
         )
         files = {"file": ("test_pixel.png", io.BytesIO(png_bytes), "image/png")}
-        r = requests.post(f"{BASE_URL}/api/admin/upload", files=files, headers=admin_headers, timeout=30)
+        r = requests.post(
+            f"{BASE_URL}/api/admin/upload",
+            files=files,
+            headers=admin_headers,
+            timeout=30,
+        )
         assert r.status_code == 200, r.text
         data = r.json()
         assert "url" in data and data["url"], f"no url in upload response: {data}"

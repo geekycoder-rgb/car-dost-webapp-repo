@@ -1,28 +1,48 @@
 """Vehicle Catalog v2 tests - hierarchical Make->Model->Variant + filter/order integration."""
+
 import os
 import pytest
 import requests
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://stereo-connect-2.preview.emergentagent.com').rstrip('/')
+BASE_URL = os.environ.get(
+    "REACT_APP_BACKEND_URL", "https://stereo-connect-2.preview.emergentagent.com"
+).rstrip("/")
 API = f"{BASE_URL}/api"
 
 # Test credentials (seeded admin) — overridable via env
 ADMIN_EMAIL = os.environ.get("TEST_ADMIN_EMAIL", "admin@cardost.com")
 ADMIN_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD", "Admin@123")
 
-EXPECTED_MAKES = {"Honda", "Hyundai", "Kia", "Mahindra", "Maruti Suzuki", "Skoda", "Tata Motors", "Toyota", "Volkswagen"}
+EXPECTED_MAKES = {
+    "Honda",
+    "Hyundai",
+    "Kia",
+    "Mahindra",
+    "Maruti Suzuki",
+    "Skoda",
+    "Tata Motors",
+    "Toyota",
+    "Volkswagen",
+}
 
 
 @pytest.fixture(scope="session")
 def admin_token():
-    r = requests.post(f"{API}/auth/login", json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD}, timeout=15)
+    r = requests.post(
+        f"{API}/auth/login",
+        json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD},
+        timeout=15,
+    )
     assert r.status_code == 200, r.text
     return r.json()["token"]
 
 
 @pytest.fixture(scope="session")
 def admin_headers(admin_token):
-    return {"Authorization": f"Bearer {admin_token}", "Content-Type": "application/json"}
+    return {
+        "Authorization": f"Bearer {admin_token}",
+        "Content-Type": "application/json",
+    }
 
 
 @pytest.fixture(scope="session")
@@ -64,7 +84,9 @@ class TestCatalogRead:
 
     def test_models_filtered_by_make(self, tree):
         honda = next(mk for mk in tree if mk["name"] == "Honda")
-        r = requests.get(f"{API}/catalog/models", params={"make_id": honda["id"]}, timeout=15)
+        r = requests.get(
+            f"{API}/catalog/models", params={"make_id": honda["id"]}, timeout=15
+        )
         assert r.status_code == 200
         models = r.json()
         assert all(m["make_id"] == honda["id"] for m in models)
@@ -74,7 +96,9 @@ class TestCatalogRead:
     def test_variants_filtered_by_model(self, tree):
         honda = next(mk for mk in tree if mk["name"] == "Honda")
         amaze = next(m for m in honda["models"] if m["name"] == "Amaze")
-        r = requests.get(f"{API}/catalog/variants", params={"model_id": amaze["id"]}, timeout=15)
+        r = requests.get(
+            f"{API}/catalog/variants", params={"model_id": amaze["id"]}, timeout=15
+        )
         assert r.status_code == 200
         variants = r.json()
         assert len(variants) == 2
@@ -98,44 +122,72 @@ class TestCatalogRead:
 class TestAdminCatalogCRUD:
     def test_make_model_variant_create_update_delete_cascade(self, admin_headers):
         # Create make
-        r = requests.post(f"{API}/admin/catalog/makes", json={"name": "TESTBrand"}, headers=admin_headers, timeout=15)
+        r = requests.post(
+            f"{API}/admin/catalog/makes",
+            json={"name": "TESTBrand"},
+            headers=admin_headers,
+            timeout=15,
+        )
         assert r.status_code == 200
         mk = r.json()
         mid = mk["id"]
         assert mk["slug"] == "testbrand"
 
         # Create model
-        r = requests.post(f"{API}/admin/catalog/models", json={"make_id": mid, "name": "TESTModel"}, headers=admin_headers, timeout=15)
+        r = requests.post(
+            f"{API}/admin/catalog/models",
+            json={"make_id": mid, "name": "TESTModel"},
+            headers=admin_headers,
+            timeout=15,
+        )
         assert r.status_code == 200
         model = r.json()
         mod_id = model["id"]
 
         # Create variant
-        r = requests.post(f"{API}/admin/catalog/variants",
-                          json={"model_id": mod_id, "name": "TESTVariant", "start_year": 2020, "end_year": None},
-                          headers=admin_headers, timeout=15)
+        r = requests.post(
+            f"{API}/admin/catalog/variants",
+            json={
+                "model_id": mod_id,
+                "name": "TESTVariant",
+                "start_year": 2020,
+                "end_year": None,
+            },
+            headers=admin_headers,
+            timeout=15,
+        )
         assert r.status_code == 200
         v = r.json()
-        vid = v["id"]
         assert v["start_year"] == 2020
         assert v["end_year"] is None
 
         # Update make
-        r = requests.put(f"{API}/admin/catalog/makes/{mid}", json={"name": "TESTBrand2"}, headers=admin_headers, timeout=15)
+        r = requests.put(
+            f"{API}/admin/catalog/makes/{mid}",
+            json={"name": "TESTBrand2"},
+            headers=admin_headers,
+            timeout=15,
+        )
         assert r.status_code == 200
 
         # Delete make - cascade
-        r = requests.delete(f"{API}/admin/catalog/makes/{mid}", headers=admin_headers, timeout=15)
+        r = requests.delete(
+            f"{API}/admin/catalog/makes/{mid}", headers=admin_headers, timeout=15
+        )
         assert r.status_code == 200
 
         # Verify cascade: model + variant gone
         r = requests.get(f"{API}/catalog/models", params={"make_id": mid}, timeout=15)
         assert r.json() == []
-        r = requests.get(f"{API}/catalog/variants", params={"model_id": mod_id}, timeout=15)
+        r = requests.get(
+            f"{API}/catalog/variants", params={"model_id": mod_id}, timeout=15
+        )
         assert r.json() == []
 
     def test_unauthorized_make_create(self):
-        r = requests.post(f"{API}/admin/catalog/makes", json={"name": "Hack"}, timeout=10)
+        r = requests.post(
+            f"{API}/admin/catalog/makes", json={"name": "Hack"}, timeout=10
+        )
         assert r.status_code in (401, 403)
 
 
@@ -171,11 +223,15 @@ def compat_product(admin_headers, sample_variant_ids):
         "compatible_variants": [sample_variant_ids["variant_id"]],
         "car_brands": [],
     }
-    r = requests.post(f"{API}/admin/products", json=body, headers=admin_headers, timeout=15)
+    r = requests.post(
+        f"{API}/admin/products", json=body, headers=admin_headers, timeout=15
+    )
     assert r.status_code == 200, r.text
     p = r.json()
     yield p
-    requests.delete(f"{API}/admin/products/{p['id']}", headers=admin_headers, timeout=15)
+    requests.delete(
+        f"{API}/admin/products/{p['id']}", headers=admin_headers, timeout=15
+    )
 
 
 @pytest.fixture
@@ -188,52 +244,96 @@ def universal_product(admin_headers):
         "image": "https://example.com/u.jpg",
         "car_brands": ["ALL"],
     }
-    r = requests.post(f"{API}/admin/products", json=body, headers=admin_headers, timeout=15)
+    r = requests.post(
+        f"{API}/admin/products", json=body, headers=admin_headers, timeout=15
+    )
     assert r.status_code == 200, r.text
     p = r.json()
     yield p
-    requests.delete(f"{API}/admin/products/{p['id']}", headers=admin_headers, timeout=15)
+    requests.delete(
+        f"{API}/admin/products/{p['id']}", headers=admin_headers, timeout=15
+    )
 
 
 class TestProductCompatibility:
-    def test_create_product_persists_compatible_variants(self, compat_product, sample_variant_ids):
+    def test_create_product_persists_compatible_variants(
+        self, compat_product, sample_variant_ids
+    ):
         r = requests.get(f"{API}/products/{compat_product['id']}", timeout=15)
         assert r.status_code == 200
         p = r.json()
         assert sample_variant_ids["variant_id"] in p["compatible_variants"]
 
-    def test_filter_by_variant_id(self, compat_product, universal_product, sample_variant_ids):
-        r = requests.get(f"{API}/products/filter", params={"variant_id": sample_variant_ids["variant_id"]}, timeout=15)
+    def test_filter_by_variant_id(
+        self, compat_product, universal_product, sample_variant_ids
+    ):
+        r = requests.get(
+            f"{API}/products/filter",
+            params={"variant_id": sample_variant_ids["variant_id"]},
+            timeout=15,
+        )
         assert r.status_code == 200
         ids = {p["id"] for p in r.json()}
         assert compat_product["id"] in ids, "compat product missing"
-        assert universal_product["id"] in ids, "universal product missing (should appear for any variant)"
+        assert universal_product["id"] in ids, (
+            "universal product missing (should appear for any variant)"
+        )
 
-    def test_filter_by_other_variant_excludes_compat(self, compat_product, universal_product, sample_variant_ids):
-        r = requests.get(f"{API}/products/filter", params={"variant_id": sample_variant_ids["other_variant_id"]}, timeout=15)
+    def test_filter_by_other_variant_excludes_compat(
+        self, compat_product, universal_product, sample_variant_ids
+    ):
+        r = requests.get(
+            f"{API}/products/filter",
+            params={"variant_id": sample_variant_ids["other_variant_id"]},
+            timeout=15,
+        )
         ids = {p["id"] for p in r.json()}
         assert compat_product["id"] not in ids
         assert universal_product["id"] in ids
 
-    def test_filter_by_model_id(self, compat_product, universal_product, sample_variant_ids):
-        r = requests.get(f"{API}/products/filter", params={"model_id": sample_variant_ids["model_id"]}, timeout=15)
+    def test_filter_by_model_id(
+        self, compat_product, universal_product, sample_variant_ids
+    ):
+        r = requests.get(
+            f"{API}/products/filter",
+            params={"model_id": sample_variant_ids["model_id"]},
+            timeout=15,
+        )
         ids = {p["id"] for p in r.json()}
         assert compat_product["id"] in ids
         assert universal_product["id"] in ids
 
-    def test_filter_by_other_model_excludes_compat(self, compat_product, sample_variant_ids):
-        r = requests.get(f"{API}/products/filter", params={"model_id": sample_variant_ids["other_model_id"]}, timeout=15)
+    def test_filter_by_other_model_excludes_compat(
+        self, compat_product, sample_variant_ids
+    ):
+        r = requests.get(
+            f"{API}/products/filter",
+            params={"model_id": sample_variant_ids["other_model_id"]},
+            timeout=15,
+        )
         ids = {p["id"] for p in r.json()}
         assert compat_product["id"] not in ids
 
-    def test_filter_by_make_id(self, compat_product, universal_product, sample_variant_ids):
-        r = requests.get(f"{API}/products/filter", params={"make_id": sample_variant_ids["make_id"]}, timeout=15)
+    def test_filter_by_make_id(
+        self, compat_product, universal_product, sample_variant_ids
+    ):
+        r = requests.get(
+            f"{API}/products/filter",
+            params={"make_id": sample_variant_ids["make_id"]},
+            timeout=15,
+        )
         ids = {p["id"] for p in r.json()}
         assert compat_product["id"] in ids
         assert universal_product["id"] in ids
 
-    def test_filter_by_other_make_excludes_compat(self, compat_product, sample_variant_ids):
-        r = requests.get(f"{API}/products/filter", params={"make_id": sample_variant_ids["other_make_id"]}, timeout=15)
+    def test_filter_by_other_make_excludes_compat(
+        self, compat_product, sample_variant_ids
+    ):
+        r = requests.get(
+            f"{API}/products/filter",
+            params={"make_id": sample_variant_ids["other_make_id"]},
+            timeout=15,
+        )
         ids = {p["id"] for p in r.json()}
         assert compat_product["id"] not in ids
 
@@ -248,23 +348,33 @@ class TestProductCompatibility:
             "car_models": ["Creta"],
             "years": [2018],
         }
-        r = requests.post(f"{API}/admin/products", json=body, headers=admin_headers, timeout=15)
+        r = requests.post(
+            f"{API}/admin/products", json=body, headers=admin_headers, timeout=15
+        )
         assert r.status_code == 200
         pid = r.json()["id"]
         try:
-            r = requests.get(f"{API}/products/filter", params={"car_brand": "Hyundai"}, timeout=15)
+            r = requests.get(
+                f"{API}/products/filter", params={"car_brand": "Hyundai"}, timeout=15
+            )
             ids = {p["id"] for p in r.json()}
             assert pid in ids
 
-            r = requests.get(f"{API}/products/filter", params={"car_model": "Creta"}, timeout=15)
+            r = requests.get(
+                f"{API}/products/filter", params={"car_model": "Creta"}, timeout=15
+            )
             ids = {p["id"] for p in r.json()}
             assert pid in ids
 
-            r = requests.get(f"{API}/products/filter", params={"year": 2018}, timeout=15)
+            r = requests.get(
+                f"{API}/products/filter", params={"year": 2018}, timeout=15
+            )
             ids = {p["id"] for p in r.json()}
             assert pid in ids
         finally:
-            requests.delete(f"{API}/admin/products/{pid}", headers=admin_headers, timeout=15)
+            requests.delete(
+                f"{API}/admin/products/{pid}", headers=admin_headers, timeout=15
+            )
 
 
 # -------- Order with vehicle fields --------
@@ -272,12 +382,14 @@ class TestOrderVehiclePersistence:
     def test_order_preserves_vehicle_fields(self, compat_product, sample_variant_ids):
         vehicle_label = "Hyundai Creta · 1st Generation (2015–2020)"
         body = {
-            "items": [{
-                "product_id": compat_product["id"],
-                "quantity": 1,
-                "vehicle_variant_id": sample_variant_ids["variant_id"],
-                "vehicle_label": vehicle_label,
-            }],
+            "items": [
+                {
+                    "product_id": compat_product["id"],
+                    "quantity": 1,
+                    "vehicle_variant_id": sample_variant_ids["variant_id"],
+                    "vehicle_label": vehicle_label,
+                }
+            ],
             "address": {
                 "full_name": "Test User",
                 "phone": "9999999999",
@@ -308,7 +420,9 @@ class TestOrderVehiclePersistence:
                 "phone": "9999999999",
                 "email": "test@example.com",
                 "line1": "1 Test St",
-                "city": "Mumbai", "state": "MH", "pincode": "400001",
+                "city": "Mumbai",
+                "state": "MH",
+                "pincode": "400001",
             },
             "is_guest": True,
         }

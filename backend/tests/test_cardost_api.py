@@ -2,12 +2,15 @@
 CarDost backend API tests - covers auth, products, orders/payment (mock),
 admin CRUD/stats, contact, and guest+logged-in checkout flows.
 """
+
 import os
 import uuid
 import pytest
 import requests
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://stereo-connect-2.preview.emergentagent.com").rstrip("/")
+BASE_URL = os.environ.get(
+    "REACT_APP_BACKEND_URL", "https://stereo-connect-2.preview.emergentagent.com"
+).rstrip("/")
 API = f"{BASE_URL}/api"
 
 # Test credentials (seeded admin) — overridable via env, see /app/memory/test_credentials.md
@@ -31,7 +34,9 @@ def session():
 
 @pytest.fixture(scope="session")
 def admin_token(session):
-    r = session.post(f"{API}/auth/login", json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD})
+    r = session.post(
+        f"{API}/auth/login", json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD}
+    )
     assert r.status_code == 200, f"Admin login failed: {r.status_code} {r.text}"
     data = r.json()
     assert data["user"]["role"] == "admin"
@@ -40,16 +45,24 @@ def admin_token(session):
 
 @pytest.fixture(scope="session")
 def admin_headers(admin_token):
-    return {"Authorization": f"Bearer {admin_token}", "Content-Type": "application/json"}
+    return {
+        "Authorization": f"Bearer {admin_token}",
+        "Content-Type": "application/json",
+    }
 
 
 @pytest.fixture(scope="session")
 def user_token(session):
     # Signup
-    r = session.post(f"{API}/auth/signup", json={
-        "name": TEST_USER_NAME, "email": TEST_USER_EMAIL,
-        "password": TEST_USER_PASSWORD, "phone": "9999999999"
-    })
+    r = session.post(
+        f"{API}/auth/signup",
+        json={
+            "name": TEST_USER_NAME,
+            "email": TEST_USER_EMAIL,
+            "password": TEST_USER_PASSWORD,
+            "phone": "9999999999",
+        },
+    )
     assert r.status_code == 200, f"Signup failed: {r.status_code} {r.text}"
     data = r.json()
     assert "token" in data and data["user"]["email"] == TEST_USER_EMAIL
@@ -118,8 +131,15 @@ class TestProducts:
         assert r.status_code == 200
         cats = r.json()
         slugs = [c["slug"] for c in cats]
-        for s in ["android-stereos", "speakers", "amplifiers", "dash-cameras",
-                  "led-lights", "perfumes", "accessories"]:
+        for s in [
+            "android-stereos",
+            "speakers",
+            "amplifiers",
+            "dash-cameras",
+            "led-lights",
+            "perfumes",
+            "accessories",
+        ]:
             assert s in slugs
 
 
@@ -127,22 +147,23 @@ class TestProducts:
 class TestAuth:
     def test_signup_duplicate(self, session, user_token):
         # user_token fixture ensures TEST user is already registered
-        r = session.post(f"{API}/auth/signup", json={
-            "name": "Dup", "email": TEST_USER_EMAIL,
-            "password": "abc12345"
-        })
+        r = session.post(
+            f"{API}/auth/signup",
+            json={"name": "Dup", "email": TEST_USER_EMAIL, "password": "abc12345"},
+        )
         assert r.status_code == 400
 
     def test_login_invalid(self, session):
-        r = session.post(f"{API}/auth/login", json={
-            "email": TEST_USER_EMAIL, "password": "WRONG"
-        })
+        r = session.post(
+            f"{API}/auth/login", json={"email": TEST_USER_EMAIL, "password": "WRONG"}
+        )
         assert r.status_code == 401
 
     def test_login_success(self, session):
-        r = session.post(f"{API}/auth/login", json={
-            "email": TEST_USER_EMAIL, "password": TEST_USER_PASSWORD
-        })
+        r = session.post(
+            f"{API}/auth/login",
+            json={"email": TEST_USER_EMAIL, "password": TEST_USER_PASSWORD},
+        )
         assert r.status_code == 200
         data = r.json()
         assert "token" in data
@@ -165,18 +186,25 @@ class TestGuestCheckout:
         payload = {
             "items": [{"product_id": first_product["id"], "quantity": 2}],
             "address": {
-                "full_name": "Guest Buyer", "phone": "9012345678",
-                "email": "guest@test.com", "line1": "1 Main",
-                "line2": "", "city": "Mumbai", "state": "MH", "pincode": "400001"
+                "full_name": "Guest Buyer",
+                "phone": "9012345678",
+                "email": "guest@test.com",
+                "line1": "1 Main",
+                "line2": "",
+                "city": "Mumbai",
+                "state": "MH",
+                "pincode": "400001",
             },
-            "is_guest": True
+            "is_guest": True,
         }
         r = session.post(f"{API}/orders/create", json=payload)
         assert r.status_code == 200, r.text
         data = r.json()
         assert "order_id" in data
         if not data.get("mock"):
-            pytest.skip("Razorpay is in LIVE mode on this env — checkout flow needs a real signature to verify. Toggle Admin → Integrations → Razorpay → MOCK_MODE for QA.")
+            pytest.skip(
+                "Razorpay is in LIVE mode on this env — checkout flow needs a real signature to verify. Toggle Admin → Integrations → Razorpay → MOCK_MODE for QA."
+            )
         assert data["mock"] is True
         expected_total = first_product["price"] * 2
         assert abs(data["total"] - expected_total) < 0.01
@@ -197,26 +225,42 @@ class TestGuestCheckout:
         assert order["razorpay_payment_id"].startswith("mock_pay_")
 
     def test_empty_order_rejected(self, session):
-        r = session.post(f"{API}/orders/create", json={
-            "items": [],
-            "address": {
-                "full_name": "X", "phone": "9000000000", "email": "x@x.com",
-                "line1": "x", "city": "x", "state": "x", "pincode": "100000"
+        r = session.post(
+            f"{API}/orders/create",
+            json={
+                "items": [],
+                "address": {
+                    "full_name": "X",
+                    "phone": "9000000000",
+                    "email": "x@x.com",
+                    "line1": "x",
+                    "city": "x",
+                    "state": "x",
+                    "pincode": "100000",
+                },
+                "is_guest": True,
             },
-            "is_guest": True
-        })
+        )
         # No items -> total 0 -> 400
         assert r.status_code in (400, 422)
 
     def test_invalid_product_rejected(self, session):
-        r = session.post(f"{API}/orders/create", json={
-            "items": [{"product_id": "no_such_product", "quantity": 1}],
-            "address": {
-                "full_name": "X", "phone": "9000000000", "email": "x@x.com",
-                "line1": "x", "city": "x", "state": "x", "pincode": "100000"
+        r = session.post(
+            f"{API}/orders/create",
+            json={
+                "items": [{"product_id": "no_such_product", "quantity": 1}],
+                "address": {
+                    "full_name": "X",
+                    "phone": "9000000000",
+                    "email": "x@x.com",
+                    "line1": "x",
+                    "city": "x",
+                    "state": "x",
+                    "pincode": "100000",
+                },
+                "is_guest": True,
             },
-            "is_guest": True
-        })
+        )
         assert r.status_code == 400
 
 
@@ -226,18 +270,24 @@ class TestUserCheckout:
         payload = {
             "items": [{"product_id": first_product["id"], "quantity": 1}],
             "address": {
-                "full_name": "User Buyer", "phone": "9011112222",
-                "email": TEST_USER_EMAIL, "line1": "10 Park",
-                "city": "Delhi", "state": "DL", "pincode": "110001"
+                "full_name": "User Buyer",
+                "phone": "9011112222",
+                "email": TEST_USER_EMAIL,
+                "line1": "10 Park",
+                "city": "Delhi",
+                "state": "DL",
+                "pincode": "110001",
             },
-            "is_guest": False
+            "is_guest": False,
         }
         r = session.post(f"{API}/orders/create", json=payload, headers=user_headers)
         assert r.status_code == 200, r.text
         data = r.json()
         oid = data["order_id"]
         if not data.get("mock"):
-            pytest.skip("Razorpay is in LIVE mode on this env — checkout flow needs a real signature to verify. Toggle Admin → Integrations → Razorpay → MOCK_MODE for QA.")
+            pytest.skip(
+                "Razorpay is in LIVE mode on this env — checkout flow needs a real signature to verify. Toggle Admin → Integrations → Razorpay → MOCK_MODE for QA."
+            )
 
         r2 = session.post(f"{API}/orders/verify", json={"order_id": oid})
         assert r2.status_code == 200
@@ -267,9 +317,17 @@ class TestAdminAuth:
     def test_admin_routes_forbidden_for_user(self, session, user_headers):
         r = session.get(f"{API}/admin/stats", headers=user_headers)
         assert r.status_code == 403
-        r = session.post(f"{API}/admin/products", headers=user_headers, json={
-            "name": "x", "description": "x", "price": 1, "category": "x", "image": "x"
-        })
+        r = session.post(
+            f"{API}/admin/products",
+            headers=user_headers,
+            json={
+                "name": "x",
+                "description": "x",
+                "price": 1,
+                "category": "x",
+                "image": "x",
+            },
+        )
         assert r.status_code == 403
 
 
@@ -303,7 +361,7 @@ class TestAdminCRUD:
             "image": "https://example.com/x.jpg",
             "stock": 10,
             "rating": 4.0,
-            "featured": False
+            "featured": False,
         }
         r = session.post(f"{API}/admin/products", headers=admin_headers, json=payload)
         assert r.status_code == 200, r.text
@@ -320,7 +378,9 @@ class TestAdminCRUD:
         # UPDATE
         payload["price"] = 999.0
         payload["name"] = "TEST_Admin_Product_Updated"
-        r3 = session.put(f"{API}/admin/products/{pid}", headers=admin_headers, json=payload)
+        r3 = session.put(
+            f"{API}/admin/products/{pid}", headers=admin_headers, json=payload
+        )
         assert r3.status_code == 200
 
         r4 = session.get(f"{API}/products/{pid}")
@@ -339,15 +399,21 @@ class TestAdminCRUD:
 # ---------------- contact ----------------
 class TestContact:
     def test_contact_submit(self, session):
-        r = session.post(f"{API}/contact", json={
-            "name": "TEST Contact", "email": "test@contact.com",
-            "phone": "9999999999", "message": "Hello CarDost team"
-        })
+        r = session.post(
+            f"{API}/contact",
+            json={
+                "name": "TEST Contact",
+                "email": "test@contact.com",
+                "phone": "9999999999",
+                "message": "Hello CarDost team",
+            },
+        )
         assert r.status_code == 200
         assert r.json().get("ok") is True
 
     def test_contact_invalid_email(self, session):
-        r = session.post(f"{API}/contact", json={
-            "name": "X", "email": "not-an-email", "message": "hi"
-        })
+        r = session.post(
+            f"{API}/contact",
+            json={"name": "X", "email": "not-an-email", "message": "hi"},
+        )
         assert r.status_code == 422

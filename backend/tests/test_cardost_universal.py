@@ -3,6 +3,7 @@ Tests for new CarDost features: ALL/universal car-brands, SEO fields,
 admin banners / tax-rules / reviews moderation endpoints, products/filter
 route ordering fix.
 """
+
 import os
 import uuid
 import pytest
@@ -24,7 +25,9 @@ def session():
 
 @pytest.fixture(scope="module")
 def admin_headers(session):
-    r = session.post(f"{API}/auth/login", json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD})
+    r = session.post(
+        f"{API}/auth/login", json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD}
+    )
     assert r.status_code == 200, r.text
     tok = r.json()["token"]
     return {"Authorization": f"Bearer {tok}", "Content-Type": "application/json"}
@@ -84,13 +87,17 @@ class TestProductFilterUniversal:
         r = session.get(f"{API}/products/filter", params={"car_brand": "Maruti Suzuki"})
         assert r.status_code == 200, r.text
         ids = [p["id"] for p in r.json()]
-        assert universal_product["id"] in ids, "Universal product missing from brand filter"
+        assert universal_product["id"] in ids, (
+            "Universal product missing from brand filter"
+        )
 
     def test_filter_by_year_includes_universal(self, session, universal_product):
         r = session.get(f"{API}/products/filter", params={"year": 2020})
         assert r.status_code == 200, r.text
         ids = [p["id"] for p in r.json()]
-        assert universal_product["id"] in ids, "Universal product missing from year filter"
+        assert universal_product["id"] in ids, (
+            "Universal product missing from year filter"
+        )
 
     def test_filter_by_model_includes_universal(self, session, universal_product):
         r = session.get(f"{API}/products/filter", params={"car_model": "Swift"})
@@ -134,10 +141,16 @@ class TestBanners:
 
     def test_create_update_delete_banner(self, session, admin_headers):
         body = {
-            "title": "TEST Banner", "subtitle": "TEST sub",
-            "badge": "B", "cta_text": "Go", "cta_link": "/shop",
-            "mesh": "mesh-emerald", "accent": "#10B981", "image": "",
-            "sort_order": 999, "is_active": True,
+            "title": "TEST Banner",
+            "subtitle": "TEST sub",
+            "badge": "B",
+            "cta_text": "Go",
+            "cta_link": "/shop",
+            "mesh": "mesh-emerald",
+            "accent": "#10B981",
+            "image": "",
+            "sort_order": 999,
+            "is_active": True,
         }
         r = session.post(f"{API}/admin/banners", headers=admin_headers, json=body)
         assert r.status_code == 200
@@ -148,7 +161,9 @@ class TestBanners:
         assert r2.status_code == 200
 
         r3 = session.get(f"{API}/admin/banners", headers=admin_headers)
-        assert any(b["id"] == bid and b["title"] == "TEST Banner Updated" for b in r3.json())
+        assert any(
+            b["id"] == bid and b["title"] == "TEST Banner Updated" for b in r3.json()
+        )
 
         r4 = session.delete(f"{API}/admin/banners/{bid}", headers=admin_headers)
         assert r4.status_code == 200
@@ -168,7 +183,12 @@ class TestTaxRules:
         assert len(defaults) == 1 and defaults[0]["rate"] == 18
 
     def test_admin_create_update_delete_tax_rule(self, session, admin_headers):
-        body = {"name": "TEST Rule", "rate": 7.5, "is_default": False, "description": "test"}
+        body = {
+            "name": "TEST Rule",
+            "rate": 7.5,
+            "is_default": False,
+            "description": "test",
+        }
         r = session.post(f"{API}/admin/tax-rules", headers=admin_headers, json=body)
         assert r.status_code == 200
 
@@ -178,7 +198,9 @@ class TestTaxRules:
         rid = match[0]["id"]
 
         body["rate"] = 9.0
-        r2 = session.put(f"{API}/admin/tax-rules/{rid}", headers=admin_headers, json=body)
+        r2 = session.put(
+            f"{API}/admin/tax-rules/{rid}", headers=admin_headers, json=body
+        )
         assert r2.status_code == 200
 
         r3 = session.delete(f"{API}/admin/tax-rules/{rid}", headers=admin_headers)
@@ -198,15 +220,22 @@ class TestReviewsModeration:
 
     def test_review_toggle_and_delete(self, session, admin_headers, universal_product):
         pid = universal_product["id"]
-        r = session.post(f"{API}/products/{pid}/reviews", json={
-            "name": "TEST Reviewer", "rating": 5,
-            "title": "Great", "comment": "Loved it"
-        })
+        r = session.post(
+            f"{API}/products/{pid}/reviews",
+            json={
+                "name": "TEST Reviewer",
+                "rating": 5,
+                "title": "Great",
+                "comment": "Loved it",
+            },
+        )
         assert r.status_code == 200, r.text
         rid = r.json()["review"]["id"]
 
         # hide
-        r2 = session.patch(f"{API}/admin/reviews/{rid}?is_approved=false", headers=admin_headers)
+        r2 = session.patch(
+            f"{API}/admin/reviews/{rid}?is_approved=false", headers=admin_headers
+        )
         assert r2.status_code == 200
 
         public = session.get(f"{API}/products/{pid}/reviews").json()

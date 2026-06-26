@@ -6,15 +6,17 @@ Iteration 5 regression suite — focuses on the new fix surface:
   4. Order status update email trigger (idempotency)
   5. RBAC unchanged
 """
+
 import io
 import os
 import csv
-import time
 import uuid
 import pytest
 import requests
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://stereo-connect-2.preview.emergentagent.com").rstrip("/")
+BASE_URL = os.environ.get(
+    "REACT_APP_BACKEND_URL", "https://stereo-connect-2.preview.emergentagent.com"
+).rstrip("/")
 API = f"{BASE_URL}/api"
 
 ADMIN_EMAIL = os.environ.get("TEST_ADMIN_EMAIL", "admin@cardost.com")
@@ -46,26 +48,36 @@ def session():
 
 @pytest.fixture(scope="session")
 def admin_token(session):
-    r = session.post(f"{API}/auth/login",
-                     json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD},
-                     timeout=15)
+    r = session.post(
+        f"{API}/auth/login",
+        json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD},
+        timeout=15,
+    )
     assert r.status_code == 200, f"admin login failed: {r.text}"
     return r.json()["token"]
 
 
 @pytest.fixture(scope="session")
 def admin_headers(admin_token):
-    return {"Authorization": f"Bearer {admin_token}", "Content-Type": "application/json"}
+    return {
+        "Authorization": f"Bearer {admin_token}",
+        "Content-Type": "application/json",
+    }
 
 
 # ---------------- 1. JWT / get_current_user paths ----------------
 class TestAuthPaths:
     def test_admin_login_returns_admin_role_and_token(self, session):
-        r = session.post(f"{API}/auth/login",
-                         json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD})
+        r = session.post(
+            f"{API}/auth/login", json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD}
+        )
         assert r.status_code == 200, r.text
         data = r.json()
-        assert "token" in data and isinstance(data["token"], str) and len(data["token"]) > 20
+        assert (
+            "token" in data
+            and isinstance(data["token"], str)
+            and len(data["token"]) > 20
+        )
         assert data["user"]["role"] == "admin"
         assert data["user"]["email"] == ADMIN_EMAIL
 
@@ -83,13 +95,13 @@ class TestAuthPaths:
 
     def test_me_with_invalid_token_returns_401(self, session):
         # Critical: the except-branch in get_current_user MUST still raise, not return {}
-        r = requests.get(f"{API}/auth/me",
-                         headers={"Authorization": "Bearer not.a.real.jwt"})
+        r = requests.get(
+            f"{API}/auth/me", headers={"Authorization": "Bearer not.a.real.jwt"}
+        )
         assert r.status_code == 401, f"expected 401, got {r.status_code}: {r.text}"
 
     def test_me_with_malformed_token_returns_401(self, session):
-        r = requests.get(f"{API}/auth/me",
-                         headers={"Authorization": "Bearer xxx"})
+        r = requests.get(f"{API}/auth/me", headers={"Authorization": "Bearer xxx"})
         assert r.status_code == 401
 
 
@@ -97,10 +109,15 @@ class TestAuthPaths:
 class TestAdminEndpointsReachable:
     # Note: /admin/products is POST-only (creates a product); product listing
     # in admin uses the public /products endpoint. We test that separately.
-    @pytest.mark.parametrize("path", [
-        "/admin/stats", "/admin/orders",
-        "/admin/messages", "/admin/settings",
-    ])
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "/admin/stats",
+            "/admin/orders",
+            "/admin/messages",
+            "/admin/settings",
+        ],
+    )
     def test_admin_endpoint_200(self, session, admin_headers, path):
         r = session.get(f"{API}{path}", headers=admin_headers)
         assert r.status_code == 200, f"{path} -> {r.status_code} {r.text[:200]}"
@@ -108,14 +125,20 @@ class TestAdminEndpointsReachable:
     def test_non_admin_user_gets_403_on_admin_stats(self, session):
         # signup throwaway user
         email = f"TEST_regress_{uuid.uuid4().hex[:6]}@cardost-test.com"
-        s = session.post(f"{API}/auth/signup", json={
-            "name": "Regress User", "email": email, "phone": "9999999999",
-            "password": TEST_USER_PASSWORD
-        })
+        s = session.post(
+            f"{API}/auth/signup",
+            json={
+                "name": "Regress User",
+                "email": email,
+                "phone": "9999999999",
+                "password": TEST_USER_PASSWORD,
+            },
+        )
         assert s.status_code == 200, s.text
         utok = s.json()["token"]
-        r = session.get(f"{API}/admin/stats",
-                        headers={"Authorization": f"Bearer {utok}"})
+        r = session.get(
+            f"{API}/admin/stats", headers={"Authorization": f"Bearer {utok}"}
+        )
         assert r.status_code == 403
 
 
@@ -145,9 +168,12 @@ class TestUploadServe:
     def test_upload_jpeg_then_serve(self, admin_token):
         url = f"{API}/admin/upload"
         files = {"file": ("regress.jpg", TINY_JPEG, "image/jpeg")}
-        r = requests.post(url, files=files,
-                          headers={"Authorization": f"Bearer {admin_token}"},
-                          timeout=30)
+        r = requests.post(
+            url,
+            files=files,
+            headers={"Authorization": f"Bearer {admin_token}"},
+            timeout=30,
+        )
         assert r.status_code == 200, r.text
         body = r.json()
         assert "url" in body and body["url"].startswith("/api/files/")
@@ -163,25 +189,52 @@ class TestUploadServe:
 
     def test_upload_rejects_non_image(self, admin_token):
         files = {"file": ("regress.txt", b"hello", "text/plain")}
-        r = requests.post(f"{API}/admin/upload", files=files,
-                          headers={"Authorization": f"Bearer {admin_token}"})
+        r = requests.post(
+            f"{API}/admin/upload",
+            files=files,
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
         assert r.status_code == 400
 
 
 # ---------------- 5. CSV bulk export/import roundtrip ----------------
 EXPECTED_BULK_COLUMNS = [
-    "id", "name", "description", "price", "original_price", "category", "categories",
-    "brand", "image", "gallery", "stock", "rating", "featured", "is_published",
-    "is_best_seller", "is_new_arrival", "discount_percent", "discount_flat", "gst_percent",
-    "tags", "car_brands", "car_models", "years", "compatible_variants",
-    "meta_title", "meta_description", "seo_slug",
+    "id",
+    "name",
+    "description",
+    "price",
+    "original_price",
+    "category",
+    "categories",
+    "brand",
+    "image",
+    "gallery",
+    "stock",
+    "rating",
+    "featured",
+    "is_published",
+    "is_best_seller",
+    "is_new_arrival",
+    "discount_percent",
+    "discount_flat",
+    "gst_percent",
+    "tags",
+    "car_brands",
+    "car_models",
+    "years",
+    "compatible_variants",
+    "meta_title",
+    "meta_description",
+    "seo_slug",
 ]
 
 
 class TestCSVRoundtrip:
     def test_export_returns_csv_with_27_columns(self, admin_token):
-        r = requests.get(f"{API}/admin/products/export",
-                         headers={"Authorization": f"Bearer {admin_token}"})
+        r = requests.get(
+            f"{API}/admin/products/export",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
         assert r.status_code == 200, r.text
         ct = r.headers.get("Content-Type", "")
         assert "text/csv" in ct, f"got {ct}"
@@ -196,15 +249,20 @@ class TestCSVRoundtrip:
 
     def test_export_then_reimport_updates_zero_creates(self, admin_token):
         # 1. export
-        r = requests.get(f"{API}/admin/products/export",
-                         headers={"Authorization": f"Bearer {admin_token}"})
+        r = requests.get(
+            f"{API}/admin/products/export",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
         assert r.status_code == 200
         csv_bytes = r.content
         # 2. re-upload as bulk
         files = {"file": ("roundtrip.csv", csv_bytes, "text/csv")}
-        r2 = requests.post(f"{API}/admin/products/bulk", files=files,
-                           headers={"Authorization": f"Bearer {admin_token}"},
-                           timeout=60)
+        r2 = requests.post(
+            f"{API}/admin/products/bulk",
+            files=files,
+            headers={"Authorization": f"Bearer {admin_token}"},
+            timeout=60,
+        )
         assert r2.status_code == 200, r2.text
         body = r2.json()
         assert body.get("updated", 0) >= 1, body
@@ -214,24 +272,29 @@ class TestCSVRoundtrip:
         slug = f"test-regress-{uuid.uuid4().hex[:6]}"
         rows = [EXPECTED_BULK_COLUMNS]
         new_row = {c: "" for c in EXPECTED_BULK_COLUMNS}
-        new_row.update({
-            "name": f"TEST_Regression Product {slug}",
-            "description": "Generated by iteration 5 regression test",
-            "price": "999",
-            "category": "Accessories",
-            "image": "https://placehold.co/300x300.png",
-            "stock": "10",
-            "is_published": "true",
-            "seo_slug": slug,
-        })
+        new_row.update(
+            {
+                "name": f"TEST_Regression Product {slug}",
+                "description": "Generated by iteration 5 regression test",
+                "price": "999",
+                "category": "Accessories",
+                "image": "https://placehold.co/300x300.png",
+                "stock": "10",
+                "is_published": "true",
+                "seo_slug": slug,
+            }
+        )
         rows.append([new_row[c] for c in EXPECTED_BULK_COLUMNS])
         buf = io.StringIO()
         w = csv.writer(buf)
         for r in rows:
             w.writerow(r)
         files = {"file": ("new.csv", buf.getvalue().encode("utf-8"), "text/csv")}
-        r = requests.post(f"{API}/admin/products/bulk", files=files,
-                          headers={"Authorization": f"Bearer {admin_token}"})
+        r = requests.post(
+            f"{API}/admin/products/bulk",
+            files=files,
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
         assert r.status_code == 200, r.text
         body = r.json()
         assert body.get("created", 0) == 1, body
@@ -240,14 +303,19 @@ class TestCSVRoundtrip:
         lst = requests.get(f"{API}/products").json()
         match = [p for p in lst if p.get("seo_slug") == slug]
         if match:
-            requests.delete(f"{API}/admin/products/{match[0]['id']}",
-                            headers={"Authorization": f"Bearer {admin_token}"})
+            requests.delete(
+                f"{API}/admin/products/{match[0]['id']}",
+                headers={"Authorization": f"Bearer {admin_token}"},
+            )
 
 
 # ---------------- 6. Admin product CRUD ----------------
 class TestAdminProductCRUD:
     def test_full_crud_roundtrip(self, admin_token):
-        h = {"Authorization": f"Bearer {admin_token}", "Content-Type": "application/json"}
+        h = {
+            "Authorization": f"Bearer {admin_token}",
+            "Content-Type": "application/json",
+        }
         payload = {
             "name": f"TEST_Regress CRUD {uuid.uuid4().hex[:6]}",
             "description": "regress crud",
@@ -265,8 +333,9 @@ class TestAdminProductCRUD:
             assert g.status_code == 200
             assert g.json()["name"] == payload["name"]
 
-            u = requests.put(f"{API}/admin/products/{pid}",
-                             json={**payload, "stock": 99}, headers=h)
+            u = requests.put(
+                f"{API}/admin/products/{pid}", json={**payload, "stock": 99}, headers=h
+            )
             assert u.status_code == 200
             g2 = requests.get(f"{API}/products/{pid}")
             assert g2.json()["stock"] == 99
@@ -280,7 +349,10 @@ class TestAdminProductCRUD:
 # ---------------- 7. Order status update — idempotency & response ----------------
 class TestOrderStatusUpdate:
     def test_patch_order_status_idempotent(self, admin_token):
-        h = {"Authorization": f"Bearer {admin_token}", "Content-Type": "application/json"}
+        h = {
+            "Authorization": f"Bearer {admin_token}",
+            "Content-Type": "application/json",
+        }
         # find any existing order
         r = requests.get(f"{API}/admin/orders", headers=h)
         assert r.status_code == 200
@@ -291,22 +363,30 @@ class TestOrderStatusUpdate:
         current = orders[0].get("status", "pending")
         # pick a status different from current
         target = "processing" if current != "processing" else "shipped"
-        r1 = requests.patch(f"{API}/admin/orders/{oid}/status",
-                            json={"status": target}, headers=h)
+        r1 = requests.patch(
+            f"{API}/admin/orders/{oid}/status", json={"status": target}, headers=h
+        )
         assert r1.status_code == 200, r1.text
         assert r1.json().get("ok") is True
         # patch again with same status — should still 200 but logically no email
-        r2 = requests.patch(f"{API}/admin/orders/{oid}/status",
-                            json={"status": target}, headers=h)
+        r2 = requests.patch(
+            f"{API}/admin/orders/{oid}/status", json={"status": target}, headers=h
+        )
         assert r2.status_code == 200, r2.text
 
     def test_patch_order_status_rejects_invalid_status(self, admin_token):
-        h = {"Authorization": f"Bearer {admin_token}", "Content-Type": "application/json"}
+        h = {
+            "Authorization": f"Bearer {admin_token}",
+            "Content-Type": "application/json",
+        }
         r = requests.get(f"{API}/admin/orders", headers=h)
         orders = r.json()
         if not orders:
             pytest.skip("no orders to patch")
         oid = orders[0]["id"]
-        r2 = requests.patch(f"{API}/admin/orders/{oid}/status",
-                            json={"status": "bogus_status_value"}, headers=h)
+        r2 = requests.patch(
+            f"{API}/admin/orders/{oid}/status",
+            json={"status": "bogus_status_value"},
+            headers=h,
+        )
         assert r2.status_code == 400
