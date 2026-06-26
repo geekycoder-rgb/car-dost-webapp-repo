@@ -133,6 +133,16 @@ export default function AdminSettings() {
     }
   };
 
+  const regenerateSitemap = async () => {
+    try {
+      const { data } = await api.post("/admin/sitemap/regenerate");
+      toast.success(`Sitemap regenerated — ${data.url_count} URL${data.url_count === 1 ? "" : "s"} (wrote ${data.written.length} file${data.written.length === 1 ? "" : "s"})`);
+    } catch (err) {
+      const d = err.response?.data?.detail;
+      toast.error(typeof d === "string" ? d : "Regenerate failed");
+    }
+  };
+
   // helper that returns SecretInput element with shared state bound
   const sec = (name, label, maskedKey, placeholder) =>
     <SecretInput name={name} label={label} maskedKey={maskedKey} placeholder={placeholder} s={s} setS={setS} showSecrets={showSecrets} setShowSecrets={setShowSecrets}/>;
@@ -348,6 +358,23 @@ export default function AdminSettings() {
           <div><Label className="text-xs uppercase font-bold text-stone-700">Store Name</Label><Input value={s.store_name || ""} onChange={c("store_name")} className="border-stone-300 mt-1.5"/></div>
           <div><Label className="text-xs uppercase font-bold text-stone-700">Support Email</Label><Input value={s.support_email || ""} onChange={c("support_email")} className="border-stone-300 mt-1.5"/></div>
           <div><Label className="text-xs uppercase font-bold text-stone-700">Support Phone</Label><Input value={s.support_phone || ""} onChange={c("support_phone")} className="border-stone-300 mt-1.5"/></div>
+        </div>
+      </div>
+
+      {/* SEO / Sitemap */}
+      <div className="bg-white border border-stone-200 rounded-2xl p-6">
+        <div className="flex items-center gap-3 mb-5 pb-3 border-b border-stone-200">
+          <div className="w-10 h-10 rounded-xl bg-emerald-50 grid place-items-center text-emerald-600 font-bold">🗺️</div>
+          <div>
+            <h2 className="font-display text-lg font-bold text-stone-950">SEO / Sitemap</h2>
+            <p className="text-xs text-stone-500">Auto-regenerates whenever you add, edit, or delete a product/category. Click below to refresh on demand.</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <Button data-testid="regen-sitemap-btn" onClick={regenerateSitemap} className="bg-emerald-600 hover:bg-emerald-700 text-xs font-bold uppercase">
+            Regenerate Sitemap Now
+          </Button>
+          <a data-testid="view-sitemap-link" href="/sitemap.xml" target="_blank" rel="noreferrer" className="text-xs text-indigo-600 hover:underline font-semibold">View /sitemap.xml →</a>
         </div>
       </div>
 

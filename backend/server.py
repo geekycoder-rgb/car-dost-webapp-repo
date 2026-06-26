@@ -1021,6 +1021,7 @@ async def admin_create_category(body: CategoryIn, _=Depends(get_admin)):
         raise HTTPException(400, "Slug already exists")
     doc = {"id": str(uuid.uuid4()), **body.model_dump(), "created_at": datetime.now(timezone.utc).isoformat()}
     await db.categories.insert_one(doc)
+    schedule_sitemap_refresh("category-create")
     return {"ok": True}
 
 @api_router.put("/admin/categories/{slug}")
@@ -1031,6 +1032,7 @@ async def admin_update_category(slug: str, body: CategoryIn, _=Depends(get_admin
     res = await db.categories.update_one({"slug": slug}, {"$set": body.model_dump()})
     if res.matched_count == 0:
         raise HTTPException(404, "Not found")
+    schedule_sitemap_refresh("category-update")
     return {"ok": True}
 
 @api_router.patch("/admin/categories/reorder")
@@ -1045,6 +1047,7 @@ async def admin_delete_category(slug: str, _=Depends(get_admin)):
     if in_use > 0:
         raise HTTPException(400, f"Category in use by {in_use} product(s). Reassign first.")
     await db.categories.delete_one({"slug": slug})
+    schedule_sitemap_refresh("category-delete")
     return {"ok": True}
 
 # ============ Automotive Catalog ============
@@ -1231,6 +1234,7 @@ async def variant_label(vid: str):
 async def create_product(p: ProductIn, _=Depends(get_admin)):
     prod = Product(**p.model_dump())
     await db.products.insert_one(prod.model_dump())
+    schedule_sitemap_refresh("product-create")
     return clean(prod.model_dump())
 
 @api_router.put("/admin/products/{pid}")
@@ -1238,11 +1242,13 @@ async def update_product(pid: str, p: ProductIn, _=Depends(get_admin)):
     res = await db.products.update_one({"id": pid}, {"$set": p.model_dump()})
     if res.matched_count == 0:
         raise HTTPException(404, "Not found")
+    schedule_sitemap_refresh("product-update")
     return {"ok": True}
 
 @api_router.delete("/admin/products/{pid}")
 async def delete_product(pid: str, _=Depends(get_admin)):
     await db.products.delete_one({"id": pid})
+    schedule_sitemap_refresh("product-delete")
     return {"ok": True}
 
 # ============ Bulk CSV Import ============
@@ -1415,6 +1421,8 @@ async def bulk_import_products(file: UploadFile = File(...), _=Depends(get_admin
                 created += 1
         except Exception as e:
             errors.append({"row": i, "error": str(e)[:160]})
+    if created or updated:
+        schedule_sitemap_refresh("bulk-import")
     return {"created": created, "updated": updated, "errors": errors[:20], "error_count": len(errors)}
 
 # ============ File Upload (Emergent Object Storage) ============
@@ -1948,6 +1956,20 @@ def _iso_date(value) -> str:
 
 @api_router.get("/seo/sitemap.xml")
 async def seo_sitemap():
+    xml = await build_sitemap_xml()
+    return Response(
+        content=xml,
+        media_type="application/xml; charset=utf-8",
+        headers={"Cache-Control": "public, max-age=3600"},  # 1h CDN/browser cache
+    )
+
+
+async def build_sitemap_xml() -> str:
+    """Build the canonical sitemap XML body from the live DB. Reused by:
+    - GET /api/seo/sitemap.xml (HTTP route)
+    - write_sitemap_to_disk() (auto-regenerate on product/category mutations)
+    - POST /api/admin/sitemap/regenerate (admin button)
+    """
     base = (FRONTEND_URL or "").rstrip("/") or "https://cardost.in"
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
@@ -1962,14 +1984,13 @@ async def seo_sitemap():
 
     urls = []
     for path, prio, freq in _STATIC_SITEMAP_PAGES:
-        loc = f"{base}/" if not path else f"{base}/{path}"   # home keeps trailing slash for canonical
+        loc = f"{base}/" if not path else f"{base}/{path}"
         urls.append(
             f"  <url><loc>{_xml_escape(loc)}</loc>"
             f"<lastmod>{today}</lastmod>"
             f"<changefreq>{freq}</changefreq>"
             f"<priority>{prio}</priority></url>"
         )
-
     for cat in categories:
         slug = cat.get("slug")
         if not slug:
@@ -1981,7 +2002,6 @@ async def seo_sitemap():
             f"<changefreq>weekly</changefreq>"
             f"<priority>0.7</priority></url>"
         )
-
     for p in products:
         pid = p.get("id")
         if not pid:
@@ -1995,18 +2015,60 @@ async def seo_sitemap():
             f"<priority>0.8</priority></url>"
         )
 
-    xml = (
+    return (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         '<?xml-stylesheet type="text/xsl" href="/sitemap.xsl"?>\n'
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
         + "\n".join(urls)
         + "\n</urlset>\n"
     )
-    return Response(
-        content=xml,
-        media_type="application/xml; charset=utf-8",
-        headers={"Cache-Control": "public, max-age=3600"},  # 1h CDN/browser cache
-    )
+
+
+# Candidate paths where the static /sitemap.xml could be served from.
+# In dev, CRA serves /app/frontend/public/. In a built/deployed app, nginx serves
+# /app/frontend/build/. Writing to both ensures a single fix works everywhere.
+_SITEMAP_TARGET_PATHS = [
+    "/app/frontend/public/sitemap.xml",
+    "/app/frontend/build/sitemap.xml",
+]
+
+
+async def write_sitemap_to_disk(reason: str = "manual") -> dict:
+    """Regenerate sitemap.xml and write it to every reachable serving path.
+    Safe for fire-and-forget — catches & logs all failures."""
+    try:
+        xml = await build_sitemap_xml()
+    except Exception as e:
+        logger.error(f"[sitemap] build failed ({reason}): {e}")
+        return {"ok": False, "reason": reason, "error": str(e), "written": []}
+    written, skipped = [], []
+    for path in _SITEMAP_TARGET_PATHS:
+        try:
+            parent = os.path.dirname(path)
+            if not os.path.isdir(parent):
+                skipped.append({"path": path, "reason": "parent dir missing"})
+                continue
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write(xml)
+            written.append(path)
+        except Exception as e:
+            skipped.append({"path": path, "reason": str(e)})
+    url_count = xml.count("<url>")
+    logger.info(f"[sitemap] regenerated ({reason}): {url_count} URLs, wrote={len(written)}, skipped={len(skipped)}")
+    return {"ok": True, "reason": reason, "url_count": url_count, "written": written, "skipped": skipped}
+
+
+def schedule_sitemap_refresh(reason: str = "mutation"):
+    """Fire-and-forget background regeneration — call from product/category mutation
+    endpoints. Errors are swallowed; never blocks the caller."""
+    asyncio.create_task(write_sitemap_to_disk(reason=reason))
+
+
+@api_router.post("/admin/sitemap/regenerate")
+async def admin_regenerate_sitemap(_=Depends(get_admin)):
+    """Admin-triggered manual sitemap refresh. Returns the write status so the
+    admin UI can show 'wrote N URLs to public/sitemap.xml' feedback."""
+    return await write_sitemap_to_disk(reason="admin")
 
 @api_router.get("/seo/robots.txt")
 async def seo_robots_txt():
