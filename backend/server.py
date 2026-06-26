@@ -2650,12 +2650,6 @@ _STATIC_SITEMAP_PAGES = [
     ("reviews", "0.5", "weekly"),
 ]
 
-_CATEGORY_SITEMAP_ALIASES = {
-    "car-key-covers": "key-chains",
-    "key-covers": "key-chains",
-    "car-covers": "body-covers",
-}
-
 
 def _xml_escape(s: str) -> str:
     return (
@@ -2725,7 +2719,6 @@ async def build_sitemap_xml() -> str:
             f"<changefreq>weekly</changefreq>"
             f"<priority>0.7</priority></url>"
         )
-    category_model_urls = set()
     for p in products:
         pid = p.get("id")
         if not pid:
@@ -2737,36 +2730,6 @@ async def build_sitemap_xml() -> str:
             f"<lastmod>{lastmod}</lastmod>"
             f"<changefreq>weekly</changefreq>"
             f"<priority>0.8</priority></url>"
-        )
-
-        cat_slug = p.get("category")
-        if not cat_slug:
-            continue
-        brands = [b for b in (p.get("car_brands") or []) if isinstance(b, str) and b.strip().upper() != "ALL"]
-        models = [m for m in (p.get("car_models") or []) if isinstance(m, str) and m.strip()]
-        if not brands or not models:
-            continue
-        for brand in brands:
-            for model in models:
-                model_slug = _slugify(f"{brand}-{model}")
-                category_model_urls.add((cat_slug, model_slug))
-
-    alias_category_model_urls = set()
-    for alias_slug, real_slug in _CATEGORY_SITEMAP_ALIASES.items():
-        for cat_slug, model_slug in category_model_urls:
-            if cat_slug != real_slug:
-                continue
-            alias_category_model_urls.add((alias_slug, model_slug))
-
-    category_model_urls |= alias_category_model_urls
-
-    for cat_slug, model_slug in sorted(category_model_urls):
-        loc = f"{base}/{cat_slug}/{model_slug}"
-        urls.append(
-            f"  <url><loc>{_xml_escape(loc)}</loc>"
-            f"<lastmod>{today}</lastmod>"
-            f"<changefreq>weekly</changefreq>"
-            f"<priority>0.65</priority></url>"
         )
 
     return (
