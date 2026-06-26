@@ -4,6 +4,7 @@ admin CRUD/stats, contact, and guest+logged-in checkout flows.
 """
 
 import os
+import re
 import uuid
 import pytest
 import requests
@@ -142,6 +143,30 @@ class TestProducts:
         ]:
             assert s in slugs
 
+    def test_sitemap_alias_category_model_pages(self, session):
+        r = session.get(f"{API}/seo/sitemap.xml")
+        assert r.status_code == 200, r.text
+        assert "application/xml" in r.headers.get("Content-Type", "")
+
+        sitemap = r.text
+        key_chains_slugs = re.findall(r"<loc>https?://[^<]*/key-chains/([^<]+)</loc>", sitemap)
+        car_key_covers_slugs = re.findall(r"<loc>https?://[^<]*/car-key-covers/([^<]+)</loc>", sitemap)
+        body_covers_slugs = re.findall(r"<loc>https?://[^<]*/body-covers/([^<]+)</loc>", sitemap)
+        car_covers_slugs = re.findall(r"<loc>https?://[^<]*/car-covers/([^<]+)</loc>", sitemap)
+
+        if not key_chains_slugs and not body_covers_slugs:
+            pytest.skip(
+                "No key-chains/body-covers model sitemap entries are present in this environment."
+            )
+
+        if key_chains_slugs:
+            assert set(key_chains_slugs) == set(car_key_covers_slugs)
+            assert key_chains_slugs, "Expected key-chains model pages in sitemap"
+
+        if body_covers_slugs:
+            assert set(body_covers_slugs) == set(car_covers_slugs)
+            assert body_covers_slugs, "Expected body-covers model pages in sitemap"
+
 
 # ---------------- auth ----------------
 class TestAuth:
@@ -201,6 +226,7 @@ class TestGuestCheckout:
         assert r.status_code == 200, r.text
         data = r.json()
         assert "order_id" in data
+        assert re.match(r"^CD-\d{6}-[A-F0-9]{6}$", data["order_id"])
         if not data.get("mock"):
             pytest.skip(
                 "Razorpay is in LIVE mode on this env — checkout flow needs a real signature to verify. Toggle Admin → Integrations → Razorpay → MOCK_MODE for QA."
@@ -209,8 +235,13 @@ class TestGuestCheckout:
         expected_total = first_product["price"] * 2
         assert abs(data["total"] - expected_total) < 0.01
 
-        # verify mock payment
+        # order should exist but not be marked paid until verification
         oid = data["order_id"]
+        r1 = session.get(f"{API}/orders/{oid}")
+        assert r1.status_code == 200, r1.text
+        assert r1.json()["status"] == "created"
+
+        # verify mock payment
         r2 = session.post(f"{API}/orders/verify", json={"order_id": oid})
         assert r2.status_code == 200, r2.text
         assert r2.json()["status"] == "paid"
@@ -283,7 +314,11 @@ class TestUserCheckout:
         r = session.post(f"{API}/orders/create", json=payload, headers=user_headers)
         assert r.status_code == 200, r.text
         data = r.json()
+        assert re.match(r"^CD-\d{6}-[A-F0-9]{6}$", data["order_id"])
         oid = data["order_id"]
+        r1 = session.get(f"{API}/orders/{oid}")
+        assert r1.status_code == 200, r1.text
+        assert r1.json()["status"] == "created"
         if not data.get("mock"):
             pytest.skip(
                 "Razorpay is in LIVE mode on this env — checkout flow needs a real signature to verify. Toggle Admin → Integrations → Razorpay → MOCK_MODE for QA."

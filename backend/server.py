@@ -19,6 +19,7 @@ from email_service import (
     admin_order_email,
     admin_contact_email,
     order_status_email,
+    payment_confirmed_email,
     low_stock_email,
 )
 
@@ -41,6 +42,13 @@ from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
 from typing import Any, List, Optional, TypedDict, Union
 from datetime import datetime, timezone, timedelta
+
+
+def generate_order_id() -> str:
+    """Generate a compact human-friendly order ID for customer-facing use."""
+    stamp = datetime.now(timezone.utc).strftime("%y%m%d")
+    suffix = uuid.uuid4().hex[:6].upper()
+    return f"CD-{stamp}-{suffix}"
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
@@ -771,6 +779,37 @@ async def send_order_status_email(order: dict, new_status: str):
         )
     except Exception as e:
         logger.error(f"[email] status email failed: {e}")
+        return False
+
+
+async def send_payment_confirmation_email(order: dict):
+    """Send the customer payment-confirmed email after Razorpay payment is captured."""
+    settings = await get_settings_doc()
+    if not settings.get("smtp_enabled"):
+        return False
+    addr = order.get("address") or {}
+    to_email = addr.get("email")
+    if not to_email:
+        return False
+    order_from = settings.get("email_order_from") or settings.get("smtp_from")
+    support_reply = (
+        settings.get("email_support_from")
+        or settings.get("email_support_to")
+        or settings.get("support_email")
+    )
+    try:
+        subj, html = payment_confirmed_email(order, base_url=FRONTEND_URL)
+        return await send_email(
+            settings,
+            to_email,
+            subj,
+            html,
+            reply_to=support_reply,
+            from_alias=order_from,
+            from_name="CarDost Orders",
+        )
+    except Exception as e:
+        logger.error(f"[email] payment confirmation email failed: {e}")
         return False
 
 
@@ -2138,7 +2177,7 @@ async def create_order(
         }
         total = max(0, total - discount)
 
-    order_id = str(uuid.uuid4())
+    order_id = generate_order_id()
     amount_paise = int(round(total * 100))
 
     razorpay_order_id = None
@@ -2181,35 +2220,16 @@ async def create_order(
             {"code": coupon_data["code"]}, {"$inc": {"used_count": 1}}
         )
 
-    # Fire customer + admin notification emails (non-blocking)
+    # Fire admin notification only; customer payment confirmation email is sent after the order is paid.
     try:
         if settings.get("smtp_enabled"):
-            # Customer order confirmation FROM order@cardost.in (with support@ as reply-to)
-            subj_c, html_c = order_confirmation_email(order_doc, base_url=FRONTEND_URL)
-            order_from = settings.get("email_order_from") or settings.get("smtp_from")
-            support_reply = (
-                settings.get("email_support_from")
-                or settings.get("email_support_to")
-                or settings.get("support_email")
-            )
-            asyncio.create_task(
-                send_email(
-                    settings,
-                    order_doc["address"]["email"],
-                    subj_c,
-                    html_c,
-                    reply_to=support_reply,
-                    from_alias=order_from,
-                    from_name="CarDost Orders",
-                )
-            )
-            # Admin new-order alert TO admin@cardost.in FROM order@cardost.in
             admin_to = (
                 settings.get("email_admin_to")
                 or settings.get("smtp_admin_email")
                 or settings.get("support_email")
             )
             if admin_to:
+                order_from = settings.get("email_order_from") or settings.get("smtp_from")
                 subj_a, html_a = admin_order_email(order_doc, base_url=FRONTEND_URL)
                 asyncio.create_task(
                     send_email(
@@ -2223,7 +2243,7 @@ async def create_order(
                     )
                 )
     except Exception as e:
-        logger.error(f"[email] order confirmation failed: {e}")
+        logger.error(f"[email] order notification failed: {e}")
 
     return {
         "order_id": order_id,
@@ -2298,6 +2318,7 @@ async def verify_payment(req: VerifyPaymentReq):
     updated = await db.orders.find_one({"id": req.order_id}, {"_id": 0})
     if updated:
         await trigger_shiprocket(updated)
+        asyncio.create_task(send_payment_confirmation_email(updated))
     return {"ok": True, "status": "paid", "order_id": req.order_id}
 
 
@@ -2377,6 +2398,7 @@ async def razorpay_webhook(
         updated = await db.orders.find_one({"id": order["id"]}, {"_id": 0})
         if updated:
             await trigger_shiprocket(updated)
+            asyncio.create_task(send_payment_confirmation_email(updated))
     elif event_type == "payment.failed":
         await db.orders.update_one(
             {"id": order["id"]},
@@ -2628,6 +2650,12 @@ _STATIC_SITEMAP_PAGES = [
     ("reviews", "0.5", "weekly"),
 ]
 
+_CATEGORY_SITEMAP_ALIASES = {
+    "car-key-covers": "key-chains",
+    "key-covers": "key-chains",
+    "car-covers": "body-covers",
+}
+
 
 def _xml_escape(s: str) -> str:
     return (
@@ -2697,6 +2725,7 @@ async def build_sitemap_xml() -> str:
             f"<changefreq>weekly</changefreq>"
             f"<priority>0.7</priority></url>"
         )
+    category_model_urls = set()
     for p in products:
         pid = p.get("id")
         if not pid:
@@ -2708,6 +2737,36 @@ async def build_sitemap_xml() -> str:
             f"<lastmod>{lastmod}</lastmod>"
             f"<changefreq>weekly</changefreq>"
             f"<priority>0.8</priority></url>"
+        )
+
+        cat_slug = p.get("category")
+        if not cat_slug:
+            continue
+        brands = [b for b in (p.get("car_brands") or []) if isinstance(b, str) and b.strip().upper() != "ALL"]
+        models = [m for m in (p.get("car_models") or []) if isinstance(m, str) and m.strip()]
+        if not brands or not models:
+            continue
+        for brand in brands:
+            for model in models:
+                model_slug = _slugify(f"{brand}-{model}")
+                category_model_urls.add((cat_slug, model_slug))
+
+    alias_category_model_urls = set()
+    for alias_slug, real_slug in _CATEGORY_SITEMAP_ALIASES.items():
+        for cat_slug, model_slug in category_model_urls:
+            if cat_slug != real_slug:
+                continue
+            alias_category_model_urls.add((alias_slug, model_slug))
+
+    category_model_urls |= alias_category_model_urls
+
+    for cat_slug, model_slug in sorted(category_model_urls):
+        loc = f"{base}/{cat_slug}/{model_slug}"
+        urls.append(
+            f"  <url><loc>{_xml_escape(loc)}</loc>"
+            f"<lastmod>{today}</lastmod>"
+            f"<changefreq>weekly</changefreq>"
+            f"<priority>0.65</priority></url>"
         )
 
     return (

@@ -200,6 +200,38 @@ def admin_order_email(order: dict, base_url) -> tuple:
     return f"🛒 New CarDost Order #{oid_short} · ₹{order.get('total', 0):,.0f}", html
 
 
+def payment_confirmed_email(order: dict, base_url) -> tuple:
+    """Returns (subject, html) for the customer payment confirmation email."""
+    oid_short = order["id"][:8].upper()
+    addr = order.get("address", {})
+    items_html = _items_html(order.get("items", []), base_url)
+    track_url = f"{base_url}/track-order?order_id={order['id']}"
+    body = f"""
+      <h2>Payment confirmed for order #{oid_short}</h2>
+      <p class="muted">Your payment has been successfully received.</p>
+      <p style="margin-top:14px">We&apos;re now processing your order and will notify you once it ships.</p>
+      <p style="margin:18px 0"><a href="{track_url}" class="btn">Track your order →</a></p>
+      <h2 style="margin-top:24px">Order details</h2>
+      {items_html}
+      <div class="tot"><span>Total</span><span>₹{order.get('total', 0):,.0f}</span></div>
+      <h2 style="margin-top:24px">Shipping address</h2>
+      <p style="font-size:13px;line-height:1.5">
+        <b>{addr.get("full_name", "")}</b><br>
+        {addr.get("line1", "")}{", " + addr.get("line2", "") if addr.get("line2") else ""}<br>
+        {addr.get("city", "")}, {addr.get("state", "")} - {addr.get("pincode", "")}<br>
+        📞 {addr.get("phone", "")} · ✉ {addr.get("email", "")}
+      </p>
+      <p class="muted" style="margin-top:18px">You can also track this order any time at <a href="{track_url}" style="color:#4f46e5">{track_url}</a>.</p>
+    """
+    html = BASE_WRAP.format(
+        title="Payment Confirmed",
+        subtitle=f"Order #{oid_short} is paid",
+        body=body,
+        base_url=base_url,
+    )
+    return f"Payment received · Order #{oid_short}", html
+
+
 def admin_contact_email(msg: dict, base_url) -> tuple:
     body = f"""
       <h2>New enquiry from {msg.get("name", "Anonymous")}</h2>
