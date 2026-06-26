@@ -26,7 +26,7 @@ import Contact from "@/pages/Contact";
 export default function App() {
   return (
     <div className="App">
-      <BrowserRouter>
+        <BrowserRouter>
         <AuthProvider>
           <CartProvider>
             <WishlistProvider>

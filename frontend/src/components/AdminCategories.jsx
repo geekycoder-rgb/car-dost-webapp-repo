@@ -10,7 +10,7 @@ import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@
 import { Plus, Edit, Trash2, GripVertical, EyeOff, Eye as EyeIcon, Upload, ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 
-const EMPTY = { slug: "", name: "", description: "", image: "", icon: "Package", parent_slug: null, is_active: true, sort_order: 100 };
+const EMPTY = { slug: "", name: "", description: "", image: "", icon: "Package", parent_slug: null, is_active: true, sort_order: 100, meta_title: "", meta_description: "" };
 
 const resolveImg = (src) => {
   if (!src) return "";
@@ -179,6 +179,17 @@ export default function AdminCategories() {
             <div className="flex items-center gap-2 pt-2">
               <Switch checked={form.is_active} onCheckedChange={(v) => setForm({ ...form, is_active: v })}/>
               <span className="text-sm">Active (visible on frontend)</span>
+            </div>
+            <div className="pt-3 mt-2 border-t border-stone-200 space-y-2">
+              <p className="text-[10px] uppercase tracking-wider font-bold text-stone-500">SEO (Google rich-snippets)</p>
+              <div>
+                <Label className="text-xs uppercase font-bold">Meta Title <span className="text-stone-400 font-normal normal-case text-[10px]">— e.g. "Buy Car Key Covers Online India | CarDost"</span></Label>
+                <Input data-testid="cat-meta-title" value={form.meta_title || ""} onChange={(e) => setForm({ ...form, meta_title: e.target.value })} placeholder={`Buy ${form.name || "[Category]"} Online India | CarDost`} className="mt-1"/>
+              </div>
+              <div>
+                <Label className="text-xs uppercase font-bold">Meta Description <span className="text-stone-400 font-normal normal-case text-[10px]">— 120-160 chars</span></Label>
+                <Textarea data-testid="cat-meta-description" rows={2} value={form.meta_description || ""} onChange={(e) => setForm({ ...form, meta_description: e.target.value })} placeholder={`Shop premium ${(form.name || "products").toLowerCase()} online in India. Free shipping, GST invoice, 7-day return.`} className="mt-1"/>
+              </div>
             </div>
           </div>
           <Button data-testid="save-cat" onClick={save} className="bg-indigo-600 hover:bg-indigo-700 font-bold uppercase text-xs">Save Category</Button>

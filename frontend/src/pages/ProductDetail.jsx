@@ -53,20 +53,13 @@ export default function ProductDetail() {
     api.get(`/products/${id}`).then((r) => { setProduct(r.data); setActiveImg(r.data.image); }).catch(() => navigate("/shop"));
   }, [id, navigate]);
 
-  // Per-product SEO meta tags
+  // Per-product SEO meta tags — meta tags use React 19 native hoisting (see <Helmet> in JSX).
+  // <title> needs an imperative set since React 19 doesn't replace the static title in index.html.
   useEffect(() => {
     if (!product) return;
-    const prevTitle = document.title;
+    const prev = document.title;
     document.title = product.meta_title || `${product.name} — CarDost`;
-    const setMeta = (name, content) => {
-      if (!content) return null;
-      let el = document.querySelector(`meta[name="${name}"]`);
-      if (!el) { el = document.createElement("meta"); el.setAttribute("name", name); document.head.appendChild(el); }
-      el.setAttribute("content", content);
-      return el;
-    };
-    const desc = setMeta("description", product.meta_description || product.description?.slice(0, 160));
-    return () => { document.title = prevTitle; if (desc) desc.setAttribute("content", ""); };
+    return () => { document.title = prev; };
   }, [product]);
 
   // Product + Breadcrumb JSON-LD for Google rich snippets (rating stars, price, availability)
@@ -137,9 +130,29 @@ export default function ProductDetail() {
   if (!product) return <div className="max-w-7xl mx-auto px-6 py-20 text-stone-500">Loading...</div>;
   const off = product.original_price ? Math.round(100 - (product.price / product.original_price) * 100) : 0;
   const gallery = [product.image, ...(product.gallery || [])].filter(Boolean);
+  const origin = typeof window !== "undefined" ? window.location.origin : "https://cardost.in";
+  const canonical = product.seo_slug
+    ? `${origin}/product/${product.id}`         // route is /product/:id; seo_slug is informational for now
+    : `${origin}/product/${product.id}`;
+  const helmetTitle = product.meta_title || `${product.name} — CarDost`;
+  const helmetDesc = product.meta_description || (product.description ? product.description.slice(0, 160) : `Buy ${product.name} online at CarDost.`);
 
   return (
     <div className="bg-white">
+      {/* React 19 auto-hoists <meta>/<link> to <head>. <title> is set via useEffect above. */}
+      <meta name="description" content={helmetDesc} />
+      <link rel="canonical" href={canonical} />
+      <meta property="og:type" content="product" />
+      <meta property="og:title" content={helmetTitle} />
+      <meta property="og:description" content={helmetDesc} />
+      <meta property="og:url" content={canonical} />
+      <meta property="og:image" content={product.image} />
+      <meta property="product:price:amount" content={String(product.price)} />
+      <meta property="product:price:currency" content="INR" />
+      <meta name="twitter:card" content="summary_large_image" />
+      <meta name="twitter:title" content={helmetTitle} />
+      <meta name="twitter:description" content={helmetDesc} />
+      <meta name="twitter:image" content={product.image} />
       <div className="bg-neutral-50 border-b border-neutral-200">
         <div className="max-w-7xl mx-auto px-6 py-3 text-xs text-neutral-500">
           <Link to="/" className="hover:text-indigo-600">Home</Link> / <Link to="/shop" className="hover:text-indigo-600">Shop</Link> / <Link to={`/shop?category=${product.category}`} className="hover:text-indigo-600">{product.category}</Link> / <span className="text-neutral-900">{product.name}</span>

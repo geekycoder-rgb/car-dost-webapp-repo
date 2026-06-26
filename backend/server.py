@@ -1012,6 +1012,8 @@ class CategoryIn(BaseModel):
     parent_slug: Optional[str] = None
     is_active: bool = True
     sort_order: int = 0
+    meta_title: Optional[str] = ""
+    meta_description: Optional[str] = ""
 
 @api_router.post("/admin/categories")
 async def admin_create_category(body: CategoryIn, _=Depends(get_admin)):

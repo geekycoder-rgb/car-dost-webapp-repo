@@ -91,13 +91,46 @@ export default function Shop() {
     setParams(p);
   };
 
-  const activeCatName = category === "all" ? "All Products" : (categories.find((c) => c.slug === category)?.name || "Products");
+  const activeCat = category === "all" ? null : categories.find((c) => c.slug === category);
+  const activeCatName = activeCat?.name || (category === "all" ? "All Products" : "Products");
+
+  // SEO — category-aware <title> & description.
+  // Uses category.meta_title / meta_description if admin has set them, else auto-generates.
+  const origin = typeof window !== "undefined" ? window.location.origin : "https://cardost.in";
+  const canonical = category === "all" ? `${origin}/shop` : `${origin}/shop?category=${category}`;
+  const pageTitle = (() => {
+    if (q) return `Search: ${q} — CarDost`;
+    if (activeCat?.meta_title) return activeCat.meta_title;
+    if (activeCat) return `Buy ${activeCat.name} Online India | CarDost`;
+    return "Shop Car Stereos, Speakers & Accessories Online India | CarDost";
+  })();
+  const pageDesc = (() => {
+    if (activeCat?.meta_description) return activeCat.meta_description;
+    if (activeCat) return `Shop premium ${activeCat.name.toLowerCase()} online in India. ${activeCat.description || "Free shipping, GST invoice, 7-day return."} Pan-India delivery from CarDost.`;
+    return "Shop premium car Android stereos, speakers, amplifiers, dash cams, LED lights and accessories. Free shipping all India. CarDost.";
+  })();
   const hasVehicleFilter = carBrand || carModel || year;
+
+  // Imperative document.title set — React 19's native hoist doesn't replace the static title in index.html
+  useEffect(() => {
+    const prev = document.title;
+    document.title = pageTitle;
+    return () => { document.title = prev; };
+  }, [pageTitle]);
 
   const Section = ({ id, title, children }) => null; // moved out
 
   return (
     <div className="bg-stone-50">
+      {/* React 19 auto-hoists <meta>/<link> to <head>. <title> is set via useEffect above. */}
+      <meta name="description" content={pageDesc} />
+      <link rel="canonical" href={canonical} />
+      <meta property="og:type" content="website" />
+      <meta property="og:title" content={pageTitle} />
+      <meta property="og:description" content={pageDesc} />
+      <meta property="og:url" content={canonical} />
+      {activeCat?.image && <meta property="og:image" content={activeCat.image} />}
+      <meta name="twitter:card" content="summary_large_image" />
       <div className="bg-white border-b border-stone-200">
         <div className="max-w-7xl mx-auto px-6 py-8">
           <div className="text-xs uppercase tracking-[0.2em] text-indigo-600 font-bold mb-2">Catalog</div>

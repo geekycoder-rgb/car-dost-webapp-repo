@@ -1,0 +1,48 @@
+{
+  "summary": "Iteration 7 — End-to-end regression of new SEO surface (per-page <title>, dynamic <meta>/<link>/<og>/<twitter>, Category SEO fields, admin → public round-trip). Backend: NEW /app/backend/tests/test_cardost_iteration7_seo.py adds 7 tests covering POST/GET (public+admin)/PUT/DELETE on /api/admin/categories with meta_title + meta_description fields, clearing-to-empty persistence, and 403 for unauthenticated POST — all 7 PASS. Full backend sweep: 107 passed + 2 skipped, 0 failed across 7 test files (api, bugfixes, iter5_regression, iter7_seo, smtp_migration, universal, vehicles) in 90.45s. Frontend (Playwright on REACT_APP_BACKEND_URL): (a) /shop?category=key-chains → 'Buy Key Chains Online India | CarDost' ✓; (b) /shop?category=speakers → 'Buy Speakers Online India | CarDost' ✓; (c) /shop → 'Shop Car Stereos, Speakers & Accessories Online India | CarDost' ✓; (d) /shop?q=stereo → 'Search: stereo — CarDost' ✓; (e) /product/<id> → '<product.name> — CarDost' ✓; (f) product page meta description, canonical, og:title, og:image, product:price:amount=18999, product:price:currency=INR, twitter:title all populated correctly; (g) JSON-LD: exactly 4 blocks present and parsing as ['Organization','WebSite','Product','BreadcrumbList'] ✓; (h) Admin → public round-trip: PUT meta_title='Test SEO Title For Speakers' on speakers cat → public /shop?category=speakers immediately shows that exact title; revert to empty restores auto-generated 'Buy Speakers Online India | CarDost' ✓. Admin Categories UI dialog confirmed to have data-testid 'cat-meta-title' and 'cat-meta-description' inputs at the bottom of the dialog. NO React 'duplicate key' or 'invariant' warnings on Shop or ProductDetail. One real SEO defect surfaced — see backend_issues/frontend_issues below.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "All pages (Shop, ProductDetail, anything that injects dynamic OG tags)",
+        "issues": [
+          "DUPLICATE OG META TAGS — /app/frontend/public/index.html lines 28–32 declare static <meta property=\"og:type\">, og:title, og:description, og:url ('https://cardost.in/'). React 19's metadata hoisting does NOT deduplicate these for property-based meta tags. Verified on /shop?category=key-chains: document.querySelectorAll('meta[property=\"og:url\"]').length === 2 → values in DOM order are ['https://cardost.in/', 'https://stereo-connect-2.preview.emergentagent.com/shop?category=key-chains']. og:type also has 2 copies. twitter:card has 2 copies. Most SEO scrapers (Facebook, LinkedIn, Twitter) take the FIRST occurrence, which is the stale static one — so the entire dynamic SEO effort is largely defeated for OG sharing. og:title and og:description happen to show 1 each (React appears to dedupe these specific properties), but og:url is the most important one and it's wrong. Fix: remove the 4 static og:* lines (and the static twitter:card) from public/index.html so React's injected tags are the only ones."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_cardost_iteration7_seo.py",
+    "/app/test_reports/pytest/iteration_7_seo.xml",
+    "/app/test_reports/pytest/iteration_7_full.xml"
+  ],
+  "action_items": [
+    "REMOVE static OG/twitter meta tags from /app/frontend/public/index.html (lines 28, 30, 31, 32 og:type/og:title/og:description/og:url, and the twitter:card if present). After removal, og:url on /product/<id> should resolve to a single, correct https://<host>/product/<id> value instead of the duplicate where index.html's 'https://cardost.in/' wins for scrapers."
+  ],
+  "critical_code_review_comments": [
+    "server.py CategoryIn (lines 1006–1016): new meta_title + meta_description Optional[str] fields added correctly. Defaults to '' rather than None — clean.",
+    "Shop.jsx (lines 97–119): cascade order correct (q > category.meta_title > auto-gen > default). pageTitle/pageDesc are recomputed every render but useEffect on [pageTitle] only mutates document.title when value changes — efficient. Restore-on-unmount via the return prev pattern correctly handles navigation away from /shop.",
+    "ProductDetail.jsx (lines 58–63 + 137–155): same imperative title pattern as Shop. helmetTitle/helmetDesc fall back to product.description.slice(0,160). Note: canonical does not use seo_slug yet — the ternary at lines 134–136 is effectively a no-op (both branches return the same URL). Either remove the dead branch or wire seo_slug into the canonical URL once the routing supports it. Minor.",
+    "AdminCategories.jsx EMPTY default (line 13) includes meta_title and meta_description; dialog (lines 183–193) renders the two inputs with the correct data-testid attributes. ✓",
+    "public/index.html still has 4 static og:* tags (og:type, og:title, og:description, og:url) and a static twitter:card — these duplicate the dynamic ones React 19 injects. SEO impact: scrapers pick the first occurrence, which is the static (wrong) one for og:url. Fix listed in action_items.",
+    "react-helmet-async is in package.json but unused — fine for now (kept for future SSR per problem statement), but the dependency adds ~50KB to node_modules. Consider removing if SSR is not actually planned in the near term."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_cardost_iteration7_seo.py (new — 7 tests, all PASS)"
+  ],
+  "success_rate": {
+    "backend": "100% — 7/7 new SEO tests pass; full sweep 107 passed, 2 skipped (the same 2 Razorpay LIVE checkout tests skipped since iter5), 0 failed.",
+    "frontend": "95% — all 8 page-title + meta scenarios + admin→public round-trip pass. Single defect: duplicate og:url/og:type/twitter:card from static index.html overrides dynamic ones for SEO scrapers."
+  },
+  "test_credentials": "admin@cardost.com / Admin@123 (login returns `token` field). Razorpay LIVE on this preview — 2 checkout tests remain skipped (pre-existing, unrelated).",
+  "seed_data_creation": "Test category test-seo-cat-<timestamp> created and deleted within the same pytest run via module-scope autouse teardown. During the admin round-trip Playwright test, the 'speakers' category had meta_title='Test SEO Title For Speakers' and meta_description='TEST_SEO desc for speakers' temporarily set, then explicitly reverted to empty strings — verified via final GET that auto-generated title 'Buy Speakers Online India | CarDost' is restored.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend tests live at /app/backend/tests/. Run with: REACT_APP_BACKEND_URL=https://stereo-connect-2.preview.emergentagent.com python -m pytest backend/tests/ -v. Current totals: 107 passed + 2 skipped (Razorpay LIVE). New iter7 file: test_cardost_iteration7_seo.py. The duplicate-OG-meta issue is the ONLY non-passing item — it's a one-line fix in public/index.html (delete the 4 og:* lines + twitter:card line). After that fix, the iteration_7 frontend playwright duplicate-count check should report og_url=1, og_type=1, twitter_card=1 across all pages.",
+  "rca of the issue": "The duplicate-meta bug is structural in React 19's metadata hoisting: React's hoist algorithm only merges meta tags that share a `name` attribute (so name=\"description\" was deduped to 1), but for property=\"og:*\" meta tags it does NOT merge against pre-existing static tags in the initial HTML — those remain untouched. Reproduction: open https://stereo-connect-2.preview.emergentagent.com/shop?category=key-chains in DevTools → run document.querySelectorAll('meta[property=\"og:url\"]').length → returns 2; first is 'https://cardost.in/' (from public/index.html line 32), second is the dynamic React one. SEO crawlers and OG-scrapers (Facebook, Slack, Twitter, WhatsApp link-preview) take the first occurrence, so the dynamic per-page og:url is effectively dead-code for sharing previews. Mitigation: delete the four static og:* lines and the static twitter:card from public/index.html. The dynamic React-injected tags will then be the only source of truth. No code change needed in Shop.jsx/ProductDetail.jsx — they're already correct."
+}
