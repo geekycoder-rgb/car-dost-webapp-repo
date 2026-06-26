@@ -24,13 +24,12 @@
         <title>CarDost — Premium Car Stereos, Speakers &amp; Accessories</title>
         <meta name="description" content="Shop premium car Android stereos, speakers, amplifiers, dash cams and accessories. Free shipping all India. Compatible with all major car makes &amp; models."/>
         <link rel="canonical" href="https://cardost.in/" />
-        <!-- Open Graph / social cards -->
-        <meta property="og:type" content="website" />
         <meta property="og:site_name" content="CarDost" />
-        <meta property="og:title" content="CarDost — Premium Car Stereos, Speakers &amp; Accessories" />
-        <meta property="og:description" content="Premium car Android stereos, speakers, amplifiers, dash cams. Free shipping all India." />
-        <meta property="og:url" content="https://cardost.in/" />
-        <meta name="twitter:card" content="summary_large_image" />
+        <!-- Dynamic OG / Twitter tags are injected per-page by Shop.jsx and ProductDetail.jsx
+             via React 19 native metadata hoisting. We intentionally don't declare og:type,
+             og:title, og:description, og:url or twitter:card here — duplicate property-based
+             meta tags would let scrapers pick the first (static) occurrence and ignore the
+             dynamic one. The home page falls back to the og:site_name above for branding. -->
         <!-- Site-wide Organization JSON-LD (rich brand presence in Google) -->
         <script type="application/ld+json">
         {

@@ -131,9 +131,7 @@ export default function ProductDetail() {
   const off = product.original_price ? Math.round(100 - (product.price / product.original_price) * 100) : 0;
   const gallery = [product.image, ...(product.gallery || [])].filter(Boolean);
   const origin = typeof window !== "undefined" ? window.location.origin : "https://cardost.in";
-  const canonical = product.seo_slug
-    ? `${origin}/product/${product.id}`         // route is /product/:id; seo_slug is informational for now
-    : `${origin}/product/${product.id}`;
+  const canonical = `${origin}/product/${product.id}`;
   const helmetTitle = product.meta_title || `${product.name} — CarDost`;
   const helmetDesc = product.meta_description || (product.description ? product.description.slice(0, 160) : `Buy ${product.name} online at CarDost.`);
 
