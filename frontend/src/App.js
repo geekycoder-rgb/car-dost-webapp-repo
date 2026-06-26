@@ -19,7 +19,6 @@ import OrderDetail from "@/pages/OrderDetail";
 import Wishlist from "@/pages/Wishlist";
 import TrackOrder from "@/pages/TrackOrder";
 import Reviews from "@/pages/Reviews";
-import CategoryModelPage from "@/pages/CategoryModelPage";
 import About from "@/pages/About";
 import FAQ from "@/pages/FAQ";
 import Contact from "@/pages/Contact";
@@ -36,7 +35,6 @@ export default function App() {
                 <Route path="/" element={<Home />} />
                 <Route path="/shop" element={<Shop />} />
                 <Route path="/product/:id" element={<ProductDetail />} />
-                <Route path="/:category/:model" element={<CategoryModelPage />} />
                 <Route path="/cart" element={<Cart />} />
                 <Route path="/wishlist" element={<Wishlist />} />
                 <Route path="/checkout" element={<Checkout />} />
