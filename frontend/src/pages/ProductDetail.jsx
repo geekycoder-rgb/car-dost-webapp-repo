@@ -69,6 +69,71 @@ export default function ProductDetail() {
     return () => { document.title = prevTitle; if (desc) desc.setAttribute("content", ""); };
   }, [product]);
 
+  // Product + Breadcrumb JSON-LD for Google rich snippets (rating stars, price, availability)
+  useEffect(() => {
+    if (!product) return;
+    const origin = window.location.origin;
+    const productUrl = `${origin}/product/${product.id}`;
+    const images = [product.image, ...(product.gallery || [])].filter(Boolean).map((u) =>
+      u.startsWith("http") ? u : `${origin}${u}`
+    );
+    const inStock = (product.stock || 0) > 0;
+    const productLd = {
+      "@context": "https://schema.org",
+      "@type": "Product",
+      "name": product.name,
+      "description": product.meta_description || product.description?.slice(0, 5000) || product.name,
+      "image": images,
+      "sku": product.id,
+      "mpn": product.id,
+      "brand": { "@type": "Brand", "name": product.brand || "CarDost" },
+      "category": product.category,
+      "offers": {
+        "@type": "Offer",
+        "url": productUrl,
+        "priceCurrency": "INR",
+        "price": product.price,
+        "priceValidUntil": new Date(Date.now() + 365 * 86400 * 1000).toISOString().slice(0, 10),
+        "availability": inStock ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+        "itemCondition": "https://schema.org/NewCondition",
+        "seller": { "@type": "Organization", "name": "CarDost" },
+      },
+    };
+    if (product.review_count > 0 && product.rating > 0) {
+      productLd.aggregateRating = {
+        "@type": "AggregateRating",
+        "ratingValue": Number(product.rating).toFixed(1),
+        "reviewCount": product.review_count,
+        "bestRating": "5",
+        "worstRating": "1",
+      };
+    }
+    const breadcrumbLd = {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        { "@type": "ListItem", "position": 1, "name": "Home", "item": `${origin}/` },
+        { "@type": "ListItem", "position": 2, "name": "Shop", "item": `${origin}/shop` },
+        { "@type": "ListItem", "position": 3, "name": (product.category || "Products").replace(/-/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()), "item": `${origin}/shop?category=${product.category}` },
+        { "@type": "ListItem", "position": 4, "name": product.name, "item": productUrl },
+      ],
+    };
+    const ensureLd = (id, payload) => {
+      let el = document.getElementById(id);
+      if (!el) {
+        el = document.createElement("script");
+        el.type = "application/ld+json";
+        el.id = id;
+        document.head.appendChild(el);
+      }
+      el.textContent = JSON.stringify(payload);
+      return el;
+    };
+    const a = ensureLd("ld-product", productLd);
+    const b = ensureLd("ld-breadcrumb", breadcrumbLd);
+    return () => { a?.remove(); b?.remove(); };
+  }, [product]);
+
   if (!product) return <div className="max-w-7xl mx-auto px-6 py-20 text-stone-500">Loading...</div>;
   const off = product.original_price ? Math.round(100 - (product.price / product.original_price) * 100) : 0;
   const gallery = [product.image, ...(product.gallery || [])].filter(Boolean);
