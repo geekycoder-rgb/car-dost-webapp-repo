@@ -1962,7 +1962,7 @@ async def seo_sitemap():
 
     urls = []
     for path, prio, freq in _STATIC_SITEMAP_PAGES:
-        loc = f"{base}/{path}".rstrip("/")
+        loc = f"{base}/" if not path else f"{base}/{path}"   # home keeps trailing slash for canonical
         urls.append(
             f"  <url><loc>{_xml_escape(loc)}</loc>"
             f"<lastmod>{today}</lastmod>"
@@ -2021,7 +2021,7 @@ async def seo_robots_txt():
         "Disallow: /order/\n"
         "Disallow: /api/\n"
         "\n"
-        f"Sitemap: {base}/api/seo/sitemap.xml\n"
+        f"Sitemap: {base}/sitemap.xml\n"
     )
     return Response(content=body, media_type="text/plain; charset=utf-8")
 

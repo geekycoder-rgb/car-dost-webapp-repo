@@ -8,4 +8,4 @@ Disallow: /my-orders
 Disallow: /order/
 Disallow: /api/
 
-Sitemap: https://cardost.in/api/seo/sitemap.xml
+Sitemap: https://cardost.in/sitemap.xml
