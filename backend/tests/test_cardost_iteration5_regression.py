@@ -19,6 +19,7 @@ API = f"{BASE_URL}/api"
 
 ADMIN_EMAIL = os.environ.get("TEST_ADMIN_EMAIL", "admin@cardost.com")
 ADMIN_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD", "Admin@123")
+TEST_USER_PASSWORD = os.environ.get("TEST_USER_PASSWORD", "Test@12345")
 
 # Tiny valid JPEG (10x10 red) — base85 of a real JPEG byte stream
 TINY_JPEG = bytes.fromhex(
@@ -109,7 +110,7 @@ class TestAdminEndpointsReachable:
         email = f"TEST_regress_{uuid.uuid4().hex[:6]}@cardost-test.com"
         s = session.post(f"{API}/auth/signup", json={
             "name": "Regress User", "email": email, "phone": "9999999999",
-            "password": "Test@12345"
+            "password": TEST_USER_PASSWORD
         })
         assert s.status_code == 200, s.text
         utok = s.json()["token"]

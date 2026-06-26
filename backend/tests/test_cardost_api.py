@@ -17,7 +17,7 @@ ADMIN_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD", "Admin@123")
 # unique test user per run
 RUN_ID = uuid.uuid4().hex[:6]
 TEST_USER_EMAIL = f"TEST_user_{RUN_ID}@cardost-test.com"
-TEST_USER_PASSWORD = "Test@12345"
+TEST_USER_PASSWORD = os.environ.get("TEST_USER_PASSWORD", "Test@12345")
 TEST_USER_NAME = "Test User"
 
 
