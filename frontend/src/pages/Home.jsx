@@ -51,30 +51,6 @@ const CATEGORY_TILES = [
 
 const BRANDS = ["Sony", "JBL", "Pioneer", "Magnetz", "Autotek", "Xxygen", "RoadLink", "Bullsone"];
 
-const MODEL_LANDING_PAGES = [
-  {
-    category: "car-key-covers",
-    model: "hyundai-creta",
-    title: "Car Key Covers for Hyundai Creta",
-    subtitle: "Perfect fit key covers for Hyundai Creta owners",
-    image: "https://images.pexels.com/photos/14111785/pexels-photo-14111785.jpeg?auto=compress&w=900",
-  },
-  {
-    category: "car-key-covers",
-    model: "tata-nexon",
-    title: "Key Covers for Tata Nexon",
-    subtitle: "Stylish Nexon-compatible car key covers",
-    image: "https://images.pexels.com/photos/1796493/pexels-photo-1796493.jpeg?auto=compress&w=900",
-  },
-  {
-    category: "car-covers",
-    model: "maruti-suzuki-swift",
-    title: "Car Covers for Maruti Suzuki Swift",
-    subtitle: "Waterproof body covers tailored for Swift",
-    image: "https://images.pexels.com/photos/1629138/pexels-photo-1629138.jpeg?auto=compress&w=900",
-  },
-];
-
 const FAQS = [
   { q: "Do you provide installation services?", a: "Yes! Our certified team installs every product at our studio in India. Book a slot via the Contact page; most installations are completed same-day." },
   { q: "What is the warranty on your products?", a: "All products come with a 1-year manufacturer warranty. Premium speakers and amplifiers carry an extended brand warranty depending on the manufacturer (Sony, JBL, Pioneer, etc.)." },
@@ -197,96 +173,6 @@ export default function Home() {
                 <img src={c.image} alt={c.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"/>
               </div>
               <div className="text-xs sm:text-sm font-bold uppercase tracking-wider text-neutral-800 group-hover:text-indigo-600">{c.name}</div>
-            </Link>
-          ))}
-        </div>
-      </section>
-
-      {/* VEHICLE-LANDING PAGES */}
-      <section className="max-w-7xl mx-auto px-6 py-14">
-        <div className="flex flex-wrap items-end justify-between gap-3 mb-8 border-b border-neutral-200 pb-4">
-          <div>
-            <h2 className="font-display text-2xl sm:text-3xl font-bold uppercase tracking-wider text-neutral-900">
-              Car Model <span className="text-indigo-600">Landing Pages</span>
-            </h2>
-            <p className="text-sm text-stone-500 max-w-2xl mt-2">
-              Explore curated accessory pages built for popular models and search intent, with exact-fit recommendations for your car.
-            </p>
-          </div>
-          <Link to="/shop" className="text-sm font-bold uppercase tracking-wider text-indigo-600 hover:underline">Browse All Products →</Link>
-        </div>
-        <div className="grid gap-4 md:grid-cols-3">
-          {MODEL_LANDING_PAGES.map((page) => (
-            <Link key={`${page.category}/${page.model}`} to={`/${page.category}/${page.model}`} className="group block overflow-hidden rounded-3xl border border-neutral-200 bg-white shadow-sm hover:shadow-lg transition">
-              <div className="relative h-60 overflow-hidden">
-                <img src={page.image} alt={page.title} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-                <div className="absolute bottom-0 left-0 right-0 p-5">
-                  <div className="text-xs uppercase tracking-[0.3em] text-white font-bold">{page.category.replace(/-/g, " ")}</div>
-                  <h3 className="mt-2 text-lg font-semibold text-white">{page.title}</h3>
-                  <p className="mt-1 text-sm text-white/80">{page.subtitle}</p>
-                </div>
-              </div>
-            </Link>
-          ))}
-        </div>
-      </section>
-
-      {/* VEHICLE-LANDING PAGES */}
-      <section className="max-w-7xl mx-auto px-6 py-14">
-        <div className="flex flex-wrap items-end justify-between gap-3 mb-8 border-b border-neutral-200 pb-4">
-          <div>
-            <h2 className="font-display text-2xl sm:text-3xl font-bold uppercase tracking-wider text-neutral-900">
-              Car Model <span className="text-indigo-600">Landing Pages</span>
-            </h2>
-            <p className="text-sm text-stone-500 max-w-2xl mt-2">
-              Discover ready-made pages for popular models so buyers land directly on perfect-fit accessories.
-            </p>
-          </div>
-          <Link to="/shop" className="text-sm font-bold uppercase tracking-wider text-indigo-600 hover:underline">View all accessories →</Link>
-        </div>
-        <div className="grid gap-4 md:grid-cols-3">
-          {[
-            {
-              category: "car-key-covers",
-              model: "hyundai-creta",
-              title: "Key Covers for Hyundai Creta",
-              subtitle: "Exact-fit key covers for Creta owners",
-              image: "https://images.pexels.com/photos/14111785/pexels-photo-14111785.jpeg?auto=compress&w=900",
-            },
-            {
-              category: "car-key-covers",
-              model: "tata-nexon",
-              title: "Key Covers for Tata Nexon",
-              subtitle: "Premium Nexon-compatible key covers",
-              image: "https://images.pexels.com/photos/1796493/pexels-photo-1796493.jpeg?auto=compress&w=900",
-            },
-            {
-              category: "car-covers",
-              model: "maruti-suzuki-swift",
-              title: "Car Covers for Maruti Suzuki Swift",
-              subtitle: "Waterproof body covers tailored for Swift",
-              image: "https://images.pexels.com/photos/1629138/pexels-photo-1629138.jpeg?auto=compress&w=900",
-            },
-          ].map((page) => (
-            <Link
-              key={`${page.category}/${page.model}`}
-              to={`/${page.category}/${page.model}`}
-              className="group block overflow-hidden rounded-3xl border border-neutral-200 bg-white shadow-sm hover:shadow-lg transition"
-            >
-              <div className="relative h-60 overflow-hidden">
-                <img
-                  src={page.image}
-                  alt={page.title}
-                  className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-transparent to-transparent" />
-                <div className="absolute bottom-0 left-0 right-0 p-5">
-                  <div className="text-xs uppercase tracking-[0.3em] text-white font-bold">{page.category.replace(/-/g, " ")}</div>
-                  <h3 className="mt-2 text-lg font-semibold text-white">{page.title}</h3>
-                  <p className="mt-1 text-sm text-white/80">{page.subtitle}</p>
-                </div>
-              </div>
             </Link>
           ))}
         </div>
