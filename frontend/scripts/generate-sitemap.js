@@ -76,11 +76,19 @@ function writeMinimalFallback() {
     // slash for bare-host URLs (so home is `https://cardost.in/`, not
     // `https://cardost.in`). Using a callback avoids regex-escaping bugs
     // and prevents the earlier `[^/]+` greediness that consumed `<` of `</loc>`.
-    const rewritten = xml.replace(/<loc>([^<]*)<\/loc>/g, (_, raw) => {
+    let rewritten = xml.replace(/<loc>([^<]*)<\/loc>/g, (_, raw) => {
       let url = raw.replace(/^https?:\/\/[^\/]+/, SITE);
       if (url === SITE) url = SITE + "/";
       return `<loc>${url}</loc>`;
     });
+    // Inject an XSL stylesheet reference so browsers render the file as a
+    // styled HTML table instead of a "blank" raw-XML view. Google ignores it.
+    if (!/xml-stylesheet/.test(rewritten)) {
+      rewritten = rewritten.replace(
+        /^<\?xml[^>]*\?>\n?/,
+        (decl) => `${decl.trim()}\n<?xml-stylesheet type="text/xsl" href="/sitemap.xsl"?>\n`
+      );
+    }
     fs.writeFileSync(OUT_PATH, rewritten, "utf8");
     const urlCount = (rewritten.match(/<url>/g) || []).length;
     console.log(`[sitemap] wrote ${urlCount} URLs to public/sitemap.xml (source: ${SOURCE_URL})`);
