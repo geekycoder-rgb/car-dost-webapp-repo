@@ -134,7 +134,7 @@ sudo crontab -l 2>/dev/null > /tmp/cron; \
   sudo crontab /tmp/cron
 ```
 
-Open `https://your-domain.com` — the React SPA loads, `/api/products` returns data, and the seeded admin (`admin@cardost.com` / `Admin@123`) can sign in. **Change the admin password immediately.**
+Open `https://your-domain.com` — the React SPA loads, `/api/products` returns data, and the seeded admin (`admin@cardost.in` / `Admin@123`) can sign in. **Change the admin password immediately.**
 
 ---
 
@@ -334,7 +334,7 @@ docker compose -f deploy/docker-compose.yml down -v
 - [x] Secrets in `.env` files (chmod 600 — handled by docker-compose)
 - [x] Razorpay webhook secret verified server-side
 - [x] JWT signed with a strong `JWT_SECRET`
-- [ ] **You must rotate** the seeded admin password (`admin@cardost.com` / `Admin@123`) on first login
+- [ ] **You must rotate** the seeded admin password (`admin@cardost.in` / `Admin@123`) on first login
 - [ ] **You must point** the SMTP secrets at your own mailbox (Admin → Integrations → Email)
 - [ ] (Optional) Move SSH to a non-standard port + key-only auth
 

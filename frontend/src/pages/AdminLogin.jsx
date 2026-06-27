@@ -10,7 +10,7 @@ import { toast } from "sonner";
 export default function AdminLogin() {
   const { login } = useAuth();
   const navigate = useNavigate();
-  const [form, setForm] = useState({ email: "admin@cardost.com", password: "" });
+  const [form, setForm] = useState({ email: "admin@cardost.in", password: "" });
   const [loading, setLoading] = useState(false);
 
   const submit = async (e) => {

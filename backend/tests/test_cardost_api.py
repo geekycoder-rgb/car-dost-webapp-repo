@@ -14,7 +14,7 @@ BASE_URL = os.environ.get(
 API = f"{BASE_URL}/api"
 
 # Test credentials (seeded admin) — overridable via env, see /app/memory/test_credentials.md
-ADMIN_EMAIL = os.environ.get("TEST_ADMIN_EMAIL", "admin@cardost.com")
+ADMIN_EMAIL = os.environ.get("TEST_ADMIN_EMAIL", "admin@cardost.in")
 ADMIN_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD", "Admin@123")
 
 # unique test user per run

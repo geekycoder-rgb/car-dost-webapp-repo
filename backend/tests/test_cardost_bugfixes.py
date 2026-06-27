@@ -19,7 +19,7 @@ BASE_URL = (
     os.environ.get("REACT_APP_BACKEND_URL")
     or "https://stereo-connect-2.preview.emergentagent.com"
 ).rstrip("/")
-ADMIN_EMAIL = "admin@cardost.com"
+ADMIN_EMAIL = "admin@cardost.in"
 ADMIN_PASS = "Admin@123"
 
 # Product with one real approved 5-star review (from review_request context)

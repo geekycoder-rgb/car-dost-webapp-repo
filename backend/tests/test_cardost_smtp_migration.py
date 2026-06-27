@@ -23,7 +23,7 @@ import requests
 BASE_URL = os.environ.get(
     "REACT_APP_BACKEND_URL", "https://stereo-connect-2.preview.emergentagent.com"
 ).rstrip("/")
-ADMIN_EMAIL = os.environ.get("TEST_ADMIN_EMAIL", "admin@cardost.com")
+ADMIN_EMAIL = os.environ.get("TEST_ADMIN_EMAIL", "admin@cardost.in")
 ADMIN_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD", "Admin@123")
 
 TARGET_HOST = "smtpout.secureserver.net"
