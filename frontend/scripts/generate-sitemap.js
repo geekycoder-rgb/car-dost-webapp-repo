@@ -81,14 +81,11 @@ function writeMinimalFallback() {
       if (url === SITE) url = SITE + "/";
       return `<loc>${url}</loc>`;
     });
-    // Inject an XSL stylesheet reference so browsers render the file as a
-    // styled HTML table instead of a "blank" raw-XML view. Google ignores it.
-    if (!/xml-stylesheet/.test(rewritten)) {
-      rewritten = rewritten.replace(
-        /^<\?xml[^>]*\?>\n?/,
-        (decl) => `${decl.trim()}\n<?xml-stylesheet type="text/xsl" href="/sitemap.xsl"?>\n`
-      );
-    }
+    // Strip any <?xml-stylesheet?> processing instruction — some strict
+    // sitemap parsers (incl. parts of GSC's validator) reject sitemaps with
+    // PIs when the referenced XSL can't be served with a clean text/xsl
+    // content-type (the static-file layer serves .xsl as octet-stream).
+    rewritten = rewritten.replace(/<\?xml-stylesheet[^?]*\?>\n?/g, "");
     fs.writeFileSync(OUT_PATH, rewritten, "utf8");
     const urlCount = (rewritten.match(/<url>/g) || []).length;
     console.log(`[sitemap] wrote ${urlCount} URLs to public/sitemap.xml (source: ${SOURCE_URL})`);

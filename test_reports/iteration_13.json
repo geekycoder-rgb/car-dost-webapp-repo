@@ -1,0 +1,48 @@
+{
+  "summary": "Backend-only regression for sitemap XSL PI removal + dynamic regen end-to-end. All 11 review-request scenarios pass. New /app/backend/tests/test_cardost_iteration13_sitemap.py adds 12 dedicated sitemap tests. Full pytest suite: 119 passed + 2 skipped + 0 failed (the 12 added sitemap tests bring total from 107 to 119; no existing test required adjustment).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_cardost_iteration13_sitemap.py",
+    "/app/test_reports/pytest/iteration_13.xml"
+  ],
+  "verifications_executed": {
+    "xml_cleanliness_disk_sitemap": "PASS — GET /sitemap.xml → 200 application/xml, 5686 bytes, NO '<?xml-stylesheet' substring, L1='<?xml version=\"1.0\" encoding=\"UTF-8\"?>', L2='<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">', xml.etree.ElementTree.parse() succeeds, 35 <url> entries.",
+    "xml_cleanliness_api_sitemap": "PASS — GET /api/seo/sitemap.xml → same cleanliness, identical URL set to /sitemap.xml (verified via sorted <loc> diff).",
+    "googlebot_ua": "PASS — Googlebot UA returns identical 200 application/xml; no '<?xml-stylesheet'; parses cleanly.",
+    "dynamic_regen_on_product_crud": "PASS — POST /api/admin/products triggers schedule_sitemap_refresh; /app/frontend/public/sitemap.xml mtime advances within 3s and the new product's seo_slug appears in /api/seo/sitemap.xml. DELETE removes it from the dynamic sitemap within 3s.",
+    "admin_manual_regen": "PASS — POST /api/admin/sitemap/regenerate returns {ok:true, reason:'admin', url_count:35, written:['/app/frontend/public/sitemap.xml'], skipped:[{path:'/app/frontend/build/sitemap.xml', reason:'parent dir missing'}]}. On-disk file rewritten clean (no XSL PI).",
+    "generator_script_strips_pi": "PASS — synthetic XML with '<?xml-stylesheet type=\"text/xsl\" href=\"/sitemap.xsl\"?>' run through the exact regex from generate-sitemap.js produces output with PI removed and <urlset> + <loc> rewrites intact (/tmp/test_strip_pi.js).",
+    "generator_idempotent": "PASS — two consecutive runs of generate-sitemap.js with valid SITE_URL+REACT_APP_BACKEND_URL both exit 0; resulting md5 is identical (7a9efa3491854f21dc8983f04bf999b2 == 7a9efa3491854f21dc8983f04bf999b2); xml-stylesheet count = 0 after each.",
+    "generator_fallback": "PASS — REACT_APP_BACKEND_URL=https://does-not-exist.invalid → exit 0, stderr 'keeping existing public/sitemap.xml', file md5 and mtime unchanged (both pre/post = 1782566978).",
+    "robots_txt": "PASS — Sitemap directive still 'https://cardost.in/sitemap.xml' (NOT /api/seo/); 'Disallow: /admin' and 'Disallow: /api' rules present.",
+    "auth_unauthenticated_blocked": "PASS — POST /api/admin/sitemap/regenerate without token → 403.",
+    "auth_non_admin_blocked": "PASS — created a fresh customer via /api/auth/signup, logged in, POST /api/admin/sitemap/regenerate with that token → 403.",
+    "pytest_regression": "PASS — 119 passed, 2 skipped, 0 failed in 77.55s; existing test_cardost_iteration7_seo.py needed NO modification (does not assert XSL PI presence)."
+  },
+  "critical_code_review_comments": [
+    "generate-sitemap.js line 88 regex `<\\?xml-stylesheet[^?]*\\?>\\n?` correctly strips the PI line. It targets the question mark in the PI close — only minor concern is that it would not match a PI value containing literal '?', but the canonical form 'type=\"text/xsl\" href=\"...\"' never contains '?', so the regex is safe in practice.",
+    "build_sitemap_xml() in server.py (line ~2825) now cleanly emits only the XML declaration + urlset; PI removal verified via curl + ET.parse. No defensive fallback needed.",
+    "schedule_sitemap_refresh() uses asyncio.create_task fire-and-forget — observed regen completion <3s in tests. No race condition observed across create+delete in the same test.",
+    "Pre-existing observation from iteration_11 still applies: test_cardost_universal.py imports REACT_APP_BACKEND_URL at collection time; export the env var before running pytest. Not a regression from this iteration."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_cardost_iteration13_sitemap.py (NEW — 12 tests)"
+  ],
+  "success_rate": {
+    "backend": "100% (119/119 passed + 2 skipped + 0 failed)",
+    "frontend": "N/A (skipped per request)"
+  },
+  "test_credentials": "admin@cardost.in / Admin@123 (per /app/memory/test_credentials.md — NOTE: review request listed admin@cardost.com which is incorrect; used .in domain from credentials file and backend/.env ADMIN_EMAIL)",
+  "seed_data_creation": "Test creates and self-cleans one product (slug test-sitemap-regen-<uuid>) and one customer (test_sitemap_user_<uuid>@test.com). Customer cleanup not implemented but isolated.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 13 verified: sitemap XML is PI-free end-to-end, dynamic regen on product CRUD works (<3s), admin manual regen works with correct response shape, generator script strips PIs and is idempotent + fallback-safe. Preview at https://stereo-connect-2.preview.emergentagent.com/sitemap.xml shows 35 URLs (preview DB). Production cardost.in still has the OLD file with the XSL PI until next deploy. New tests live at /app/backend/tests/test_cardost_iteration13_sitemap.py — reuse for any future sitemap regression. To run pytest, export REACT_APP_BACKEND_URL first (consumed by test_cardost_universal.py at collection time)."
+}
