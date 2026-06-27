@@ -3116,21 +3116,52 @@ async def startup_event():
         logger.info("Storage initialized")
     except Exception as e:
         logger.warning(f"Storage init failed (uploads may not work): {e}")
-    # Seed admin
+    # Seed / migrate admin user.
+    #   1. If ADMIN_EMAIL already exists → no-op.
+    #   2. Else if a legacy admin@cardost.com exists → rename it to ADMIN_EMAIL
+    #      (preserves the password they may have changed, and removes the duplicate).
+    #   3. Else → fresh seed with ADMIN_PASSWORD.
     admin = await db.users.find_one({"email": ADMIN_EMAIL})
     if not admin:
-        await db.users.insert_one(
-            {
-                "id": str(uuid.uuid4()),
-                "name": "Admin",
-                "email": ADMIN_EMAIL,
-                "phone": "",
-                "password": hash_pw(ADMIN_PASSWORD),
-                "role": "admin",
-                "created_at": datetime.now(timezone.utc).isoformat(),
-            }
+        LEGACY_ADMIN_EMAILS = ["admin@cardost.com"]
+        legacy = await db.users.find_one(
+            {"email": {"$in": LEGACY_ADMIN_EMAILS}, "role": "admin"}
         )
-        logger.info("Admin user seeded")
+        if legacy:
+            await db.users.update_one(
+                {"id": legacy["id"]},
+                {"$set": {"email": ADMIN_EMAIL}},
+            )
+            logger.info(
+                f"[seed] migrated legacy admin {legacy.get('email')} → {ADMIN_EMAIL} "
+                f"(password preserved)"
+            )
+        else:
+            await db.users.insert_one(
+                {
+                    "id": str(uuid.uuid4()),
+                    "name": "Admin",
+                    "email": ADMIN_EMAIL,
+                    "phone": "",
+                    "password": hash_pw(ADMIN_PASSWORD),
+                    "role": "admin",
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                }
+            )
+            logger.info("[seed] Admin user seeded")
+    # Final cleanup: if BOTH the canonical and a legacy admin still exist (e.g. on
+    # a system that had the new admin seeded BEFORE this migration shipped),
+    # delete the legacy duplicate so login only works with the canonical email.
+    legacy_dup = await db.users.find_one(
+        {"email": {"$in": ["admin@cardost.com"]}, "role": "admin"}
+    )
+    canonical_exists = await db.users.find_one({"email": ADMIN_EMAIL, "role": "admin"})
+    if legacy_dup and canonical_exists and legacy_dup.get("id") != canonical_exists.get("id"):
+        await db.users.delete_one({"id": legacy_dup["id"]})
+        logger.info(
+            f"[seed] removed duplicate legacy admin {legacy_dup.get('email')} "
+            f"(canonical {ADMIN_EMAIL} kept)"
+        )
 
     # Seed default categories if empty
     cat_count = await db.categories.count_documents({})
