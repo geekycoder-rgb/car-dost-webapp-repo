@@ -19,6 +19,17 @@ export const LOGIN = {
 	registerLink: 'login-register-link',
 };
 
+export const FORGOT_PASSWORD = {
+	emailInput: 'forgot-password-email-input',
+	submitButton: 'forgot-password-submit-button',
+};
+
+export const RESET_PASSWORD = {
+	passwordInput: 'reset-password-input',
+	confirmPasswordInput: 'reset-password-confirm-input',
+	submitButton: 'reset-password-submit-button',
+};
+
 export const REGISTER = {
 	nameInput: 'register-name-input',
 	emailInput: 'register-email-input',

@@ -345,6 +345,24 @@ def low_stock_email(items: list, base_url) -> tuple:
     )
 
 
+def password_reset_email(reset_link: str, base_url: str) -> tuple:
+    body = f"""
+      <h2>Reset your CarDost password</h2>
+      <p class="muted">We received a request to reset the password for your account.</p>
+      <p style="margin:18px 0"><a href="{reset_link}" class="btn">Reset Password</a></p>
+      <p style="font-size:13px;line-height:1.5">If the button doesn’t work, copy and paste this link into your browser:</p>
+      <p style="font-size:12px;word-break:break-all"><a href="{reset_link}" style="color:#4f46e5">{reset_link}</a></p>
+      <p class="muted" style="margin-top:18px">This link will expire in 2 hours. If you didn’t request a reset, you can safely ignore this email.</p>
+    """
+    html = BASE_WRAP.format(
+        title="Password reset request",
+        subtitle="Secure your account",
+        body=body,
+        base_url=base_url,
+    )
+    return "Reset your CarDost password", html
+
+
 def abandoned_cart_email(cart: dict, base_url) -> tuple:
     items_html = _items_html(cart.get("items", []), base_url)
     body = f"""

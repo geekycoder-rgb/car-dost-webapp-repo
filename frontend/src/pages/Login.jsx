@@ -36,6 +36,9 @@ export default function Login() {
           <form onSubmit={submit} className="space-y-4">
             <div><Label className="text-xs uppercase font-bold text-neutral-700">Email *</Label><Input data-testid="login-email" type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="border-neutral-300 mt-1.5"/></div>
             <div><Label className="text-xs uppercase font-bold text-neutral-700">Password *</Label><Input data-testid="login-password" type="password" required value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className="border-neutral-300 mt-1.5"/></div>
+            <div className="flex justify-end text-right">
+              <Link to="/forgot-password" data-testid="login-forgot-password-link" className="text-sm font-semibold text-indigo-600 hover:underline">Forgot Password?</Link>
+            </div>
             <Button data-testid="login-submit" disabled={loading} type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 py-6 font-bold uppercase tracking-wider text-xs">{loading ? "Signing in..." : "Sign In"}</Button>
           </form>
           <p className="text-sm text-neutral-600 text-center mt-6">

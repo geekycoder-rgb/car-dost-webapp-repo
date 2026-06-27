@@ -20,6 +20,7 @@ from email_service import (
     admin_contact_email,
     order_status_email,
     payment_confirmed_email,
+    password_reset_email,
     low_stock_email,
 )
 
@@ -28,6 +29,7 @@ import re
 import asyncio
 import logging
 import uuid
+import secrets
 import hmac
 import hashlib
 import json
@@ -102,6 +104,15 @@ class SignupReq(BaseModel):
 
 class LoginReq(BaseModel):
     email: EmailStr
+    password: str
+
+
+class ForgotPasswordReq(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordReq(BaseModel):
+    token: str
     password: str
 
 
@@ -276,6 +287,85 @@ async def login(req: LoginReq):
             "role": user.get("role", "user"),
         },
     }
+
+
+@api_router.post("/auth/forgot-password")
+async def forgot_password(req: ForgotPasswordReq):
+    user = await db.users.find_one({"email": req.email})
+    if not user:
+        return {
+            "ok": True,
+            "message": "If an account exists for that email, we have sent password reset instructions.",
+        }
+
+    token = secrets.token_urlsafe(32)
+    expires_at = (datetime.now(timezone.utc) + timedelta(hours=2)).isoformat()
+    await db.users.update_one(
+        {"id": user["id"]},
+        {
+            "$set": {
+                "password_reset_token": token,
+                "password_reset_expires": expires_at,
+            }
+        },
+    )
+
+    settings = await get_settings_doc()
+    if settings.get("smtp_enabled"):
+        reset_link = f"{FRONTEND_URL}/reset-password?token={token}"
+        subject, html = password_reset_email(reset_link, base_url=FRONTEND_URL)
+        reply_to = (
+            settings.get("email_support_from")
+            or settings.get("email_support_to")
+            or settings.get("support_email")
+        )
+        from_alias = settings.get("email_support_from") or settings.get("smtp_from")
+        try:
+            await send_email(
+                settings,
+                user["email"],
+                subject,
+                html,
+                reply_to=reply_to,
+                from_alias=from_alias,
+                from_name="CarDost Support",
+            )
+        except Exception as e:
+            logger.error(f"[email] forgot-password send failed: {e}")
+
+    return {
+        "ok": True,
+        "message": "If an account exists for that email, we have sent password reset instructions.",
+    }
+
+
+@api_router.post("/auth/reset-password")
+async def reset_password(req: ResetPasswordReq):
+    user = await db.users.find_one({"password_reset_token": req.token})
+    if not user:
+        raise HTTPException(400, "Invalid or expired password reset token")
+
+    expires_at = user.get("password_reset_expires")
+    if not expires_at:
+        raise HTTPException(400, "Invalid or expired password reset token")
+
+    try:
+        expires_dt = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+    except Exception:
+        raise HTTPException(400, "Invalid or expired password reset token")
+
+    if expires_dt < datetime.now(timezone.utc):
+        raise HTTPException(400, "Invalid or expired password reset token")
+
+    await db.users.update_one(
+        {"id": user["id"]},
+        {
+            "$set": {"password": hash_pw(req.password)},
+            "$unset": {"password_reset_token": "", "password_reset_expires": ""},
+        },
+    )
+
+    return {"ok": True, "message": "Password updated successfully. Please sign in with your new password."}
 
 
 @api_router.get("/auth/me")
