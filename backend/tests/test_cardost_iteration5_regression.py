@@ -194,6 +194,39 @@ class TestAdminEndpointsReachable:
                 )
                 assert r4.status_code == 200, r4.text
 
+    def test_admin_can_update_site_theme_and_public_settings_reflect_it(self, session, admin_headers):
+        r = session.get(f"{API}/admin/settings", headers=admin_headers, timeout=15)
+        assert r.status_code == 200, r.text
+        original = r.json()
+
+        updates = {"site_theme": "professional-dark"}
+
+        try:
+            r2 = session.put(
+                f"{API}/admin/settings",
+                headers=admin_headers,
+                json=updates,
+                timeout=15,
+            )
+            assert r2.status_code == 200, r2.text
+
+            r3 = session.get(f"{API}/admin/settings", headers=admin_headers, timeout=15)
+            assert r3.status_code == 200, r3.text
+            assert r3.json()["site_theme"] == updates["site_theme"]
+
+            pub = session.get(f"{API}/settings/public", timeout=15)
+            assert pub.status_code == 200, pub.text
+            assert pub.json()["site_theme"] == updates["site_theme"]
+        finally:
+            if original.get("site_theme"):
+                r4 = session.put(
+                    f"{API}/admin/settings",
+                    headers=admin_headers,
+                    json={"site_theme": original["site_theme"]},
+                    timeout=15,
+                )
+                assert r4.status_code == 200, r4.text
+
 
 # ---------------- 3. Products read smoke ----------------
 class TestProductsRead:

@@ -314,6 +314,30 @@ export default function AdminSettings() {
         </div>
       </div>
 
+      {/* Website Theme */}
+      <div className="bg-white border border-stone-200 rounded-2xl p-6">
+        <div className="flex items-center gap-3 mb-5 pb-3 border-b border-stone-200">
+          <div className="w-10 h-10 rounded-xl bg-slate-50 grid place-items-center text-slate-700"><Store className="w-5 h-5"/></div>
+          <div>
+            <h2 className="font-display text-lg font-bold text-stone-950">Website Theme</h2>
+            <p className="text-xs text-stone-500">Toggle the professional light or dark theme for the whole site.</p>
+          </div>
+        </div>
+        <div className="flex items-center justify-between gap-4 px-4 py-3.5 bg-slate-50 rounded-xl border border-stone-200">
+          <div className="min-w-0">
+            <Label className="text-sm uppercase font-bold text-stone-800">Theme</Label>
+            <p className="text-[11px] text-stone-600 mt-0.5">Dark mode applies a polished corporate palette; light mode uses a clean professional palette.</p>
+          </div>
+          <TogglePill
+            testid="set-site-theme-toggle"
+            checked={s.site_theme === "professional-dark"}
+            onChange={(v) => toggleAndSave("site_theme")(v ? "professional-dark" : "professional-light")}
+            onLabel="Dark"
+            offLabel="Light"
+          />
+        </div>
+      </div>
+
       {/* SMTP Email */}
       <div className="bg-white border border-stone-200 rounded-2xl p-6">
         <div className="flex items-center gap-3 mb-5 pb-3 border-b border-stone-200">

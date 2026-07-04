@@ -489,6 +489,7 @@ class SettingsUpdate(BaseModel):
     store_name: Optional[str] = None
     support_email: Optional[str] = None
     support_phone: Optional[str] = None
+    site_theme: Optional[str] = None
     home_card_a_title: Optional[str] = None
     home_card_a_subtitle: Optional[str] = None
     home_card_a_badge: Optional[str] = None
@@ -603,6 +604,7 @@ async def public_settings():
         "store_name": s.get("store_name"),
         "support_email": s.get("support_email"),
         "support_phone": s.get("support_phone"),
+        "site_theme": s.get("site_theme"),
         "home_card_a_title": s.get("home_card_a_title"),
         "home_card_a_subtitle": s.get("home_card_a_subtitle"),
         "home_card_a_badge": s.get("home_card_a_badge"),

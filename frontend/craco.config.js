@@ -97,4 +97,14 @@ if (isDevServer) {
   }
 }
 
+webpackConfig.jest = {
+  configure: (jestConfig) => {
+    jestConfig.moduleNameMapper = {
+      "^@/(.*)$": "<rootDir>/src/$1",
+      ...(jestConfig.moduleNameMapper || {}),
+    };
+    return jestConfig;
+  },
+};
+
 module.exports = webpackConfig;

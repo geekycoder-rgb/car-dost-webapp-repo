@@ -28,12 +28,25 @@ export default function Layout({ children }) {
   const [searchQ, setSearchQ] = useState("");
   const [searchCat, setSearchCat] = useState("all");
   const [categories, setCategories] = useState([]);
+  const [siteTheme, setSiteTheme] = useState("professional-light");
 
   useEffect(() => {
     api.get("/categories")
       .then((r) => setCategories((r.data || []).filter((c) => c.is_active !== false).sort((a, b) => (a.sort_order ?? 99) - (b.sort_order ?? 99))))
       .catch(() => setCategories([]));
   }, []);
+
+  useEffect(() => {
+    api.get("/settings/public")
+      .then((r) => setSiteTheme(r.data?.site_theme || "professional-light"))
+      .catch(() => setSiteTheme("professional-light"));
+  }, []);
+
+  useEffect(() => {
+    if (typeof document !== "undefined") {
+      document.documentElement.dataset.theme = siteTheme;
+    }
+  }, [siteTheme]);
 
   // Static (non-category) routes — pre + post category list
   const staticLinks = [
