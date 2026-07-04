@@ -141,6 +141,59 @@ class TestAdminEndpointsReachable:
         )
         assert r.status_code == 403
 
+    def test_admin_can_update_homepage_promo_settings_and_public_settings_reflect_it(
+        self, session, admin_headers
+    ):
+        r = session.get(f"{API}/admin/settings", headers=admin_headers, timeout=15)
+        assert r.status_code == 200, r.text
+        original = r.json()
+
+        updates = {
+            "home_card_a_title": "Stereo Deals",
+            "home_card_a_cta_text": "Stereo Shop",
+            "home_card_b_title": "Power Speakers",
+            "home_card_b_cta_text": "Speaker Shop",
+        }
+
+        try:
+            r2 = session.put(
+                f"{API}/admin/settings",
+                headers=admin_headers,
+                json=updates,
+                timeout=15,
+            )
+            assert r2.status_code == 200, r2.text
+
+            r3 = session.get(f"{API}/admin/settings", headers=admin_headers, timeout=15)
+            assert r3.status_code == 200, r3.text
+            body = r3.json()
+            assert body["home_card_a_title"] == updates["home_card_a_title"]
+            assert body["home_card_a_cta_text"] == updates["home_card_a_cta_text"]
+            assert body["home_card_b_title"] == updates["home_card_b_title"]
+            assert body["home_card_b_cta_text"] == updates["home_card_b_cta_text"]
+
+            pub = session.get(f"{API}/settings/public", timeout=15)
+            assert pub.status_code == 200, pub.text
+            pub_body = pub.json()
+            assert pub_body["home_card_a_title"] == updates["home_card_a_title"]
+            assert pub_body["home_card_a_cta_text"] == updates["home_card_a_cta_text"]
+            assert pub_body["home_card_b_title"] == updates["home_card_b_title"]
+            assert pub_body["home_card_b_cta_text"] == updates["home_card_b_cta_text"]
+        finally:
+            restore = {
+                k: original[k]
+                for k in updates.keys()
+                if k in original
+            }
+            if restore:
+                r4 = session.put(
+                    f"{API}/admin/settings",
+                    headers=admin_headers,
+                    json=restore,
+                    timeout=15,
+                )
+                assert r4.status_code == 200, r4.text
+
 
 # ---------------- 3. Products read smoke ----------------
 class TestProductsRead:

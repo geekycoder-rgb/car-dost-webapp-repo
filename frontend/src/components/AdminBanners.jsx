@@ -9,7 +9,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, Edit, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
-const MESH = ["mesh-indigo", "mesh-stereo", "mesh-speakers", "mesh-amber", "mesh-emerald"];
+const MESH_OPTIONS = [
+  { value: "mesh-indigo", label: "Indigo Wave" },
+  { value: "mesh-stereo", label: "Stereo Pulse" },
+  { value: "mesh-speakers", label: "Speaker Glow" },
+  { value: "mesh-amber", label: "Amber Flame" },
+  { value: "mesh-emerald", label: "Emerald Rush" },
+  { value: "mesh-rose", label: "Rose Neon" },
+  { value: "mesh-cyan", label: "Cyan Surge" },
+  { value: "mesh-violet", label: "Violet Dream" },
+  { value: "mesh-slate", label: "Slate Fusion" },
+];
 const EMPTY = { title: "", subtitle: "", badge: "", cta_text: "Shop Now", cta_link: "/shop", mesh: "mesh-indigo", accent: "#A5B4FC", image: "", sort_order: 100, is_active: true };
 
 export default function AdminBanners() {
@@ -72,7 +82,7 @@ export default function AdminBanners() {
               <div><Label className="text-xs uppercase font-bold">Mesh Style</Label>
                 <Select value={form.mesh} onValueChange={(v) => setForm({ ...form, mesh: v })}>
                   <SelectTrigger className="mt-1"><SelectValue/></SelectTrigger>
-                  <SelectContent>{MESH.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
+                  <SelectContent>{MESH_OPTIONS.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div><Label className="text-xs uppercase font-bold">Accent Color (hex)</Label><Input value={form.accent || ""} onChange={(e) => setForm({ ...form, accent: e.target.value })} className="mt-1" placeholder="#A5B4FC"/></div>

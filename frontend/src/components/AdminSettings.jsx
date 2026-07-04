@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { CreditCard, Truck, Store, ShieldCheck, KeyRound, Eye, EyeOff, Mail, Send } from "lucide-react";
 
@@ -65,6 +66,18 @@ function SecretInput({ name, label, maskedKey, placeholder, s, setS, showSecrets
     </div>
   );
 }
+
+const MESH_OPTIONS = [
+  { value: "mesh-indigo", label: "Indigo Wave" },
+  { value: "mesh-stereo", label: "Stereo Pulse" },
+  { value: "mesh-speakers", label: "Speaker Glow" },
+  { value: "mesh-amber", label: "Amber Flame" },
+  { value: "mesh-emerald", label: "Emerald Rush" },
+  { value: "mesh-rose", label: "Rose Neon" },
+  { value: "mesh-cyan", label: "Cyan Surge" },
+  { value: "mesh-violet", label: "Violet Dream" },
+  { value: "mesh-slate", label: "Slate Fusion" },
+];
 
 export default function AdminSettings() {
   const [s, setS] = useState(null);
@@ -208,6 +221,95 @@ export default function AdminSettings() {
           <div>
             <Label className="text-xs uppercase font-bold text-stone-700">Pickup Location</Label>
             <Input data-testid="set-ship-pickup" value={s.shiprocket_pickup_location || ""} onChange={c("shiprocket_pickup_location")} placeholder="Primary" className="border-stone-300 mt-1.5"/>
+          </div>
+        </div>
+      </div>
+
+      {/* Homepage Promo Cards */}
+      <div className="bg-white border border-stone-200 rounded-2xl p-6">
+        <div className="flex items-center gap-3 mb-5 pb-3 border-b border-stone-200">
+          <div className="w-10 h-10 rounded-xl bg-indigo-50 grid place-items-center text-indigo-600"><Store className="w-5 h-5"/></div>
+          <div>
+            <h2 className="font-display text-lg font-bold text-stone-950">Homepage Promo Cards</h2>
+            <p className="text-xs text-stone-500">Edit the stereo and speaker promo blocks shown below New Arrivals.</p>
+          </div>
+        </div>
+        <div className="grid gap-6">
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <Label className="text-xs uppercase font-bold text-stone-700">Card A Title</Label>
+              <Input value={s.home_card_a_title || ""} onChange={c("home_card_a_title")} className="mt-1"/>
+            </div>
+            <div>
+              <Label className="text-xs uppercase font-bold text-stone-700">Card B Title</Label>
+              <Input value={s.home_card_b_title || ""} onChange={c("home_card_b_title")} className="mt-1"/>
+            </div>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <Label className="text-xs uppercase font-bold text-stone-700">Card A Subtitle</Label>
+              <Input value={s.home_card_a_subtitle || ""} onChange={c("home_card_a_subtitle")} className="mt-1"/>
+            </div>
+            <div>
+              <Label className="text-xs uppercase font-bold text-stone-700">Card B Subtitle</Label>
+              <Input value={s.home_card_b_subtitle || ""} onChange={c("home_card_b_subtitle")} className="mt-1"/>
+            </div>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <Label className="text-xs uppercase font-bold text-stone-700">Card A Badge</Label>
+              <Input value={s.home_card_a_badge || ""} onChange={c("home_card_a_badge")} className="mt-1"/>
+            </div>
+            <div>
+              <Label className="text-xs uppercase font-bold text-stone-700">Card B Badge</Label>
+              <Input value={s.home_card_b_badge || ""} onChange={c("home_card_b_badge")} className="mt-1"/>
+            </div>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <Label className="text-xs uppercase font-bold text-stone-700">Card A CTA Text</Label>
+              <Input value={s.home_card_a_cta_text || ""} onChange={c("home_card_a_cta_text")} className="mt-1" placeholder="Shop Now"/>
+            </div>
+            <div>
+              <Label className="text-xs uppercase font-bold text-stone-700">Card B CTA Text</Label>
+              <Input value={s.home_card_b_cta_text || ""} onChange={c("home_card_b_cta_text")} className="mt-1" placeholder="Shop Now"/>
+            </div>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <Label className="text-xs uppercase font-bold text-stone-700">Card A Link</Label>
+              <Input value={s.home_card_a_cta_link || ""} onChange={c("home_card_a_cta_link")} className="mt-1" placeholder="/shop?category=android-stereos"/>
+            </div>
+            <div>
+              <Label className="text-xs uppercase font-bold text-stone-700">Card B Link</Label>
+              <Input value={s.home_card_b_cta_link || ""} onChange={c("home_card_b_cta_link")} className="mt-1" placeholder="/shop?category=speakers"/>
+            </div>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <Label className="text-xs uppercase font-bold text-stone-700">Card A Image URL</Label>
+              <Input value={s.home_card_a_image || ""} onChange={c("home_card_a_image")} className="mt-1" placeholder="https://..."/>
+            </div>
+            <div>
+              <Label className="text-xs uppercase font-bold text-stone-700">Card B Image URL</Label>
+              <Input value={s.home_card_b_image || ""} onChange={c("home_card_b_image")} className="mt-1" placeholder="https://..."/>
+            </div>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <Label className="text-xs uppercase font-bold text-stone-700">Card A Mesh Style</Label>
+              <Select value={s.home_card_a_mesh || "mesh-stereo"} onValueChange={(v) => setS({ ...s, home_card_a_mesh: v })}>
+                <SelectTrigger className="mt-1"><SelectValue/></SelectTrigger>
+                <SelectContent>{MESH_OPTIONS.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs uppercase font-bold text-stone-700">Card B Mesh Style</Label>
+              <Select value={s.home_card_b_mesh || "mesh-speakers"} onValueChange={(v) => setS({ ...s, home_card_b_mesh: v })}>
+                <SelectTrigger className="mt-1"><SelectValue/></SelectTrigger>
+                <SelectContent>{MESH_OPTIONS.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
           </div>
         </div>
       </div>

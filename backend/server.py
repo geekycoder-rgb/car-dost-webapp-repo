@@ -390,6 +390,20 @@ DEFAULT_SETTINGS = {
     "store_name": "CarDost",
     "support_email": "Autobotscarstudio@gmail.com",
     "support_phone": "+919063278724",
+    "home_card_a_title": "PREMIUM STEREOS",
+    "home_card_a_subtitle": "10\" Touchscreen · CarPlay · GPS",
+    "home_card_a_badge": "Best Sellers",
+    "home_card_a_cta_text": "Shop Now",
+    "home_card_a_cta_link": "/shop?category=android-stereos",
+    "home_card_a_image": "https://images.pexels.com/photos/28984412/pexels-photo-28984412.jpeg?auto=compress&w=900",
+    "home_card_a_mesh": "mesh-stereo",
+    "home_card_b_title": "SPEAKERS & AMPS",
+    "home_card_b_subtitle": "Sony · JBL · Pioneer · Magnetz",
+    "home_card_b_badge": "Massive Bass",
+    "home_card_b_cta_text": "Shop Now",
+    "home_card_b_cta_link": "/shop?category=speakers",
+    "home_card_b_image": "https://images.unsplash.com/photo-1608538770329-65941f62f9f8?crop=entropy&w=900&q=70",
+    "home_card_b_mesh": "mesh-speakers",
     # SMTP / Email — single auth mailbox, multiple sender aliases by purpose
     "smtp_enabled": False,
     "smtp_host": "smtpout.secureserver.net",
@@ -475,6 +489,20 @@ class SettingsUpdate(BaseModel):
     store_name: Optional[str] = None
     support_email: Optional[str] = None
     support_phone: Optional[str] = None
+    home_card_a_title: Optional[str] = None
+    home_card_a_subtitle: Optional[str] = None
+    home_card_a_badge: Optional[str] = None
+    home_card_a_cta_text: Optional[str] = None
+    home_card_a_cta_link: Optional[str] = None
+    home_card_a_image: Optional[str] = None
+    home_card_a_mesh: Optional[str] = None
+    home_card_b_title: Optional[str] = None
+    home_card_b_subtitle: Optional[str] = None
+    home_card_b_badge: Optional[str] = None
+    home_card_b_cta_text: Optional[str] = None
+    home_card_b_cta_link: Optional[str] = None
+    home_card_b_image: Optional[str] = None
+    home_card_b_mesh: Optional[str] = None
     smtp_enabled: Optional[bool] = None
     smtp_host: Optional[str] = None
     smtp_port: Optional[int] = None
@@ -575,6 +603,20 @@ async def public_settings():
         "store_name": s.get("store_name"),
         "support_email": s.get("support_email"),
         "support_phone": s.get("support_phone"),
+        "home_card_a_title": s.get("home_card_a_title"),
+        "home_card_a_subtitle": s.get("home_card_a_subtitle"),
+        "home_card_a_badge": s.get("home_card_a_badge"),
+        "home_card_a_cta_text": s.get("home_card_a_cta_text"),
+        "home_card_a_cta_link": s.get("home_card_a_cta_link"),
+        "home_card_a_image": s.get("home_card_a_image"),
+        "home_card_a_mesh": s.get("home_card_a_mesh"),
+        "home_card_b_title": s.get("home_card_b_title"),
+        "home_card_b_subtitle": s.get("home_card_b_subtitle"),
+        "home_card_b_badge": s.get("home_card_b_badge"),
+        "home_card_b_cta_text": s.get("home_card_b_cta_text"),
+        "home_card_b_cta_link": s.get("home_card_b_cta_link"),
+        "home_card_b_image": s.get("home_card_b_image"),
+        "home_card_b_mesh": s.get("home_card_b_mesh"),
     }
 
 

@@ -51,6 +51,27 @@ const CATEGORY_TILES = [
 
 const BRANDS = ["Sony", "JBL", "Pioneer", "Magnetz", "Autotek", "Xxygen", "RoadLink", "Bullsone"];
 
+const DEFAULT_PROMO_CARDS = [
+  {
+    title: "PREMIUM STEREOS",
+    subtitle: "10\" Touchscreen · CarPlay · GPS",
+    badge: "Best Sellers",
+    cta_text: "Shop Now",
+    cta_link: "/shop?category=android-stereos",
+    mesh: "mesh-stereo",
+    image: "https://images.pexels.com/photos/28984412/pexels-photo-28984412.jpeg?auto=compress&w=900",
+  },
+  {
+    title: "SPEAKERS & AMPS",
+    subtitle: "Sony · JBL · Pioneer · Magnetz",
+    badge: "Massive Bass",
+    cta_text: "Shop Now",
+    cta_link: "/shop?category=speakers",
+    mesh: "mesh-speakers",
+    image: "https://images.unsplash.com/photo-1608538770329-65941f62f9f8?crop=entropy&w=900&q=70",
+  },
+];
+
 const FAQS = [
   { q: "Do you provide installation services?", a: "Yes! Our certified team installs every product at our studio in India. Book a slot via the Contact page; most installations are completed same-day." },
   { q: "What is the warranty on your products?", a: "All products come with a 1-year manufacturer warranty. Premium speakers and amplifiers carry an extended brand warranty depending on the manufacturer (Sony, JBL, Pioneer, etc.)." },
@@ -64,16 +85,54 @@ export default function Home() {
   const [stereos, setStereos] = useState([]);
   const [speakers, setSpeakers] = useState([]);
   const [slide, setSlide] = useState(0);
-  const [slides, setSlides] = useState(DEFAULT_SLIDES);
+  const [slides, setSlides] = useState([]);
+  const [bannersLoaded, setBannersLoaded] = useState(false);
+  const [promoCards, setPromoCards] = useState(DEFAULT_PROMO_CARDS);
 
   useEffect(() => {
     api.get("/products", { params: { featured: true } }).then((r) => setNewArrivals(r.data.slice(0, 8)));
     api.get("/products", { params: { category: "android-stereos" } }).then((r) => setStereos(r.data));
     api.get("/products", { params: { category: "speakers" } }).then((r) => setSpeakers(r.data));
-    // Live banners managed by admin — falls back to DEFAULT_SLIDES if none
+    api.get("/settings/public")
+      .then((r) => {
+        const cfg = r.data || {};
+        setPromoCards([
+          {
+            title: cfg.home_card_a_title || DEFAULT_PROMO_CARDS[0].title,
+            subtitle: cfg.home_card_a_subtitle || DEFAULT_PROMO_CARDS[0].subtitle,
+            badge: cfg.home_card_a_badge || DEFAULT_PROMO_CARDS[0].badge,
+            cta_text: cfg.home_card_a_cta_text || DEFAULT_PROMO_CARDS[0].cta_text,
+            cta_link: cfg.home_card_a_cta_link || DEFAULT_PROMO_CARDS[0].cta_link,
+            mesh: cfg.home_card_a_mesh || DEFAULT_PROMO_CARDS[0].mesh,
+            image: cfg.home_card_a_image || DEFAULT_PROMO_CARDS[0].image,
+          },
+          {
+            title: cfg.home_card_b_title || DEFAULT_PROMO_CARDS[1].title,
+            subtitle: cfg.home_card_b_subtitle || DEFAULT_PROMO_CARDS[1].subtitle,
+            badge: cfg.home_card_b_badge || DEFAULT_PROMO_CARDS[1].badge,
+            cta_text: cfg.home_card_b_cta_text || DEFAULT_PROMO_CARDS[1].cta_text,
+            cta_link: cfg.home_card_b_cta_link || DEFAULT_PROMO_CARDS[1].cta_link,
+            mesh: cfg.home_card_b_mesh || DEFAULT_PROMO_CARDS[1].mesh,
+            image: cfg.home_card_b_image || DEFAULT_PROMO_CARDS[1].image,
+          },
+        ]);
+      })
+      .catch(() => {})
+      .finally(() => setBannersLoaded(true));
+
     api.get("/banners")
-      .then((r) => { if (r.data && r.data.length > 0) { setSlides(r.data); setSlide(0); } })
-      .catch(() => { /* keep defaults */ });
+      .then((r) => {
+        if (r.data && r.data.length > 0) {
+          setSlides(r.data);
+          setSlide(0);
+        } else {
+          setSlides(DEFAULT_SLIDES);
+        }
+      })
+      .catch(() => {
+        setSlides(DEFAULT_SLIDES);
+      })
+      .finally(() => setBannersLoaded(true));
   }, []);
 
   useEffect(() => {
@@ -82,58 +141,64 @@ export default function Home() {
     return () => clearInterval(t);
   }, [slides.length]);
 
-  const current = slides[slide] || slides[0];
+  const current = bannersLoaded ? slides[slide] || DEFAULT_SLIDES[0] : null;
 
   return (
     <div className="bg-white">
       {/* HERO Carousel */}
       <section className="relative overflow-hidden">
-        <div className={`relative h-[280px] sm:h-[400px] lg:h-[520px] ${current.mesh || "mesh-indigo"}`}>
-          {current.image && (
-            <div className="absolute inset-0 opacity-30" style={{ backgroundImage: `url(${current.image})`, backgroundSize: "cover", backgroundPosition: "center", mixBlendMode: "luminosity" }}/>
-          )}
-          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/40"/>
-          <div className="relative max-w-7xl mx-auto h-full px-6 flex items-center">
-            <div className="space-y-3 sm:space-y-5 animate-fade-up text-white">
-              <div className="inline-flex items-center gap-2 glass border border-white/20 text-white text-[10px] sm:text-xs font-bold uppercase tracking-[0.2em] px-3 py-1.5 rounded-full">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"/> Limited Time
-              </div>
-              <h1 className="font-anton text-4xl sm:text-6xl lg:text-8xl leading-[0.95] uppercase drop-shadow-2xl">
-                {current.title}
-              </h1>
-              {current.subtitle && (
-                <p className="font-display text-base sm:text-2xl lg:text-3xl font-medium" style={{ color: current.accent || "#A5B4FC" }}>{current.subtitle}</p>
-              )}
-              <div className="flex flex-wrap gap-3 items-center pt-2">
-                <Link to={current.cta_link || "/shop"} className="group bg-white hover:bg-indigo-50 text-slate-900 font-bold uppercase text-xs sm:text-sm tracking-wider px-7 sm:px-10 py-3 sm:py-4 rounded-full transition shadow-2xl inline-flex items-center gap-2">
-                  {current.cta_text || "Shop Now"} <span className="group-hover:translate-x-1 transition">→</span>
-                </Link>
-                {current.badge && (
-                  <div className="hidden sm:flex items-center gap-2 glass border border-white/20 text-white px-4 py-2.5 rounded-full text-[10px] uppercase font-bold tracking-wider">
-                    {current.badge}
-                  </div>
+        {current ? (
+          <div className={`relative h-[280px] sm:h-[400px] lg:h-[520px] ${current.mesh || "mesh-indigo"}`}>
+            {current.image && (
+              <div className="absolute inset-0 opacity-30" style={{ backgroundImage: `url(${current.image})`, backgroundSize: "cover", backgroundPosition: "center", mixBlendMode: "luminosity" }}/>
+            )}
+            <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/40"/>
+            <div className="relative max-w-7xl mx-auto h-full px-6 flex items-center">
+              <div className="space-y-3 sm:space-y-5 animate-fade-up text-white">
+                <div className="inline-flex items-center gap-2 glass border border-white/20 text-white text-[10px] sm:text-xs font-bold uppercase tracking-[0.2em] px-3 py-1.5 rounded-full">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"/> Limited Time
+                </div>
+                <h1 className="font-anton text-4xl sm:text-6xl lg:text-8xl leading-[0.95] uppercase drop-shadow-2xl">
+                  {current.title}
+                </h1>
+                {current.subtitle && (
+                  <p className="font-display text-base sm:text-2xl lg:text-3xl font-medium" style={{ color: current.accent || "#A5B4FC" }}>{current.subtitle}</p>
                 )}
+                <div className="flex flex-wrap gap-3 items-center pt-2">
+                  <Link to={current.cta_link || "/shop"} className="group bg-white hover:bg-indigo-50 text-slate-900 font-bold uppercase text-xs sm:text-sm tracking-wider px-7 sm:px-10 py-3 sm:py-4 rounded-full transition shadow-2xl inline-flex items-center gap-2">
+                    {current.cta_text || "Shop Now"} <span className="group-hover:translate-x-1 transition">→</span>
+                  </Link>
+                  {current.badge && (
+                    <div className="hidden sm:flex items-center gap-2 glass border border-white/20 text-white px-4 py-2.5 rounded-full text-[10px] uppercase font-bold tracking-wider">
+                      {current.badge}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Slider arrows */}
-          {slides.length > 1 && (<>
-            <button onClick={() => setSlide((s) => (s - 1 + slides.length) % slides.length)} aria-label="prev"
-                    className="absolute left-3 top-1/2 -translate-y-1/2 w-11 h-11 grid place-items-center glass border border-white/20 text-white hover:bg-white hover:text-slate-900 rounded-full transition">
-              <ChevronLeft className="w-5 h-5"/>
-            </button>
-            <button onClick={() => setSlide((s) => (s + 1) % slides.length)} aria-label="next"
-                    className="absolute right-3 top-1/2 -translate-y-1/2 w-11 h-11 grid place-items-center glass border border-white/20 text-white hover:bg-white hover:text-slate-900 rounded-full transition">
-              <ChevronRight className="w-5 h-5"/>
-            </button>
-            <div className="absolute bottom-5 left-1/2 -translate-x-1/2 flex gap-2">
-              {slides.map((_, i) => (
-                <button key={i} onClick={() => setSlide(i)} aria-label={`slide ${i+1}`} className={`h-1.5 rounded-full transition-all ${i === slide ? "w-10 bg-white" : "w-1.5 bg-white/50 hover:bg-white/80"}`}/>
-              ))}
-            </div>
-          </>)}
-        </div>
+            {/* Slider arrows */}
+            {slides.length > 1 && (<>
+              <button onClick={() => setSlide((s) => (s - 1 + slides.length) % slides.length)} aria-label="prev"
+                      className="absolute left-3 top-1/2 -translate-y-1/2 w-11 h-11 grid place-items-center glass border border-white/20 text-white hover:bg-white hover:text-slate-900 rounded-full transition">
+                <ChevronLeft className="w-5 h-5"/>
+              </button>
+              <button onClick={() => setSlide((s) => (s + 1) % slides.length)} aria-label="next"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 w-11 h-11 grid place-items-center glass border border-white/20 text-white hover:bg-white hover:text-slate-900 rounded-full transition">
+                <ChevronRight className="w-5 h-5"/>
+              </button>
+              <div className="absolute bottom-5 left-1/2 -translate-x-1/2 flex gap-2">
+                {slides.map((_, i) => (
+                  <button key={i} onClick={() => setSlide(i)} aria-label={`slide ${i+1}`} className={`h-1.5 rounded-full transition-all ${i === slide ? "w-10 bg-white" : "w-1.5 bg-white/50 hover:bg-white/80"}`}/>
+                ))}
+              </div>
+            </>)}
+          </div>
+        ) : (
+          <div className="relative h-[280px] sm:h-[400px] lg:h-[520px] bg-slate-950 overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 animate-pulse" />
+          </div>
+        )}
       </section>
 
       {/* Feature strip */}
@@ -180,24 +245,21 @@ export default function Home() {
 
       {/* PROMO BANNERS - two side-by-side */}
       <section className="max-w-7xl mx-auto px-6 pb-14 grid md:grid-cols-2 gap-5">
-        <Link to="/shop?category=android-stereos" className="relative overflow-hidden rounded-2xl h-48 lg:h-64 group mesh-stereo">
-          <div className="absolute inset-0 opacity-25" style={{ backgroundImage: "url(https://images.pexels.com/photos/28984412/pexels-photo-28984412.jpeg?auto=compress&w=900)", backgroundSize: "cover", backgroundPosition: "right", mixBlendMode: "luminosity" }}/>
-          <div className="relative h-full p-6 lg:p-8 flex flex-col justify-center text-white">
-            <div className="text-[10px] uppercase tracking-[0.25em] text-amber-300 font-bold mb-2">Best Sellers</div>
-            <div className="font-anton text-3xl lg:text-5xl leading-none drop-shadow-lg">PREMIUM STEREOS</div>
-            <div className="text-sm mt-2 text-white/80">10&quot; Touchscreen · CarPlay · GPS</div>
-            <div className="mt-4 inline-flex items-center gap-2 w-fit bg-white text-slate-900 text-xs font-bold uppercase tracking-wider px-5 py-2 rounded-full group-hover:translate-x-1 transition">Shop Now →</div>
-          </div>
-        </Link>
-        <Link to="/shop?category=speakers" className="relative overflow-hidden rounded-2xl h-48 lg:h-64 group mesh-speakers">
-          <div className="absolute inset-0 opacity-25" style={{ backgroundImage: "url(https://images.unsplash.com/photo-1608538770329-65941f62f9f8?crop=entropy&w=900)", backgroundSize: "cover", backgroundPosition: "right", mixBlendMode: "luminosity" }}/>
-          <div className="relative h-full p-6 lg:p-8 flex flex-col justify-center text-white">
-            <div className="text-[10px] uppercase tracking-[0.25em] text-pink-200 font-bold mb-2">Massive Bass</div>
-            <div className="font-anton text-3xl lg:text-5xl leading-none drop-shadow-lg">SPEAKERS &amp; AMPS</div>
-            <div className="text-sm mt-2 text-white/80">Sony · JBL · Pioneer · Magnetz</div>
-            <div className="mt-4 inline-flex items-center gap-2 w-fit bg-white text-slate-900 text-xs font-bold uppercase tracking-wider px-5 py-2 rounded-full group-hover:translate-x-1 transition">Shop Now →</div>
-          </div>
-        </Link>
+        {promoCards.map((card, index) => (
+          <Link key={index} to={card.cta_link || "/shop"} className={`relative overflow-hidden rounded-2xl h-48 lg:h-64 group ${card.mesh || "mesh-stereo"}`}>
+            {card.image && (
+              <div className="absolute inset-0 opacity-25" style={{ backgroundImage: `url(${card.image})`, backgroundSize: "cover", backgroundPosition: "right", mixBlendMode: "luminosity" }}/>
+            )}
+            <div className="relative h-full p-6 lg:p-8 flex flex-col justify-center text-white">
+              {card.badge && <div className="text-[10px] uppercase tracking-[0.25em] text-amber-300 font-bold mb-2">{card.badge}</div>}
+              <div className="font-anton text-3xl lg:text-5xl leading-none drop-shadow-lg">{card.title}</div>
+              {card.subtitle && <div className="text-sm mt-2 text-white/80">{card.subtitle}</div>}
+              <div className="mt-4 inline-flex items-center gap-2 w-fit bg-white text-slate-900 text-xs font-bold uppercase tracking-wider px-5 py-2 rounded-full group-hover:translate-x-1 transition">
+                {card.cta_text || "Shop Now"} →
+              </div>
+            </div>
+          </Link>
+        ))}
       </section>
 
       {/* NEW ARRIVALS */}
