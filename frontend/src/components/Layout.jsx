@@ -114,7 +114,7 @@ export default function Layout({ children }) {
       <header className="bg-white border-b border-neutral-200">
         <div className="max-w-7xl mx-auto px-4 lg:px-6 py-4 flex items-center justify-between gap-4 lg:gap-8">
           <Link to="/" className="flex items-center gap-3 shrink-0" data-testid="logo-link">
-            <img src="/cardostlogo.png" alt="CarDost" className="h-12 w-12 rounded-xl border-2 border-indigo-600 bg-white object-contain p-1" />
+            <img src="/cardostlogo.png" alt="CarDost" className="h-10 object-contain bg-transparent" />
             <div className="leading-none">
               <div className="font-anton text-2xl lg:text-3xl tracking-wide text-neutral-900">
                 CAR<span className="text-indigo-600">DOST</span>
@@ -258,10 +258,10 @@ export default function Layout({ children }) {
       <footer className="mt-20 bg-[#0F172A] text-white">
         <div className="max-w-7xl mx-auto px-6 py-14 grid md:grid-cols-2 lg:grid-cols-4 gap-10">
           <div>
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 bg-white rounded grid place-items-center font-anton text-indigo-600 text-2xl border-2 border-indigo-600">C</div>
-              <div className="font-anton text-2xl">CAR<span className="text-indigo-500">DOST</span></div>
-            </div>
+              <div className="flex items-center gap-3 mb-4">
+                <img src="/cardostlogo.png" alt="CarDost" className="h-10 object-contain bg-transparent" />
+                <div className="font-anton text-2xl">CAR<span className="text-indigo-500">DOST</span></div>
+              </div>
             <p className="text-sm text-neutral-400 leading-relaxed mb-4">
               India&apos;s trusted destination for premium car audio, Android stereos, speakers and accessories. Best prices guaranteed.
             </p>
