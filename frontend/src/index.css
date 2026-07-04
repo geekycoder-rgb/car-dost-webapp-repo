@@ -48,25 +48,37 @@ html[data-theme="professional-dark"] {
   background: var(--bg);
 }
 
-html[data-theme="professional-dark"] .bg-white {
+html[data-theme="professional-dark"] .bg-white,
+html[data-theme="professional-dark"] .bg-neutral-50,
+html[data-theme="professional-dark"] .bg-stone-50,
+html[data-theme="professional-dark"] .bg-stone-100,
+html[data-theme="professional-dark"] .bg-slate-50,
+html[data-theme="professional-dark"] .bg-slate-100 {
   background-color: var(--surface) !important;
 }
 
-html[data-theme="professional-dark"] .bg-neutral-50 {
-  background-color: var(--surface) !important;
-}
-
-html[data-theme="professional-dark"] .border-neutral-200 {
+html[data-theme="professional-dark"] .border-neutral-200,
+html[data-theme="professional-dark"] .border-stone-200,
+html[data-theme="professional-dark"] .border-slate-200 {
   border-color: var(--border) !important;
 }
 
 html[data-theme="professional-dark"] .text-neutral-900,
-html[data-theme="professional-dark"] .text-neutral-800 {
+html[data-theme="professional-dark"] .text-neutral-800,
+html[data-theme="professional-dark"] .text-stone-950,
+html[data-theme="professional-dark"] .text-stone-900,
+html[data-theme="professional-dark"] .text-slate-950,
+html[data-theme="professional-dark"] .text-slate-900,
+html[data-theme="professional-dark"] .text-slate-800,
+html[data-theme="professional-dark"] .text-stone-800 {
   color: var(--text) !important;
 }
 
 html[data-theme="professional-dark"] .text-neutral-500,
-html[data-theme="professional-dark"] .text-neutral-600 {
+html[data-theme="professional-dark"] .text-neutral-600,
+html[data-theme="professional-dark"] .text-stone-700,
+html[data-theme="professional-dark"] .text-slate-700,
+html[data-theme="professional-dark"] .text-slate-600 {
   color: var(--text-dim) !important;
 }
 
