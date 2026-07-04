@@ -114,10 +114,7 @@ export default function Layout({ children }) {
       <header className="bg-white border-b border-neutral-200">
         <div className="max-w-7xl mx-auto px-4 lg:px-6 py-4 flex items-center justify-between gap-4 lg:gap-8">
           <Link to="/" className="flex items-center gap-3 shrink-0" data-testid="logo-link">
-            <picture>
-              <source srcSet="/cardostlogo.svg" type="image/svg+xml" />
-              <img src="/cardostlogo.png" alt="CarDost" className="h-10 object-contain bg-transparent" />
-            </picture>
+            <img src="/cardostlogo.png" alt="CarDost" className="h-10 object-contain bg-transparent" />
             <div className="leading-none">
               <div className="font-anton text-2xl lg:text-3xl tracking-wide text-neutral-900">
                 CAR<span className="text-indigo-600">DOST</span>
