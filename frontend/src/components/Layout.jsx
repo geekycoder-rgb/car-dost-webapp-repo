@@ -114,9 +114,7 @@ export default function Layout({ children }) {
       <header className="bg-white border-b border-neutral-200">
         <div className="max-w-7xl mx-auto px-4 lg:px-6 py-4 flex items-center justify-between gap-4 lg:gap-8">
           <Link to="/" className="flex items-center gap-3 shrink-0" data-testid="logo-link">
-            <div className="relative">
-              <div className="w-12 h-12 bg-white border-2 border-indigo-600 rounded grid place-items-center font-anton text-indigo-600 text-2xl">C</div>
-            </div>
+            <img src="/cardostlogo.png" alt="CarDost" className="h-12 w-12 rounded-xl border-2 border-indigo-600 bg-white object-contain p-1" />
             <div className="leading-none">
               <div className="font-anton text-2xl lg:text-3xl tracking-wide text-neutral-900">
                 CAR<span className="text-indigo-600">DOST</span>
