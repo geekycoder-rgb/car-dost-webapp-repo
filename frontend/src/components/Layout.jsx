@@ -114,7 +114,9 @@ export default function Layout({ children }) {
       <header className="bg-white border-b border-neutral-200">
         <div className="max-w-7xl mx-auto px-4 lg:px-6 py-4 flex items-center justify-between gap-4 lg:gap-8">
           <Link to="/" className="flex items-center gap-3 shrink-0" data-testid="logo-link">
-            <img src="/cardostlogo.png" alt="CarDost" className="h-10 object-contain bg-transparent" />
+            <div className="flex items-center justify-center h-10 w-10 bg-white rounded shadow-sm flex-shrink-0">
+              <img src="/cardostlogo.png" alt="CarDost" className="h-8 w-8 object-contain" />
+            </div>
             <div className="leading-none">
               <div className="font-anton text-2xl lg:text-3xl tracking-wide text-neutral-900">
                 CAR<span className="text-indigo-600">DOST</span>
@@ -259,7 +261,9 @@ export default function Layout({ children }) {
         <div className="max-w-7xl mx-auto px-6 py-14 grid md:grid-cols-2 lg:grid-cols-4 gap-10">
           <div>
               <div className="flex items-center gap-3 mb-4">
-                <img src="/cardostlogo.png" alt="CarDost" className="h-10 object-contain bg-transparent" />
+                <div className="flex items-center justify-center h-10 w-10 bg-white rounded shadow-sm flex-shrink-0">
+                  <img src="/cardostlogo.png" alt="CarDost" className="h-8 w-8 object-contain" />
+                </div>
                 <div className="font-anton text-2xl">CAR<span className="text-indigo-500">DOST</span></div>
               </div>
             <p className="text-sm text-neutral-400 leading-relaxed mb-4">
