@@ -158,36 +158,43 @@ export default function Home() {
       {/* HERO Carousel */}
       <section className="relative overflow-hidden">
         {current ? (
-          <div className={`relative h-[280px] sm:h-[400px] lg:h-[520px] ${current.display_mode === "image-only" ? "" : (current.mesh || "mesh-indigo")}`}>
-            {current.image && (
-              <div className="absolute inset-0" style={{ backgroundImage: `url(${current.image})`, backgroundSize: "cover", backgroundPosition: "center", mixBlendMode: current.display_mode === "image-only" ? "normal" : "luminosity", opacity: current.display_mode === "image-only" ? 1 : 0.3 }}/>
-            )}
-            {current.display_mode !== "image-only" && <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/40"/>}
-            {current.display_mode !== "image-only" && (
-            <div className="relative max-w-7xl mx-auto h-full px-6 flex items-center">
-              <div className="space-y-3 sm:space-y-5 animate-fade-up text-white">
-                <div className="inline-flex items-center gap-2 glass border border-white/20 text-white text-[10px] sm:text-xs font-bold uppercase tracking-[0.2em] px-3 py-1.5 rounded-full">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"/> Limited Time
-                </div>
-                <h1 className="font-anton text-4xl sm:text-6xl lg:text-8xl leading-[0.95] uppercase drop-shadow-2xl">
-                  {current.title}
-                </h1>
-                {current.subtitle && (
-                  <p className="font-display text-base sm:text-2xl lg:text-3xl font-medium" style={{ color: current.accent || "#A5B4FC" }}>{current.subtitle}</p>
+          {(() => {
+            const showOverlay = !current.hide_overlay;
+            const showText = !current.hide_text;
+            return (
+              <div className={`relative h-[280px] sm:h-[400px] lg:h-[520px] ${showOverlay ? (current.mesh || "mesh-indigo") : ""}`}>
+                {current.image && (
+                  <div className="absolute inset-0" style={{ backgroundImage: `url(${current.image})`, backgroundSize: "cover", backgroundPosition: "center", mixBlendMode: showOverlay ? "luminosity" : "normal", opacity: showOverlay ? 0.3 : 1 }}/>
                 )}
-                <div className="flex flex-wrap gap-3 items-center pt-2">
-                  <Link to={current.cta_link || "/shop"} className="group bg-white hover:bg-indigo-50 text-slate-900 font-bold uppercase text-xs sm:text-sm tracking-wider px-7 sm:px-10 py-3 sm:py-4 rounded-full transition shadow-2xl inline-flex items-center gap-2">
-                    {current.cta_text || "Shop Now"} <span className="group-hover:translate-x-1 transition">→</span>
-                  </Link>
-                  {current.badge && (
-                    <div className="hidden sm:flex items-center gap-2 glass border border-white/20 text-white px-4 py-2.5 rounded-full text-[10px] uppercase font-bold tracking-wider">
-                      {current.badge}
+                {showOverlay && <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/40"/>}
+                {showText && (
+                <div className="relative max-w-7xl mx-auto h-full px-6 flex items-center">
+                  <div className="space-y-3 sm:space-y-5 animate-fade-up text-white">
+                    <div className="inline-flex items-center gap-2 glass border border-white/20 text-white text-[10px] sm:text-xs font-bold uppercase tracking-[0.2em] px-3 py-1.5 rounded-full">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"/> Limited Time
                     </div>
-                  )}
+                    <h1 className="font-anton text-4xl sm:text-6xl lg:text-8xl leading-[0.95] uppercase drop-shadow-2xl">
+                      {current.title}
+                    </h1>
+                    {current.subtitle && (
+                      <p className="font-display text-base sm:text-2xl lg:text-3xl font-medium" style={{ color: current.accent || "#A5B4FC" }}>{current.subtitle}</p>
+                    )}
+                    <div className="flex flex-wrap gap-3 items-center pt-2">
+                      <Link to={current.cta_link || "/shop"} className="group bg-white hover:bg-indigo-50 text-slate-900 font-bold uppercase text-xs sm:text-sm tracking-wider px-7 sm:px-10 py-3 sm:py-4 rounded-full transition shadow-2xl inline-flex items-center gap-2">
+                        {current.cta_text || "Shop Now"} <span className="group-hover:translate-x-1 transition">→</span>
+                      </Link>
+                      {current.badge && (
+                        <div className="hidden sm:flex items-center gap-2 glass border border-white/20 text-white px-4 py-2.5 rounded-full text-[10px] uppercase font-bold tracking-wider">
+                          {current.badge}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
+                )}
               </div>
-            </div>
-            )}
+            );
+          })()}
 
             {/* Slider arrows */}
             {slides.length > 1 && (<>

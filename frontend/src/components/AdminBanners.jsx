@@ -20,7 +20,7 @@ const MESH_OPTIONS = [
   { value: "mesh-violet", label: "Violet Dream" },
   { value: "mesh-slate", label: "Slate Fusion" },
 ];
-const EMPTY = { title: "", subtitle: "", badge: "", cta_text: "Shop Now", cta_link: "/shop", mesh: "mesh-indigo", accent: "#A5B4FC", image: "", display_mode: "overlay", sort_order: 100, is_active: true };
+const EMPTY = { title: "", subtitle: "", badge: "", cta_text: "Shop Now", cta_link: "/shop", mesh: "mesh-indigo", accent: "#A5B4FC", image: "", hide_overlay: false, hide_text: false, sort_order: 100, is_active: true };
 
 export default function AdminBanners() {
   const [list, setList] = useState([]);
@@ -54,8 +54,11 @@ export default function AdminBanners() {
       <div className="grid sm:grid-cols-2 gap-4">
         {list.map((b) => (
           <div key={b.id} data-testid={`banner-${b.id}`} className={`relative rounded-2xl p-6 text-white overflow-hidden ${b.mesh}`}>
-            {b.display_mode === "image-only" && (
+            {b.hide_overlay && (
               <div className="absolute left-3 top-3 bg-white/20 text-[10px] px-2 py-1 rounded">Image only</div>
+            )}
+            {b.hide_text && (
+              <div className="absolute left-3 top-10 bg-white/20 text-[10px] px-2 py-1 rounded">No text</div>
             )}
             <div className="absolute top-2 right-2 flex gap-1 z-10">
               <button onClick={() => { setEditing(b); setForm({ ...EMPTY, ...b }); setOpen(true); }} className="w-7 h-7 grid place-items-center bg-white/20 hover:bg-white/40 rounded"><Edit className="w-3.5 h-3.5"/></button>
@@ -79,7 +82,7 @@ export default function AdminBanners() {
             <div><Label className="text-xs uppercase font-bold">Title *</Label><Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className="mt-1"/></div>
             <div><Label className="text-xs uppercase font-bold">Subtitle</Label><Input value={form.subtitle || ""} onChange={(e) => setForm({ ...form, subtitle: e.target.value })} className="mt-1"/></div>
             <div><Label className="text-xs uppercase font-bold">Badge / Promo Text</Label><Input value={form.badge || ""} onChange={(e) => setForm({ ...form, badge: e.target.value })} className="mt-1" placeholder="e.g. EXTRA 5% OFF · CODE SAVE5"/></div>
-            <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3">
               <div><Label className="text-xs uppercase font-bold">CTA Text</Label><Input value={form.cta_text || ""} onChange={(e) => setForm({ ...form, cta_text: e.target.value })} className="mt-1"/></div>
               <div><Label className="text-xs uppercase font-bold">CTA Link</Label><Input value={form.cta_link || ""} onChange={(e) => setForm({ ...form, cta_link: e.target.value })} className="mt-1" placeholder="/shop?category=…"/></div>
               <div><Label className="text-xs uppercase font-bold">Mesh Style</Label>
@@ -90,16 +93,16 @@ export default function AdminBanners() {
               </div>
               <div><Label className="text-xs uppercase font-bold">Accent Color (hex)</Label><Input value={form.accent || ""} onChange={(e) => setForm({ ...form, accent: e.target.value })} className="mt-1" placeholder="#A5B4FC"/></div>
               <div>
-                <Label className="text-xs uppercase font-bold">Display Mode</Label>
-                <div className="mt-1 flex gap-2">
-                  <label className={`px-3 py-2 rounded cursor-pointer ${form.display_mode === "overlay" ? "bg-indigo-600 text-white" : "bg-stone-100"}`}>
-                    <input type="radio" name="display_mode" value="overlay" checked={form.display_mode === "overlay"} onChange={() => setForm({ ...form, display_mode: "overlay" })} className="hidden" />
-                    Overlay (text + background)
-                  </label>
-                  <label className={`px-3 py-2 rounded cursor-pointer ${form.display_mode === "image-only" ? "bg-indigo-600 text-white" : "bg-stone-100"}`}>
-                    <input type="radio" name="display_mode" value="image-only" checked={form.display_mode === "image-only"} onChange={() => setForm({ ...form, display_mode: "image-only" })} className="hidden" />
-                    Image only
-                  </label>
+                <Label className="text-xs uppercase font-bold">Display Options</Label>
+                <div className="mt-1 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Switch checked={form.hide_overlay} onCheckedChange={(v) => setForm({ ...form, hide_overlay: v })}/>
+                    <span className="text-sm">Hide overlay/background (show image only)</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Switch checked={form.hide_text} onCheckedChange={(v) => setForm({ ...form, hide_text: v })}/>
+                    <span className="text-sm">Hide text overlay (title, subtitle, badge)</span>
+                  </div>
                 </div>
               </div>
             </div>

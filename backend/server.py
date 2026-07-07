@@ -1129,7 +1129,8 @@ class BannerIn(BaseModel):
     )
     accent: Optional[str] = "#A5B4FC"
     image: Optional[str] = ""
-    display_mode: Optional[str] = "overlay"  # 'overlay' or 'image-only'
+    hide_overlay: bool = False
+    hide_text: bool = False
     sort_order: int = 0
     is_active: bool = True
 
@@ -3374,7 +3375,8 @@ async def startup_event():
                 "cta_text": "Shop Now",
                 "cta_link": "/shop",
                 "mesh": "mesh-indigo",
-                "display_mode": "overlay",
+                "hide_overlay": False,
+                "hide_text": False,
                 "accent": "#A5B4FC",
                 "image": "https://images.pexels.com/photos/9530906/pexels-photo-9530906.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=720&w=1920",
                 "sort_order": 1,
@@ -3387,7 +3389,8 @@ async def startup_event():
                 "cta_text": "Explore Stereos",
                 "cta_link": "/shop?category=android-stereos",
                 "mesh": "mesh-stereo",
-                "display_mode": "overlay",
+                "hide_overlay": False,
+                "hide_text": False,
                 "accent": "#FBBF24",
                 "image": "https://images.pexels.com/photos/4078064/pexels-photo-4078064.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=720&w=1920",
                 "sort_order": 2,
@@ -3400,7 +3403,8 @@ async def startup_event():
                 "cta_text": "Shop Speakers",
                 "cta_link": "/shop?category=speakers",
                 "mesh": "mesh-speakers",
-                "display_mode": "overlay",
+                "hide_overlay": False,
+                "hide_text": False,
                 "accent": "#FBCFE8",
                 "image": "https://images.unsplash.com/photo-1608538770329-65941f62f9f8?crop=entropy&cs=srgb&fm=jpg&w=1920",
                 "sort_order": 3,
