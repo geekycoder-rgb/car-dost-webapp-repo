@@ -15,7 +15,7 @@ const DEFAULT_SLIDES = [
     cta_link: "/shop",
     mesh: "mesh-indigo",
     accent: "#A5B4FC",
-    image: "https://images.pexels.com/photos/9530906/pexels-photo-9530906.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=720&w=1920",
+    image: "https://images.pexels.com/photos/9530906/pexels-photo-9530906.jpeg?auto=compress&cs=tinysrgb&w=1920&h=600&fit=crop",
   },
   {
     title: "ANDROID STEREOS",
@@ -25,7 +25,7 @@ const DEFAULT_SLIDES = [
     cta_link: "/shop?category=android-stereos",
     mesh: "mesh-stereo",
     accent: "#FBBF24",
-    image: "https://images.pexels.com/photos/4078064/pexels-photo-4078064.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=720&w=1920",
+    image: "https://images.pexels.com/photos/4078064/pexels-photo-4078064.jpeg?auto=compress&cs=tinysrgb&w=1920&h=600&fit=crop",
   },
   {
     title: "BASS LEGENDS",
@@ -158,10 +158,19 @@ export default function Home() {
       {/* HERO Carousel */}
       <section className="relative overflow-hidden">
         {current ? (
-          <div className={`relative h-[280px] sm:h-[400px] lg:h-[520px] ${!current.hide_overlay ? (current.mesh || "mesh-indigo") : ""}`}>
+          <div className={`relative h-[280px] sm:h-[400px] lg:h-[520px] ${!current.hide_overlay ? (current.mesh || "mesh-indigo") : "bg-black"}`}>
             {current.image && (
-              <div className="absolute inset-0">
-                <img src={current.image} alt={current.title || "banner"} className={`w-full h-full object-cover ${!current.hide_overlay ? "mix-blend-luminosity opacity-30" : ""}`} />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <img
+                  src={current.image}
+                  alt={current.title || "banner"}
+                  className={`w-full h-full ${
+                    current.hide_overlay
+                      ? "object-contain object-center"
+                      : "object-cover object-center mix-blend-luminosity opacity-30"
+                  }`}
+                  style={{ imageRendering: "auto" }}
+                />
               </div>
             )}
             {!current.hide_overlay && <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/40 pointer-events-none"/>}

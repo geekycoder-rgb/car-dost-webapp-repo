@@ -106,7 +106,15 @@ export default function AdminBanners() {
                 </div>
               </div>
             </div>
-            <div><Label className="text-xs uppercase font-bold">Background Image URL</Label><Input value={form.image || ""} onChange={(e) => setForm({ ...form, image: e.target.value })} className="mt-1"/></div>
+            <div>
+              <Label className="text-xs uppercase font-bold">Background Image URL</Label>
+              <Input value={form.image || ""} onChange={(e) => setForm({ ...form, image: e.target.value })} className="mt-1" placeholder="https://…"/>
+              <p className="mt-1.5 text-[10px] leading-relaxed text-slate-500 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+                <strong>📐 Best results:</strong> <strong>1920 × 600 px</strong> (16:5 landscape ratio) · JPG or WebP · under 500 KB.<br/>
+                Portrait or low-resolution images will appear zoomed-in or pixelated on wide screens.<br/>
+                <span className="text-slate-400">Tip: Use Pexels/Unsplash with <code>?w=1920&h=600&fit=crop&auto=compress</code> query params.</span>
+              </p>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label className="text-xs uppercase font-bold">Sort Order</Label><Input type="number" value={form.sort_order} onChange={(e) => setForm({ ...form, sort_order: e.target.value })} className="mt-1"/></div>
               <div className="flex items-end gap-2 pb-1.5"><Switch checked={form.is_active} onCheckedChange={(v) => setForm({ ...form, is_active: v })}/><span className="text-sm">Active</span></div>
