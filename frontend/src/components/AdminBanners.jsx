@@ -20,7 +20,7 @@ const MESH_OPTIONS = [
   { value: "mesh-violet", label: "Violet Dream" },
   { value: "mesh-slate", label: "Slate Fusion" },
 ];
-const EMPTY = { title: "", subtitle: "", badge: "", cta_text: "Shop Now", cta_link: "/shop", mesh: "mesh-indigo", accent: "#A5B4FC", image: "", sort_order: 100, is_active: true };
+const EMPTY = { title: "", subtitle: "", badge: "", cta_text: "Shop Now", cta_link: "/shop", mesh: "mesh-indigo", accent: "#A5B4FC", image: "", display_mode: "overlay", sort_order: 100, is_active: true };
 
 export default function AdminBanners() {
   const [list, setList] = useState([]);
@@ -54,6 +54,9 @@ export default function AdminBanners() {
       <div className="grid sm:grid-cols-2 gap-4">
         {list.map((b) => (
           <div key={b.id} data-testid={`banner-${b.id}`} className={`relative rounded-2xl p-6 text-white overflow-hidden ${b.mesh}`}>
+            {b.display_mode === "image-only" && (
+              <div className="absolute left-3 top-3 bg-white/20 text-[10px] px-2 py-1 rounded">Image only</div>
+            )}
             <div className="absolute top-2 right-2 flex gap-1 z-10">
               <button onClick={() => { setEditing(b); setForm({ ...EMPTY, ...b }); setOpen(true); }} className="w-7 h-7 grid place-items-center bg-white/20 hover:bg-white/40 rounded"><Edit className="w-3.5 h-3.5"/></button>
               <button onClick={() => del(b.id)} className="w-7 h-7 grid place-items-center bg-white/20 hover:bg-rose-500 rounded"><Trash2 className="w-3.5 h-3.5"/></button>
@@ -86,6 +89,19 @@ export default function AdminBanners() {
                 </Select>
               </div>
               <div><Label className="text-xs uppercase font-bold">Accent Color (hex)</Label><Input value={form.accent || ""} onChange={(e) => setForm({ ...form, accent: e.target.value })} className="mt-1" placeholder="#A5B4FC"/></div>
+              <div>
+                <Label className="text-xs uppercase font-bold">Display Mode</Label>
+                <div className="mt-1 flex gap-2">
+                  <label className={`px-3 py-2 rounded cursor-pointer ${form.display_mode === "overlay" ? "bg-indigo-600 text-white" : "bg-stone-100"}`}>
+                    <input type="radio" name="display_mode" value="overlay" checked={form.display_mode === "overlay"} onChange={() => setForm({ ...form, display_mode: "overlay" })} className="hidden" />
+                    Overlay (text + background)
+                  </label>
+                  <label className={`px-3 py-2 rounded cursor-pointer ${form.display_mode === "image-only" ? "bg-indigo-600 text-white" : "bg-stone-100"}`}>
+                    <input type="radio" name="display_mode" value="image-only" checked={form.display_mode === "image-only"} onChange={() => setForm({ ...form, display_mode: "image-only" })} className="hidden" />
+                    Image only
+                  </label>
+                </div>
+              </div>
             </div>
             <div><Label className="text-xs uppercase font-bold">Background Image URL</Label><Input value={form.image || ""} onChange={(e) => setForm({ ...form, image: e.target.value })} className="mt-1"/></div>
             <div className="grid grid-cols-2 gap-3">

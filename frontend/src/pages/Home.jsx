@@ -158,11 +158,12 @@ export default function Home() {
       {/* HERO Carousel */}
       <section className="relative overflow-hidden">
         {current ? (
-          <div className={`relative h-[280px] sm:h-[400px] lg:h-[520px] ${current.mesh || "mesh-indigo"}`}>
+          <div className={`relative h-[280px] sm:h-[400px] lg:h-[520px] ${current.display_mode === "image-only" ? "" : (current.mesh || "mesh-indigo")}`}>
             {current.image && (
-              <div className="absolute inset-0 opacity-30" style={{ backgroundImage: `url(${current.image})`, backgroundSize: "cover", backgroundPosition: "center", mixBlendMode: "luminosity" }}/>
+              <div className="absolute inset-0" style={{ backgroundImage: `url(${current.image})`, backgroundSize: "cover", backgroundPosition: "center", mixBlendMode: current.display_mode === "image-only" ? "normal" : "luminosity", opacity: current.display_mode === "image-only" ? 1 : 0.3 }}/>
             )}
-            <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/40"/>
+            {current.display_mode !== "image-only" && <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/40"/>}
+            {current.display_mode !== "image-only" && (
             <div className="relative max-w-7xl mx-auto h-full px-6 flex items-center">
               <div className="space-y-3 sm:space-y-5 animate-fade-up text-white">
                 <div className="inline-flex items-center gap-2 glass border border-white/20 text-white text-[10px] sm:text-xs font-bold uppercase tracking-[0.2em] px-3 py-1.5 rounded-full">
@@ -186,6 +187,7 @@ export default function Home() {
                 </div>
               </div>
             </div>
+            )}
 
             {/* Slider arrows */}
             {slides.length > 1 && (<>
