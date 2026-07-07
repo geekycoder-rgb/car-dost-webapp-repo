@@ -391,11 +391,11 @@ export default function Home() {
         </div>
         {/* Duplicate the list so the loop is seamless */}
         <div className="relative flex overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_10%,black_90%,transparent)]">
-          <div className=\"flex animate-marquee-slow gap-12 items-center whitespace-nowrap\">
+          <div className="flex animate-marquee-slow gap-12 items-center whitespace-nowrap">
             {[...BRANDS, ...BRANDS].map((b, i) => (
-              <span key={i} className=\"font-anton text-xl sm:text-2xl text-neutral-400 select-none px-2 inline-flex items-center gap-12\">
+              <span key={i} className="font-anton text-xl sm:text-2xl text-neutral-400 select-none px-2 inline-flex items-center gap-12">
                 {b.toUpperCase()}
-                <span className=\"text-neutral-300 font-sans text-lg\">·</span>
+                <span className="text-neutral-300 font-sans text-lg">·</span>
               </span>
             ))}
           </div>
