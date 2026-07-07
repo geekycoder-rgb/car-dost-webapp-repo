@@ -168,6 +168,45 @@ class TestBanners:
         r4 = session.delete(f"{API}/admin/banners/{bid}", headers=admin_headers)
         assert r4.status_code == 200
 
+    def test_create_update_delete_banner_with_display_flags(self, session, admin_headers):
+        body = {
+            "title": "TEST Banner Flags",
+            "subtitle": "TEST sub",
+            "badge": "BFLAGS",
+            "cta_text": "Go",
+            "cta_link": "/shop",
+            "mesh": "mesh-emerald",
+            "accent": "#10B981",
+            "image": "",
+            "hide_overlay": True,
+            "hide_text": True,
+            "sort_order": 998,
+            "is_active": True,
+        }
+        r = session.post(f"{API}/admin/banners", headers=admin_headers, json=body)
+        assert r.status_code == 200
+        bid = r.json()["id"]
+
+        # verify flags persisted in admin list
+        rlist = session.get(f"{API}/admin/banners", headers=admin_headers)
+        assert rlist.status_code == 200
+        found = [b for b in rlist.json() if b["id"] == bid]
+        assert found and found[0].get("hide_overlay") is True and found[0].get("hide_text") is True
+
+        # update flags to false
+        body["hide_overlay"] = False
+        body["hide_text"] = False
+        body["title"] = "TEST Banner Flags Updated"
+        r2 = session.put(f"{API}/admin/banners/{bid}", headers=admin_headers, json=body)
+        assert r2.status_code == 200
+
+        rlist2 = session.get(f"{API}/admin/banners", headers=admin_headers)
+        assert any(b["id"] == bid and b.get("hide_overlay") is False and b.get("hide_text") is False for b in rlist2.json())
+
+        # cleanup
+        rdel = session.delete(f"{API}/admin/banners/{bid}", headers=admin_headers)
+        assert rdel.status_code == 200
+
 
 # ---------- tax rules ----------
 class TestTaxRules:
