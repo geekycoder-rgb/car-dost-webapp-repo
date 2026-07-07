@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { api } from "@/lib/api";
+import { api, resolveImg } from "@/lib/api";
 import ProductCard from "@/components/ProductCard";
 import ReviewsBanner from "@/components/ReviewsBanner";
 import { ChevronLeft, ChevronRight, Truck, Shield, Headphones, RotateCcw } from "lucide-react";
@@ -40,13 +40,13 @@ const DEFAULT_SLIDES = [
 ];
 
 const CATEGORY_TILES = [
-  { slug: "android-stereos", name: "Android Stereos", image: "https://images.pexels.com/photos/4078064/pexels-photo-4078064.jpeg?auto=compress&w=400" },
-  { slug: "speakers", name: "Speakers", image: "https://images.unsplash.com/photo-1608538770329-65941f62f9f8?crop=entropy&w=400&q=70" },
-  { slug: "amplifiers", name: "Amplifiers", image: "https://images.pexels.com/photos/13811121/pexels-photo-13811121.jpeg?auto=compress&w=400" },
-  { slug: "dash-cameras", name: "Dash Cameras", image: "https://images.unsplash.com/photo-1574649341254-c3cf3421df77?crop=entropy&w=400&q=70" },
-  { slug: "led-lights", name: "LED Lights", image: "https://images.pexels.com/photos/14101380/pexels-photo-14101380.jpeg?auto=compress&w=400" },
-  { slug: "perfumes", name: "Air Fresheners", image: "https://images.unsplash.com/photo-1778530207612-b46210636834?crop=entropy&w=400&q=70" },
-  { slug: "accessories", name: "Accessories", image: "https://images.pexels.com/photos/2127613/pexels-photo-2127613.jpeg?auto=compress&w=400" },
+  { slug: "android-stereos", name: "Android Stereos" },
+  { slug: "speakers", name: "Speakers" },
+  { slug: "amplifiers", name: "Amplifiers" },
+  { slug: "dash-cameras", name: "Dash Cameras" },
+  { slug: "led-lights", name: "LED Lights" },
+  { slug: "perfumes", name: "Air Fresheners" },
+  { slug: "accessories", name: "Accessories" },
 ];
 
 const BRANDS = ["Sony", "JBL", "Pioneer", "Magnetz", "Autotek", "Xxygen", "RoadLink", "Bullsone"];
@@ -88,11 +88,21 @@ export default function Home() {
   const [slides, setSlides] = useState([]);
   const [bannersLoaded, setBannersLoaded] = useState(false);
   const [promoCards, setPromoCards] = useState(DEFAULT_PROMO_CARDS);
+  const [categoryTiles, setCategoryTiles] = useState(CATEGORY_TILES);
 
   useEffect(() => {
     api.get("/products", { params: { featured: true } }).then((r) => setNewArrivals(r.data.slice(0, 8)));
     api.get("/products", { params: { category: "android-stereos" } }).then((r) => setStereos(r.data));
     api.get("/products", { params: { category: "speakers" } }).then((r) => setSpeakers(r.data));
+    api.get("/categories")
+      .then((r) => {
+        const categories = r.data || [];
+        setCategoryTiles((prev) => prev.map((tile) => {
+          const category = categories.find((c) => c.slug === tile.slug);
+          return category ? { ...tile, image: resolveImg(category.image || "") } : tile;
+        }));
+      })
+      .catch(() => {});
     api.get("/settings/public")
       .then((r) => {
         const cfg = r.data || {};
@@ -232,10 +242,10 @@ export default function Home() {
           <Link to="/shop" className="text-sm font-bold uppercase tracking-wider text-indigo-600 hover:underline">View All Categories →</Link>
         </div>
         <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-7 gap-4">
-          {CATEGORY_TILES.map((c) => (
+          {categoryTiles.map((c) => (
             <Link key={c.slug} to={`/shop?category=${c.slug}`} data-testid={`cat-${c.slug}`} className="group text-center">
               <div className="relative aspect-square rounded-full overflow-hidden border-4 border-neutral-100 group-hover:border-indigo-600 transition mb-3 shadow-sm group-hover:shadow-lg">
-                <img src={c.image} alt={c.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"/>
+                <img src={c.image || "https://images.pexels.com/photos/2127613/pexels-photo-2127613.jpeg?auto=compress&w=400"} alt={c.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"/>
               </div>
               <div className="text-xs sm:text-sm font-bold uppercase tracking-wider text-neutral-800 group-hover:text-indigo-600">{c.name}</div>
             </Link>
