@@ -214,6 +214,7 @@ body {
   100% { transform: translateX(-50%); }
 }
 .animate-marquee { animation: marquee 35s linear infinite; }
+.animate-marquee-slow { animation: marquee 50s linear infinite; }
 
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(20px); }

@@ -49,7 +49,7 @@ const CATEGORY_TILES = [
   { slug: "accessories", name: "Accessories" },
 ];
 
-const BRANDS = ["Sony", "JBL", "Pioneer", "Magnetz", "Autotek", "Xxygen", "RoadLink", "Bullsone"];
+const BRANDS = ["Sony", "JBL", "Pioneer", "Magnetz", "Autotek", "Oxygen", "RoadLink", "Blaupunkt", "UnoMinda", "Philips", "3M", "Turtle Wax", "Jopasu"];
 
 const DEFAULT_PROMO_CARDS = [
   {
@@ -351,16 +351,20 @@ export default function Home() {
       {/* CUSTOMER REVIEWS BANNER */}
       <ReviewsBanner/>
 
-      {/* BRAND STRIP */}
-      <section className="bg-neutral-50 border-y border-neutral-200 py-10">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="text-center mb-6">
-            <div className="text-xs uppercase tracking-[0.3em] text-indigo-600 font-bold mb-2">Trusted Brands</div>
-            <h2 className="font-display text-2xl font-bold uppercase">We Stock Only The Best</h2>
-          </div>
-          <div className="flex flex-wrap justify-center items-center gap-x-10 gap-y-6">
-            {BRANDS.map((b) => (
-              <div key={b} className="font-anton text-xl sm:text-2xl text-neutral-400 hover:text-indigo-600 transition cursor-pointer">{b.toUpperCase()}</div>
+      {/* BRAND STRIP — infinite scroll marquee */}
+      <section className="bg-neutral-50 border-y border-neutral-200 py-10 overflow-hidden">
+        <div className="text-center mb-6">
+          <div className="text-xs uppercase tracking-[0.3em] text-indigo-600 font-bold mb-2">Trusted Brands</div>
+          <h2 className="font-display text-2xl font-bold uppercase">We Stock Only The Best</h2>
+        </div>
+        {/* Duplicate the list so the loop is seamless */}
+        <div className="relative flex overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_10%,black_90%,transparent)]">
+          <div className=\"flex animate-marquee-slow gap-12 items-center whitespace-nowrap\">
+            {[...BRANDS, ...BRANDS].map((b, i) => (
+              <span key={i} className=\"font-anton text-xl sm:text-2xl text-neutral-400 select-none px-2 inline-flex items-center gap-12\">
+                {b.toUpperCase()}
+                <span className=\"text-neutral-300 font-sans text-lg\">·</span>
+              </span>
             ))}
           </div>
         </div>
