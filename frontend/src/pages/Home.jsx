@@ -160,11 +160,17 @@ export default function Home() {
         {current ? (
           <div className={`relative h-[280px] sm:h-[400px] lg:h-[520px] ${!current.hide_overlay ? (current.mesh || "mesh-indigo") : ""}`}>
             {current.image && (
-              <div className="absolute inset-0" style={{ backgroundImage: `url(${current.image})`, backgroundSize: "cover", backgroundPosition: "center", mixBlendMode: !current.hide_overlay ? "luminosity" : "normal", opacity: !current.hide_overlay ? 0.3 : 1 }}/>
+              <div className="absolute inset-0">
+                <img src={current.image} alt={current.title || "banner"} className={`w-full h-full object-cover ${!current.hide_overlay ? "mix-blend-luminosity opacity-30" : ""}`} />
+              </div>
             )}
-            {!current.hide_overlay && <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/40"/>}
+            {!current.hide_overlay && <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/40 pointer-events-none"/>}
+            {/* If text is hidden but a CTA link exists, make the whole slide clickable */}
+            {current.hide_text && current.cta_link && (
+              <Link to={current.cta_link} aria-label={current.cta_text || "Shop Now"} className="absolute inset-0 z-10" />
+            )}
             {!current.hide_text && (
-            <div className="relative max-w-7xl mx-auto h-full px-6 flex items-center">
+            <div className="relative z-20 max-w-7xl mx-auto h-full px-6 flex items-center">
               <div className="space-y-3 sm:space-y-5 animate-fade-up text-white">
                 <div className="inline-flex items-center gap-2 glass border border-white/20 text-white text-[10px] sm:text-xs font-bold uppercase tracking-[0.2em] px-3 py-1.5 rounded-full">
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"/> Limited Time
@@ -192,11 +198,11 @@ export default function Home() {
             {/* Slider arrows */}
             {slides.length > 1 && (<>
               <button onClick={() => setSlide((s) => (s - 1 + slides.length) % slides.length)} aria-label="prev"
-                      className="absolute left-3 top-1/2 -translate-y-1/2 w-11 h-11 grid place-items-center glass border border-white/20 text-white hover:bg-white hover:text-slate-900 rounded-full transition">
+                      className="absolute left-3 top-1/2 -translate-y-1/2 w-11 h-11 grid place-items-center glass border border-white/20 text-white hover:bg-white hover:text-slate-900 rounded-full transition z-30">
                 <ChevronLeft className="w-5 h-5"/>
               </button>
               <button onClick={() => setSlide((s) => (s + 1) % slides.length)} aria-label="next"
-                      className="absolute right-3 top-1/2 -translate-y-1/2 w-11 h-11 grid place-items-center glass border border-white/20 text-white hover:bg-white hover:text-slate-900 rounded-full transition">
+                      className="absolute right-3 top-1/2 -translate-y-1/2 w-11 h-11 grid place-items-center glass border border-white/20 text-white hover:bg-white hover:text-slate-900 rounded-full transition z-30">
                 <ChevronRight className="w-5 h-5"/>
               </button>
               <div className="absolute bottom-5 left-1/2 -translate-x-1/2 flex gap-2">
