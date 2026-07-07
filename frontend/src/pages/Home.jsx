@@ -151,81 +151,97 @@ export default function Home() {
     return () => clearInterval(t);
   }, [slides.length]);
 
-  const current = bannersLoaded ? slides[slide] || DEFAULT_SLIDES[0] : null;
+  const current = bannersLoaded ? slides[slide] || DEFAULT_SLIDES[0] : null; // kept for downstream usage if any
+
+  const goNext = () => setSlide((s) => (s + 1) % slides.length);
+  const goPrev = () => setSlide((s) => (s - 1 + slides.length) % slides.length);
 
   return (
     <div className="bg-white">
       {/* HERO Carousel */}
       <section className="relative overflow-hidden">
-        {current ? (
-          <div className={`relative h-[280px] sm:h-[400px] lg:h-[520px] ${!current.hide_overlay ? (current.mesh || "mesh-indigo") : "bg-black"}`}>
-            {current.image && (
-              <div className="absolute inset-0 flex items-center justify-center">
-                <img
-                  src={current.image}
-                  alt={current.title || "banner"}
-                  className={`w-full h-full ${
-                    current.hide_overlay
-                      ? "object-contain object-center"
-                      : "object-cover object-center mix-blend-luminosity opacity-30"
-                  }`}
-                  style={{ imageRendering: "auto" }}
-                />
-              </div>
-            )}
-            {!current.hide_overlay && <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/40 pointer-events-none"/>}
-            {/* If text is hidden but a CTA link exists, make the whole slide clickable */}
-            {current.hide_text && current.cta_link && (
-              <Link to={current.cta_link} aria-label={current.cta_text || "Shop Now"} className="absolute inset-0 z-10" />
-            )}
-            {!current.hide_text && (
-            <div className="relative z-20 max-w-7xl mx-auto h-full px-6 flex items-center">
-              <div className="space-y-3 sm:space-y-5 animate-fade-up text-white">
-                <div className="inline-flex items-center gap-2 glass border border-white/20 text-white text-[10px] sm:text-xs font-bold uppercase tracking-[0.2em] px-3 py-1.5 rounded-full">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"/> Limited Time
-                </div>
-                <h1 className="font-anton text-4xl sm:text-6xl lg:text-8xl leading-[0.95] uppercase drop-shadow-2xl">
-                  {current.title}
-                </h1>
-                {current.subtitle && (
-                  <p className="font-display text-base sm:text-2xl lg:text-3xl font-medium" style={{ color: current.accent || "#A5B4FC" }}>{current.subtitle}</p>
-                )}
-                <div className="flex flex-wrap gap-3 items-center pt-2">
-                  <Link to={current.cta_link || "/shop"} className="group bg-white hover:bg-indigo-50 text-slate-900 font-bold uppercase text-xs sm:text-sm tracking-wider px-7 sm:px-10 py-3 sm:py-4 rounded-full transition shadow-2xl inline-flex items-center gap-2">
-                    {current.cta_text || "Shop Now"} <span className="group-hover:translate-x-1 transition">→</span>
-                  </Link>
-                  {current.badge && (
-                    <div className="hidden sm:flex items-center gap-2 glass border border-white/20 text-white px-4 py-2.5 rounded-full text-[10px] uppercase font-bold tracking-wider">
-                      {current.badge}
+        {bannersLoaded && slides.length > 0 ? (
+          <div className="relative h-[280px] sm:h-[400px] lg:h-[520px]">
+            {/* Sliding track — all slides laid out horizontally */}
+            <div
+              className="flex h-full transition-transform duration-700 ease-in-out will-change-transform"
+              style={{ transform: `translateX(-${slide * 100}%)` }}
+            >
+              {slides.map((sl, i) => (
+                <div
+                  key={i}
+                  className={`relative flex-shrink-0 w-full h-full ${!sl.hide_overlay ? (sl.mesh || "mesh-indigo") : "bg-black"}`}
+                >
+                  {sl.image && (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <img
+                        src={sl.image}
+                        alt={sl.title || "banner"}
+                        className={`w-full h-full ${
+                          sl.hide_overlay
+                            ? "object-contain object-center"
+                            : "object-cover object-center mix-blend-luminosity opacity-30"
+                        }`}
+                        style={{ imageRendering: "auto" }}
+                        loading={i === 0 ? "eager" : "lazy"}
+                      />
+                    </div>
+                  )}
+                  {!sl.hide_overlay && <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/40 pointer-events-none"/>}
+                  {sl.hide_text && sl.cta_link && (
+                    <Link to={sl.cta_link} aria-label={sl.cta_text || "Shop Now"} className="absolute inset-0 z-10" />
+                  )}
+                  {!sl.hide_text && (
+                    <div className="relative z-20 max-w-7xl mx-auto h-full px-6 flex items-center">
+                      <div className="space-y-3 sm:space-y-5 text-white">
+                        <div className="inline-flex items-center gap-2 glass border border-white/20 text-white text-[10px] sm:text-xs font-bold uppercase tracking-[0.2em] px-3 py-1.5 rounded-full">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"/> Limited Time
+                        </div>
+                        <h1 className="font-anton text-4xl sm:text-6xl lg:text-8xl leading-[0.95] uppercase drop-shadow-2xl">
+                          {sl.title}
+                        </h1>
+                        {sl.subtitle && (
+                          <p className="font-display text-base sm:text-2xl lg:text-3xl font-medium" style={{ color: sl.accent || "#A5B4FC" }}>{sl.subtitle}</p>
+                        )}
+                        <div className="flex flex-wrap gap-3 items-center pt-2">
+                          <Link to={sl.cta_link || "/shop"} className="group bg-white hover:bg-indigo-50 text-slate-900 font-bold uppercase text-xs sm:text-sm tracking-wider px-7 sm:px-10 py-3 sm:py-4 rounded-full transition shadow-2xl inline-flex items-center gap-2">
+                            {sl.cta_text || "Shop Now"} <span className="group-hover:translate-x-1 transition">→</span>
+                          </Link>
+                          {sl.badge && (
+                            <div className="hidden sm:flex items-center gap-2 glass border border-white/20 text-white px-4 py-2.5 rounded-full text-[10px] uppercase font-bold tracking-wider">
+                              {sl.badge}
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
-              </div>
+              ))}
             </div>
-            )}
 
-            {/* Slider arrows */}
+            {/* Controls — overlaid on top of the track */}
             {slides.length > 1 && (<>
-              <button onClick={() => setSlide((s) => (s - 1 + slides.length) % slides.length)} aria-label="prev"
+              <button onClick={goPrev} aria-label="prev"
                       className="absolute left-3 top-1/2 -translate-y-1/2 w-11 h-11 grid place-items-center glass border border-white/20 text-white hover:bg-white hover:text-slate-900 rounded-full transition z-30">
                 <ChevronLeft className="w-5 h-5"/>
               </button>
-              <button onClick={() => setSlide((s) => (s + 1) % slides.length)} aria-label="next"
+              <button onClick={goNext} aria-label="next"
                       className="absolute right-3 top-1/2 -translate-y-1/2 w-11 h-11 grid place-items-center glass border border-white/20 text-white hover:bg-white hover:text-slate-900 rounded-full transition z-30">
                 <ChevronRight className="w-5 h-5"/>
               </button>
-              <div className="absolute bottom-5 left-1/2 -translate-x-1/2 flex gap-2">
+              <div className="absolute bottom-5 left-1/2 -translate-x-1/2 flex gap-2 z-30">
                 {slides.map((_, i) => (
                   <button key={i} onClick={() => setSlide(i)} aria-label={`slide ${i+1}`} className={`h-1.5 rounded-full transition-all ${i === slide ? "w-10 bg-white" : "w-1.5 bg-white/50 hover:bg-white/80"}`}/>
                 ))}
               </div>
             </>)}
           </div>
-        ) : (
+        ) : !bannersLoaded ? (
           <div className="relative h-[280px] sm:h-[400px] lg:h-[520px] bg-slate-950 overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 animate-pulse" />
           </div>
-        )}
+        ) : null}
       </section>
 
       {/* Feature strip */}
