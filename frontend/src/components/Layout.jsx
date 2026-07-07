@@ -1,4 +1,4 @@
-import { Link, NavLink, useNavigate } from "react-router-dom";
+import { Link, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { ShoppingCart, User, LogOut, Menu, X, Phone, Mail, Search, Heart, Home as HomeIcon, Grid, MessageCircle, ChevronDown } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useCart } from "@/context/CartContext";
@@ -29,6 +29,14 @@ export default function Layout({ children }) {
   const [searchCat, setSearchCat] = useState("all");
   const [categories, setCategories] = useState([]);
   const [siteTheme, setSiteTheme] = useState("professional-light");
+  const location = useLocation();
+
+  // True only when pathname AND search both match (fixes all /shop?category=… links activating together)
+  const isNavActive = (to) => {
+    const target = new URL(to, "http://x");
+    const current = new URL(location.pathname + location.search, "http://x");
+    return target.pathname === current.pathname && target.search === current.search;
+  };
 
   useEffect(() => {
     api.get("/categories")
@@ -210,22 +218,24 @@ export default function Layout({ children }) {
       <nav className="hidden lg:block bg-[#0F172A] text-white border-t border-neutral-800">
         <div className="max-w-7xl mx-auto px-6">
           <div className="flex items-center justify-center gap-1 flex-wrap">
-            {navLinks.map((l) => (
-              <NavLink
-                key={l.to}
-                to={l.to}
-                end={l.to === "/"}
-                data-testid={`nav-${l.label.toLowerCase().replace(/ /g, "-")}`}
-                className={({ isActive }) =>
-                  `relative px-5 py-3.5 text-xs font-bold uppercase tracking-wider transition group whitespace-nowrap ${
-                    isActive ? "text-indigo-500" : "text-white hover:text-indigo-500"
-                  }`
-                }
-              >
-                {l.label}
-                <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-0 group-hover:w-full h-0.5 bg-indigo-500 transition-all"/>
-              </NavLink>
-            ))}
+            {navLinks.map((l) => {
+              const active = isNavActive(l.to);
+              return (
+                <Link
+                  key={l.to}
+                  to={l.to}
+                  data-testid={`nav-${l.label.toLowerCase().replace(/ /g, "-")}`}
+                  className={`relative px-5 py-3.5 text-xs font-bold uppercase tracking-wider transition group whitespace-nowrap ${
+                    active ? "text-indigo-400" : "text-white hover:text-indigo-400"
+                  }`}
+                >
+                  {l.label}
+                  <span className={`absolute bottom-0 left-1/2 -translate-x-1/2 h-0.5 bg-indigo-500 transition-all ${
+                    active ? "w-full" : "w-0 group-hover:w-full"
+                  }`}/>
+                </Link>
+              );
+            })}
           </div>
         </div>
       </nav>
