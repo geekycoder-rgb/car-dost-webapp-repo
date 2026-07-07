@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Star, BadgeCheck, Quote, Filter } from "lucide-react";
 import { REVIEWS, REVIEW_CATEGORIES, REVIEW_STATS } from "@/data/reviews";
 
@@ -6,8 +6,21 @@ export default function Reviews() {
   const [filter, setFilter] = useState("all");
   const filtered = filter === "all" ? REVIEWS : REVIEWS.filter((r) => r.category === filter);
 
+  useEffect(() => {
+    const prev = document.title;
+    document.title = "Customer Reviews — CarDost Car Audio India";
+    return () => { document.title = prev; };
+  }, []);
+
   return (
     <div className="bg-stone-50 min-h-screen">
+      <meta name="description" content="Read verified customer reviews for CarDost car audio products. 4.8 ★ average from 10,000+ happy drivers across India." />
+      <link rel="canonical" href="https://cardost.in/reviews" />
+      <meta property="og:type" content="website" />
+      <meta property="og:title" content="Customer Reviews — CarDost Car Audio India" />
+      <meta property="og:description" content="Read verified customer reviews for CarDost car audio products. 4.8 ★ average from 10,000+ happy drivers across India." />
+      <meta property="og:url" content="https://cardost.in/reviews" />
+      <meta name="twitter:card" content="summary" />
       <div className="bg-white border-b border-stone-200">
         <div className="max-w-7xl mx-auto px-6 py-10 text-center">
           <div className="text-xs uppercase tracking-[0.3em] text-indigo-600 font-bold mb-3">★ ★ ★ ★ ★</div>

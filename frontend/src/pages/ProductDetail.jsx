@@ -168,7 +168,7 @@ export default function ProductDetail() {
                 {gallery.map((img, i) => (
                   <button key={i} onClick={() => setActiveImg(img)} data-testid={`gallery-${i}`}
                           className={`aspect-square rounded-lg overflow-hidden border-2 transition ${activeImg === img ? "border-indigo-600" : "border-stone-200 hover:border-stone-400"}`}>
-                    <img src={resolveImg(img)} alt="" className="w-full h-full object-cover"/>
+                    <img src={resolveImg(img)} alt={`${product.name} - view ${i + 1}`} className="w-full h-full object-cover"/>
                   </button>
                 ))}
               </div>

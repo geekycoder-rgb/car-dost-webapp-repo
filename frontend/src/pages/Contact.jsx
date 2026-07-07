@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,6 +11,12 @@ export default function Contact() {
   const [form, setForm] = useState({ name: "", email: "", phone: "", message: "" });
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    const prev = document.title;
+    document.title = "Contact CarDost — Car Audio Experts | +91 90632 78724";
+    return () => { document.title = prev; };
+  }, []);
+
   const submit = async (e) => {
     e.preventDefault(); setLoading(true);
     try { await api.post("/contact", form); toast.success("Message sent! We'll reach out soon."); setForm({ name: "", email: "", phone: "", message: "" }); }
@@ -19,6 +25,13 @@ export default function Contact() {
 
   return (
     <div className="bg-white">
+      <meta name="description" content="Contact CarDost for expert car audio advice, installation bookings, and support. Call +91 90632 78724 or WhatsApp us. Open Mon–Sun, 10 AM – 9 PM." />
+      <link rel="canonical" href="https://cardost.in/contact" />
+      <meta property="og:type" content="website" />
+      <meta property="og:title" content="Contact CarDost — Car Audio Experts | +91 90632 78724" />
+      <meta property="og:description" content="Contact CarDost for expert car audio advice, installation bookings, and support. Call +91 90632 78724 or WhatsApp us. Open Mon–Sun, 10 AM – 9 PM." />
+      <meta property="og:url" content="https://cardost.in/contact" />
+      <meta name="twitter:card" content="summary" />
       <div className="bg-neutral-50 border-b border-neutral-200 py-10">
         <div className="max-w-7xl mx-auto px-6 text-center">
           <div className="text-xs uppercase tracking-[0.3em] text-indigo-600 font-bold mb-2">Get In Touch</div>

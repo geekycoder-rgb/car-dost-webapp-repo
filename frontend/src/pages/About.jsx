@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { useEffect } from "react";
 import { Award, Shield, Users, Wrench, Truck, Headphones, ChevronRight, Sparkles, Heart } from "lucide-react";
 
 const VALUES = [
@@ -18,8 +19,21 @@ const TIMELINE = [
 ];
 
 export default function About() {
+  useEffect(() => {
+    const prev = document.title;
+    document.title = "About CarDost — India's Premium Car Audio Studio";
+    return () => { document.title = prev; };
+  }, []);
+
   return (
     <div className="bg-white">
+      <meta name="description" content="Learn the CarDost story — from a Hyderabad garage in 2018 to India's trusted car audio destination. Premium stereos, speakers & accessories with pro installation." />
+      <link rel="canonical" href="https://cardost.in/about" />
+      <meta property="og:type" content="website" />
+      <meta property="og:title" content="About CarDost — India's Premium Car Audio Studio" />
+      <meta property="og:description" content="Learn the CarDost story — from a Hyderabad garage in 2018 to India's trusted car audio destination. 10,000+ cars. Free shipping. Pro installation." />
+      <meta property="og:url" content="https://cardost.in/about" />
+      <meta name="twitter:card" content="summary_large_image" />
       {/* Hero */}
       <section className="relative mesh-indigo overflow-hidden">
         <div className="absolute inset-0 opacity-10" style={{ backgroundImage: "url(https://images.pexels.com/photos/9530906/pexels-photo-9530906.jpeg?auto=compress&w=1920)", backgroundSize: "cover", backgroundPosition: "center", mixBlendMode: "luminosity" }}/>

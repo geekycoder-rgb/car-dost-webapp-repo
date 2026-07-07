@@ -3,8 +3,7 @@
     <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <meta name="theme-color" content="#000000" />
-        <meta name="description" content="A product of emergent.sh" />
+        <meta name="theme-color" content="#4F46E5" />
         <!-- Favicon & Logo -->
         <link rel="icon" type="image/png" href="%PUBLIC_URL%/cardostlogo.png" />
         <link rel="apple-touch-icon" href="%PUBLIC_URL%/cardostlogo.png" />
@@ -34,11 +33,17 @@
         <meta name="description" content="Shop premium car Android stereos, speakers, amplifiers, dash cams and accessories. Free shipping all India. Compatible with all major car makes &amp; models."/>
         <link rel="canonical" href="https://cardost.in/" />
         <meta property="og:site_name" content="CarDost" />
-        <!-- Dynamic OG / Twitter tags are injected per-page by Shop.jsx and ProductDetail.jsx
-             via React 19 native metadata hoisting. We intentionally don't declare og:type,
-             og:title, og:description, og:url or twitter:card here — duplicate property-based
-             meta tags would let scrapers pick the first (static) occurrence and ignore the
-             dynamic one. The home page falls back to the og:site_name above for branding. -->
+        <meta property="og:type" content="website" />
+        <meta property="og:title" content="CarDost — Premium Car Stereos, Speakers &amp; Accessories India" />
+        <meta property="og:description" content="Shop premium car Android stereos, speakers, amplifiers, dash cams and accessories. Free shipping all India. Compatible with all major car makes &amp; models." />
+        <meta property="og:url" content="https://cardost.in/" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="CarDost — Premium Car Stereos, Speakers &amp; Accessories India" />
+        <meta name="twitter:description" content="Shop premium car Android stereos, speakers, amplifiers, dash cams and accessories. Free shipping all India." />
+        <!-- Dynamic OG / Twitter tags injected per-page by Shop.jsx and ProductDetail.jsx
+             via React 19 native metadata hoisting override the static values above for
+             inner pages when rendered by JS-capable crawlers (Google). Social media crawlers
+             that don't run JS will see the home-page defaults above as fallback. -->
         <!-- Site-wide Organization JSON-LD (rich brand presence in Google) -->
         <script type="application/ld+json">
         {
@@ -49,12 +54,65 @@
           "url": "https://cardost.in",
           "logo": "https://cardost.in/cardostlogo.png",
           "description": "Premium car stereos, speakers, amplifiers, dash cameras and accessories. Pan-India shipping.",
+          "telephone": "+919063278724",
+          "email": "support@cardost.in",
           "areaServed": "IN",
+          "foundingDate": "2018",
+          "address": {
+            "@type": "PostalAddress",
+            "addressLocality": "Hyderabad",
+            "addressRegion": "Telangana",
+            "addressCountry": "IN"
+          },
           "contactPoint": {
             "@type": "ContactPoint",
+            "telephone": "+919063278724",
             "contactType": "customer support",
             "email": "support@cardost.in",
-            "availableLanguage": ["en", "hi"]
+            "availableLanguage": ["en", "hi"],
+            "contactOption": "TollFree",
+            "areaServed": "IN"
+          },
+          "sameAs": [
+            "https://wa.me/919063278724"
+          ]
+        }
+        </script>
+        <!-- LocalBusiness JSON-LD (critical for local SEO — physical studio in Hyderabad) -->
+        <script type="application/ld+json">
+        {
+          "@context": "https://schema.org",
+          "@type": "AutoPartsStore",
+          "name": "CarDost — Autobots Car Studio",
+          "url": "https://cardost.in",
+          "telephone": "+919063278724",
+          "email": "support@cardost.in",
+          "image": "https://cardost.in/cardostlogo.png",
+          "priceRange": "₹₹",
+          "currenciesAccepted": "INR",
+          "paymentAccepted": "Cash, Credit Card, Debit Card, UPI, Net Banking",
+          "address": {
+            "@type": "PostalAddress",
+            "addressLocality": "Hyderabad",
+            "addressRegion": "Telangana",
+            "addressCountry": "IN"
+          },
+          "geo": {
+            "@type": "GeoCoordinates",
+            "latitude": 17.3850,
+            "longitude": 78.4867
+          },
+          "openingHoursSpecification": [{
+            "@type": "OpeningHoursSpecification",
+            "dayOfWeek": ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"],
+            "opens": "10:00",
+            "closes": "21:00"
+          }],
+          "hasMap": "https://maps.google.com/?q=Hyderabad+Telangana+India",
+          "servesCuisine": null,
+          "areaServed": {
+            "@type": "Country",
+            "name": "India"
           }
         }
         </script>

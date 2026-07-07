@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Search, HelpCircle, Package, CreditCard, Truck, RotateCcw, Wrench, Shield } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -82,6 +82,31 @@ export default function FAQ() {
   const [search, setSearch] = useState("");
   const q = search.trim().toLowerCase();
 
+  useEffect(() => {
+    const prev = document.title;
+    document.title = "FAQ — CarDost Car Audio Help Centre";
+    return () => { document.title = prev; };
+  }, []);
+
+  // FAQPage JSON-LD for Google rich snippets (FAQ accordions in search results)
+  useEffect(() => {
+    const allFaqs = FAQ_GROUPS.flatMap((g) => g.faqs);
+    const ld = {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": allFaqs.map((f) => ({
+        "@type": "Question",
+        "name": f.q,
+        "acceptedAnswer": { "@type": "Answer", "text": f.a },
+      })),
+    };
+    const el = document.createElement("script");
+    el.type = "application/ld+json"; el.id = "ld-faq";
+    el.textContent = JSON.stringify(ld);
+    document.head.appendChild(el);
+    return () => el.remove();
+  }, []);
+
   const filteredGroups = FAQ_GROUPS.map((g) => ({
     ...g,
     faqs: q ? g.faqs.filter((f) => f.q.toLowerCase().includes(q) || f.a.toLowerCase().includes(q)) : g.faqs,
@@ -89,6 +114,13 @@ export default function FAQ() {
 
   return (
     <div className="bg-white">
+      <meta name="description" content="Find answers to common questions about CarDost — orders, shipping, returns, installation, warranty and payment. Free shipping India-wide." />
+      <link rel="canonical" href="https://cardost.in/faq" />
+      <meta property="og:type" content="website" />
+      <meta property="og:title" content="FAQ — CarDost Car Audio Help Centre" />
+      <meta property="og:description" content="Find answers to common questions about CarDost — orders, shipping, returns, installation, warranty and payment." />
+      <meta property="og:url" content="https://cardost.in/faq" />
+      <meta name="twitter:card" content="summary" />
       {/* Hero */}
       <section className="bg-gradient-to-b from-stone-50 to-white border-b border-stone-200">
         <div className="max-w-3xl mx-auto px-6 py-16 text-center">

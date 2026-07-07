@@ -156,8 +156,40 @@ export default function Home() {
   const goNext = () => setSlide((s) => (s + 1) % slides.length);
   const goPrev = () => setSlide((s) => (s - 1 + slides.length) % slides.length);
 
+  // Home page SEO — title + FAQ JSON-LD
+  useEffect(() => {
+    const prev = document.title;
+    document.title = "CarDost — Premium Car Stereos, Speakers & Accessories India";
+    return () => { document.title = prev; };
+  }, []);
+
+  useEffect(() => {
+    const faqLd = {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": FAQS.map((f) => ({
+        "@type": "Question",
+        "name": f.q,
+        "acceptedAnswer": { "@type": "Answer", "text": f.a },
+      })),
+    };
+    const el = document.createElement("script");
+    el.type = "application/ld+json"; el.id = "ld-home-faq";
+    el.textContent = JSON.stringify(faqLd);
+    document.head.appendChild(el);
+    return () => el.remove();
+  }, []);
+
   return (
     <div className="bg-white">
+      {/* Home page OG / Twitter meta (React 19 hoists to <head>) */}
+      <meta property="og:type" content="website" />
+      <meta property="og:title" content="CarDost — Premium Car Stereos, Speakers & Accessories India" />
+      <meta property="og:description" content="Shop premium car Android stereos, speakers, amplifiers, dash cams and accessories. Free shipping all India. Compatible with all major car makes & models." />
+      <meta property="og:url" content="https://cardost.in/" />
+      <meta name="twitter:card" content="summary_large_image" />
+      <meta name="twitter:title" content="CarDost — Premium Car Stereos, Speakers & Accessories India" />
+      <meta name="twitter:description" content="Shop premium car Android stereos, speakers, amplifiers, dash cams and accessories. Free shipping all India." />
       {/* HERO Carousel */}
       <section className="relative overflow-hidden">
         {bannersLoaded && slides.length > 0 ? (
