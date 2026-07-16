@@ -90,10 +90,12 @@ export default function Home() {
   const [promoCards, setPromoCards] = useState(DEFAULT_PROMO_CARDS);
   const [categoryTiles, setCategoryTiles] = useState(CATEGORY_TILES);
 
+  const extractItems = (data) => (Array.isArray(data) ? data : (data?.items || []));
+
   useEffect(() => {
-    api.get("/products", { params: { featured: true } }).then((r) => setNewArrivals(r.data.slice(0, 8)));
-    api.get("/products", { params: { category: "android-stereos" } }).then((r) => setStereos(r.data));
-    api.get("/products", { params: { category: "speakers" } }).then((r) => setSpeakers(r.data));
+    api.get("/products", { params: { featured: true } }).then((r) => setNewArrivals(extractItems(r.data).slice(0, 8)));
+    api.get("/products", { params: { category: "android-stereos" } }).then((r) => setStereos(extractItems(r.data)));
+    api.get("/products", { params: { category: "speakers" } }).then((r) => setSpeakers(extractItems(r.data)));
     api.get("/categories")
       .then((r) => {
         const categories = r.data || [];

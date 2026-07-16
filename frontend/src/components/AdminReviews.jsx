@@ -7,7 +7,7 @@ export default function AdminReviews() {
   const [list, setList] = useState([]);
   const [filter, setFilter] = useState("all");
 
-  const load = () => api.get("/admin/reviews").then((r) => setList(r.data));
+  const load = () => api.get("/admin/reviews").then((r) => setList(r.data?.items || r.data || []));
   useEffect(() => { load(); }, []);
 
   const toggle = async (rid, is_approved) => {
