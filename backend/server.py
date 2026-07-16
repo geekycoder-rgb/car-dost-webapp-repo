@@ -8,7 +8,9 @@ from fastapi import (
     Response,
     Header,
     Request,
+    Cookie,
 )
+from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -28,6 +30,7 @@ import os
 import re
 import asyncio
 import logging
+import time
 import uuid
 import secrets
 import hmac
@@ -38,9 +41,10 @@ import io
 import jwt
 import bcrypt
 import razorpay  # type: ignore[import]
-import requests
 import httpx
 from pathlib import Path
+from collections import defaultdict, deque
+from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel, Field, EmailStr
 from typing import Any, List, Optional, TypedDict, Union
 from datetime import datetime, timezone, timedelta
@@ -88,10 +92,133 @@ app = FastAPI()
 api_router = APIRouter(prefix="/api")
 security = HTTPBearer(auto_error=False)
 
+DEFAULT_CSP_POLICY = "; ".join(
+    [
+        "default-src 'self'",
+        "base-uri 'self'",
+        "frame-ancestors 'none'",
+        "object-src 'none'",
+        "form-action 'self'",
+        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
+        "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
+        "img-src 'self' data: https: blob:",
+        "font-src 'self' data: https://cdn.jsdelivr.net",
+        "connect-src 'self' https: wss:",
+    ]
+)
+CSP_POLICY = os.environ.get("CSP_POLICY", DEFAULT_CSP_POLICY).strip() or DEFAULT_CSP_POLICY
+
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("Content-Security-Policy", CSP_POLICY)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+    return response
+
+RATE_LIMIT_BUCKETS: dict[str, deque[float]] = defaultdict(deque)
+
+
+def enforce_rate_limit(key: str, limit: int, window_seconds: int):
+    now = time.monotonic()
+    bucket = RATE_LIMIT_BUCKETS[key]
+    cutoff = now - window_seconds
+    while bucket and bucket[0] < cutoff:
+        bucket.popleft()
+    if len(bucket) >= limit:
+        raise HTTPException(429, "Too many requests. Please try again later.")
+    bucket.append(now)
+
+
+# ============ Pagination Helper ============
+class PaginationResponse(BaseModel):
+    items: List[Any]
+    total: int
+    page: int
+    limit: int
+    pages: int
+
+
+async def paginate_collection(
+    collection,
+    filter_query: dict,
+    page: int = 1,
+    limit: int = 20,
+    max_limit: int = 100,
+    projection: Optional[dict] = None,
+    sort: Optional[tuple] = None,
+) -> dict:
+    """
+    Paginate a MongoDB collection query.
+    Returns: {items, total, page, limit, pages}
+    """
+    page = max(1, page)
+    limit = min(max(1, limit), max_limit)
+    
+    total = await collection.count_documents(filter_query)
+    skip = (page - 1) * limit
+    
+    cursor = collection.find(filter_query, projection or {"_id": 0})
+    if sort:
+        cursor = cursor.sort(*sort)
+    items = await cursor.skip(skip).limit(limit).to_list(None)
+    
+    pages = (total + limit - 1) // limit  # ceiling division
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "pages": pages,
+    }
+
+
+# ============ Caching with ETag ============
+catalog_tree_cache = {"data": None, "etag": None}
+
+
+def generate_etag(data: Any) -> str:
+    """Generate ETag from data (JSON hash)"""
+    json_str = json.dumps(data, sort_keys=True, default=str)
+    return hashlib.md5(json_str.encode()).hexdigest()
+
+
+def invalidate_catalog_cache():
+    """Invalidate catalog tree cache when catalog data changes"""
+    catalog_tree_cache["data"] = None
+    catalog_tree_cache["etag"] = None
+
+
+async def get_catalog_tree_with_cache() -> dict:
+    """Fetch and cache catalog tree"""
+    makes = await db.car_makes.find({}, {"_id": 0}).sort("name", 1).to_list(200)
+    models = await db.car_models.find({}, {"_id": 0}).sort("name", 1).to_list(500)
+    variants = (
+        await db.car_variants.find({}, {"_id": 0}).sort("start_year", 1).to_list(1000)
+    )
+    # Group
+    by_model = {}
+    for v in variants:
+        by_model.setdefault(v["model_id"], []).append(v)
+    by_make = {}
+    for m in models:
+        m["variants"] = by_model.get(m["id"], [])
+        by_make.setdefault(m["make_id"], []).append(m)
+    for mk in makes:
+        mk["models"] = by_make.get(mk["id"], [])
+    
+    # Update cache
+    catalog_tree_cache["data"] = makes
+    catalog_tree_cache["etag"] = generate_etag(makes)
+    return makes
 
 
 # ============ Models ============
@@ -114,6 +241,12 @@ class ForgotPasswordReq(BaseModel):
 class ResetPasswordReq(BaseModel):
     token: str
     password: str
+
+
+class AdminFirstLoginPasswordChangeReq(BaseModel):
+    email: EmailStr
+    current_password: str
+    new_password: str = Field(min_length=8, max_length=128)
 
 
 class ProductIn(BaseModel):
@@ -223,17 +356,107 @@ def make_token(uid: str, role: str = "user") -> str:
     return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
 
 
+def make_guest_order_token(order_id: str) -> str:
+    payload = {
+        "oid": order_id,
+        "purpose": "guest_order_access",
+        "exp": datetime.now(timezone.utc) + timedelta(minutes=15),
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
+
+
+def validate_guest_order_token(token: str, order_id: str) -> bool:
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+    except jwt.PyJWTError:
+        return False
+    return (
+        payload.get("purpose") == "guest_order_access"
+        and payload.get("oid") == order_id
+    )
+
+
+def normalize_phone_last10(phone: Optional[str]) -> str:
+    if not phone:
+        return ""
+    digits = "".join(ch for ch in str(phone) if ch.isdigit())
+    return digits[-10:] if len(digits) >= 10 else ""
+
+
+def redact_order_for_guest(order_doc: dict[str, Any]) -> dict[str, Any]:
+    # Return only non-sensitive fields for public tracking flows.
+    safe = {
+        "id": order_doc.get("id"),
+        "status": order_doc.get("status"),
+        "created_at": order_doc.get("created_at"),
+        "total": order_doc.get("total"),
+        "items": [
+            {
+                "product_id": it.get("product_id"),
+                "name": it.get("name"),
+                "quantity": it.get("quantity"),
+                "price": it.get("price"),
+                "line_total": it.get("line_total"),
+                "vehicle_variant_id": it.get("vehicle_variant_id"),
+                "vehicle_label": it.get("vehicle_label"),
+            }
+            for it in (order_doc.get("items") or [])
+        ],
+        "shiprocket": order_doc.get("shiprocket"),
+    }
+    return safe
+
+
 async def get_current_user(
     creds: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    auth_cookie: Optional[str] = Cookie(None, alias="Authorization"),
 ):
-    if not creds:
+    token = None
+    
+    # First try Authorization header (for backward compatibility)
+    if creds:
+        token = creds.credentials
+    # Then try Authorization cookie (HttpOnly)
+    elif auth_cookie:
+        # Extract token from "Bearer <token>" format if present
+        if auth_cookie.startswith("Bearer "):
+            token = auth_cookie[7:]
+        else:
+            token = auth_cookie
+    
+    if not token:
         raise HTTPException(401, "Not authenticated")
+    
     payload: dict = {}
     try:
-        payload = jwt.decode(creds.credentials, JWT_SECRET, algorithms=["HS256"])
+        payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
     except jwt.PyJWTError:
         raise HTTPException(401, "Invalid token")
     return payload
+
+
+async def get_current_user_optional(
+    creds: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    auth_cookie: Optional[str] = Cookie(None, alias="Authorization"),
+):
+    token = None
+
+    if creds:
+        token = creds.credentials
+    elif auth_cookie:
+        if auth_cookie.startswith("Bearer "):
+            token = auth_cookie[7:]
+        else:
+            token = auth_cookie
+
+    if not token:
+        return None
+
+    try:
+        payload: dict = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+        return payload
+    except jwt.PyJWTError:
+        raise HTTPException(401, "Invalid token")
 
 
 async def get_admin(user=Depends(get_current_user)):
@@ -266,19 +489,62 @@ async def signup(req: SignupReq):
     }
     await db.users.insert_one(user)
     token = make_token(uid, "user")
-    return {
+    
+    # Generate CSRF token for frontend
+    csrf_token = secrets.token_urlsafe(32)
+    response_data = {
         "token": token,
         "user": {"id": uid, "name": req.name, "email": req.email, "role": "user"},
+        "csrf_token": csrf_token,
     }
+    
+    response = JSONResponse(content=response_data)
+    # Set HttpOnly cookie with JWT token
+    response.set_cookie(
+        key="Authorization",
+        value=f"Bearer {token}",
+        httponly=True,
+        secure=True,
+        samesite="Strict",
+        max_age=86400,
+        path="/",
+    )
+    # Set CSRF token in separate cookie (not HttpOnly, can be read by JS)
+    response.set_cookie(
+        key="csrf_token",
+        value=csrf_token,
+        httponly=False,
+        secure=True,
+        samesite="Strict",
+        max_age=86400,
+        path="/",
+    )
+    return response
 
 
 @api_router.post("/auth/login")
-async def login(req: LoginReq):
-    user = await db.users.find_one({"email": req.email})
+async def login(req: LoginReq, request: Request):
+    ip = request.client.host if request.client else "unknown"
+    email = req.email.strip().lower()
+    enforce_rate_limit(f"login:ip:{ip}", limit=300, window_seconds=300)
+    enforce_rate_limit(f"login:email:{email}", limit=80, window_seconds=300)
+
+    user = await db.users.find_one({"email": {"$in": [email, req.email]}})
     if not user or not check_pw(req.password, user["password"]):
         raise HTTPException(401, "Invalid credentials")
+    if user.get("role") == "admin" and user.get("must_change_password", False):
+        raise HTTPException(
+            403,
+            {
+                "code": "PASSWORD_CHANGE_REQUIRED",
+                "message": "Admin password must be changed before login.",
+            },
+        )
     token = make_token(user["id"], user.get("role", "user"))
-    return {
+    
+    # Generate CSRF token for frontend
+    csrf_token = secrets.token_urlsafe(32)
+    response_data = {
         "token": token,
         "user": {
             "id": user["id"],
@@ -286,11 +552,95 @@ async def login(req: LoginReq):
             "email": user["email"],
             "role": user.get("role", "user"),
         },
+        "csrf_token": csrf_token,
+    }
+    
+    response = JSONResponse(content=response_data)
+    # Set HttpOnly cookie with JWT token
+    response.set_cookie(
+        key="Authorization",
+        value=f"Bearer {token}",
+        httponly=True,
+        secure=True,  # Only send over HTTPS
+        samesite="Strict",  # Prevent CSRF
+        max_age=86400,  # 24 hours
+        path="/",
+    )
+    # Set CSRF token in separate cookie (not HttpOnly, can be read by JS)
+    response.set_cookie(
+        key="csrf_token",
+        value=csrf_token,
+        httponly=False,
+        secure=True,
+        samesite="Strict",
+        max_age=86400,
+        path="/",
+    )
+    return response
+
+
+@api_router.post("/auth/admin/first-login-password-change")
+async def admin_first_login_password_change(
+    req: AdminFirstLoginPasswordChangeReq, request: Request
+):
+    ip = request.client.host if request.client else "unknown"
+    email = req.email.strip().lower()
+    enforce_rate_limit(f"admin-first-password-change:ip:{ip}", limit=40, window_seconds=300)
+    enforce_rate_limit(
+        f"admin-first-password-change:email:{email}", limit=20, window_seconds=300
+    )
+
+    user = await db.users.find_one({"email": email, "role": "admin"})
+    if not user or not check_pw(req.current_password, user.get("password", "")):
+        raise HTTPException(401, "Invalid credentials")
+    if not user.get("must_change_password", False):
+        raise HTTPException(400, "First-login password change is not required")
+    if req.new_password == req.current_password:
+        raise HTTPException(400, "New password must be different from current password")
+
+    await db.users.update_one(
+        {"id": user["id"]},
+        {
+            "$set": {
+                "password": hash_pw(req.new_password),
+                "must_change_password": False,
+                "password_changed_at": datetime.now(timezone.utc).isoformat(),
+            }
+        },
+    )
+    return {
+        "ok": True,
+        "message": "Password updated. Please sign in with your new password.",
     }
 
 
+@api_router.post("/auth/logout")
+async def logout():
+    """Clear authentication cookies"""
+    response = JSONResponse(content={"ok": True, "message": "Logged out"})
+    response.delete_cookie(
+        key="Authorization",
+        path="/",
+        httponly=True,
+        secure=True,
+        samesite="Strict",
+    )
+    response.delete_cookie(
+        key="csrf_token",
+        path="/",
+        secure=True,
+        samesite="Strict",
+    )
+    return response
+
+
 @api_router.post("/auth/forgot-password")
-async def forgot_password(req: ForgotPasswordReq):
+async def forgot_password(req: ForgotPasswordReq, request: Request):
+    ip = request.client.host if request.client else "unknown"
+    email = req.email.strip().lower()
+    enforce_rate_limit(f"forgot:ip:{ip}", limit=120, window_seconds=600)
+    enforce_rate_limit(f"forgot:email:{email}", limit=24, window_seconds=3600)
+
     user = await db.users.find_one({"email": req.email})
     if not user:
         return {
@@ -1267,9 +1617,17 @@ async def create_review(pid: str, body: ReviewIn):
 
 
 @api_router.get("/admin/reviews")
-async def admin_list_reviews(_=Depends(get_admin)):
-    reviews = await db.reviews.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
-    return reviews
+async def admin_list_reviews(page: int = 1, limit: int = 20, _=Depends(get_admin)):
+    result = await paginate_collection(
+        db.reviews,
+        {},
+        page=page,
+        limit=limit,
+        max_limit=100,
+        projection={"_id": 0},
+        sort=("created_at", -1),
+    )
+    return result
 
 
 @api_router.patch("/admin/reviews/{rid}")
@@ -1300,10 +1658,16 @@ async def list_products(
     q: Optional[str] = None,
     best_seller: Optional[bool] = None,
     new_arrival: Optional[bool] = None,
-    published_only: bool = True,
+    include_unpublished: bool = False,
+    page: int = 1,
+    limit: int = 20,
+    user=Depends(get_current_user_optional),
 ):
     query: dict[str, Any] = {}
-    if published_only:
+    can_view_unpublished = bool(
+        user and user.get("role") == "admin" and include_unpublished
+    )
+    if not can_view_unpublished:
         query["is_published"] = {"$ne": False}
     if category and category != "all":
         # match either single legacy field or multi-category array
@@ -1316,8 +1680,17 @@ async def list_products(
         query["is_new_arrival"] = new_arrival
     if q:
         query["name"] = {"$regex": q, "$options": "i"}
-    items = await db.products.find(query, {"_id": 0}).to_list(500)
-    return items
+    
+    result = await paginate_collection(
+        db.products,
+        query,
+        page=page,
+        limit=limit,
+        max_limit=100,
+        projection={"_id": 0},
+        sort=("created_at", -1),
+    )
+    return result
 
 
 @api_router.get("/products/filter")
@@ -1333,8 +1706,17 @@ async def filter_products(
     min_price: Optional[float] = None,
     max_price: Optional[float] = None,
     q: Optional[str] = None,
+    include_unpublished: bool = False,
+    page: int = 1,
+    limit: int = 20,
+    user=Depends(get_current_user_optional),
 ):
-    query: Any = {"is_published": {"$ne": False}}
+    query: Any = {}
+    can_view_unpublished = bool(
+        user and user.get("role") == "admin" and include_unpublished
+    )
+    if not can_view_unpublished:
+        query["is_published"] = {"$ne": False}
     and_clauses: list[Any] = []
     if category and category != "all":
         and_clauses.append({"$or": [{"category": category}, {"categories": category}]})
@@ -1473,16 +1855,64 @@ async def filter_products(
         )
     if and_clauses:
         query["$and"] = and_clauses
-    items = await db.products.find(query, {"_id": 0}).to_list(500)
-    return items
+    
+    result = await paginate_collection(
+        db.products,
+        query,
+        page=page,
+        limit=limit,
+        max_limit=100,
+        projection={"_id": 0},
+        sort=("created_at", -1),
+    )
+    return result
 
 
 @api_router.get("/products/{pid}")
-async def get_product(pid: str):
+async def get_product(pid: str, user=Depends(get_current_user_optional)):
     p = await db.products.find_one({"id": pid}, {"_id": 0})
     if not p:
         raise HTTPException(404, "Not found")
+    if p.get("is_published") is False and (not user or user.get("role") != "admin"):
+        raise HTTPException(404, "Not found")
     return p
+
+
+@api_router.get("/admin/products")
+async def admin_list_products(
+    category: Optional[str] = None,
+    featured: Optional[bool] = None,
+    q: Optional[str] = None,
+    best_seller: Optional[bool] = None,
+    new_arrival: Optional[bool] = None,
+    is_published: Optional[bool] = None,
+    page: int = 1,
+    limit: int = 20,
+    _=Depends(get_admin),
+):
+    query: dict[str, Any] = {}
+    if category and category != "all":
+        query["$or"] = [{"category": category}, {"categories": category}]
+    if featured is not None:
+        query["featured"] = featured
+    if best_seller is not None:
+        query["is_best_seller"] = best_seller
+    if new_arrival is not None:
+        query["is_new_arrival"] = new_arrival
+    if is_published is not None:
+        query["is_published"] = is_published
+    if q:
+        query["name"] = {"$regex": q, "$options": "i"}
+
+    return await paginate_collection(
+        db.products,
+        query,
+        page=page,
+        limit=limit,
+        max_limit=100,
+        projection={"_id": 0},
+        sort=("created_at", -1),
+    )
 
 
 @api_router.get("/categories")
@@ -1732,23 +2162,25 @@ async def list_variants(model_id: Optional[str] = None):
 
 
 @api_router.get("/catalog/tree")
-async def catalog_tree():
-    makes = await db.car_makes.find({}, {"_id": 0}).sort("name", 1).to_list(200)
-    models = await db.car_models.find({}, {"_id": 0}).sort("name", 1).to_list(500)
-    variants = (
-        await db.car_variants.find({}, {"_id": 0}).sort("start_year", 1).to_list(1000)
+async def catalog_tree(request: Request):
+    # Check if we have a cached version and the client has the same ETag
+    if catalog_tree_cache["data"] is None:
+        # First request - fetch and cache
+        data = await get_catalog_tree_with_cache()
+    else:
+        # Check If-None-Match header
+        if_none_match = request.headers.get("If-None-Match")
+        if if_none_match and if_none_match == catalog_tree_cache["etag"]:
+            # Client has the latest version
+            return Response(status_code=304)  # Not Modified
+        data = catalog_tree_cache["data"]
+    
+    response = Response(
+        content=json.dumps(data),
+        media_type="application/json",
+        headers={"ETag": f'"{catalog_tree_cache["etag"]}"'},
     )
-    # Group
-    by_model = {}
-    for v in variants:
-        by_model.setdefault(v["model_id"], []).append(v)
-    by_make = {}
-    for m in models:
-        m["variants"] = by_model.get(m["id"], [])
-        by_make.setdefault(m["make_id"], []).append(m)
-    for mk in makes:
-        mk["models"] = by_make.get(mk["id"], [])
-    return makes
+    return response
 
 
 # Admin CRUD
@@ -1760,6 +2192,7 @@ async def create_make(body: MakeIn, _=Depends(get_admin)):
         "slug": body.slug or _slugify(body.name),
     }
     await db.car_makes.insert_one(doc)
+    invalidate_catalog_cache()
     return clean(doc)
 
 
@@ -1771,6 +2204,7 @@ async def update_make(mid: str, body: MakeIn, _=Depends(get_admin)):
     )
     if res.matched_count == 0:
         raise HTTPException(404, "Not found")
+    invalidate_catalog_cache()
     return {"ok": True}
 
 
@@ -1787,6 +2221,7 @@ async def delete_make(mid: str, _=Depends(get_admin)):
         await db.car_variants.delete_many({"model_id": {"$in": model_ids}})
         await db.car_models.delete_many({"make_id": mid})
     await db.car_makes.delete_one({"id": mid})
+    invalidate_catalog_cache()
     return {"ok": True}
 
 
@@ -1801,6 +2236,7 @@ async def create_model(body: ModelIn, _=Depends(get_admin)):
         "slug": body.slug or _slugify(body.name),
     }
     await db.car_models.insert_one(doc)
+    invalidate_catalog_cache()
     return clean(doc)
 
 
@@ -1818,6 +2254,7 @@ async def update_model(mid: str, body: ModelIn, _=Depends(get_admin)):
     )
     if res.matched_count == 0:
         raise HTTPException(404, "Not found")
+    invalidate_catalog_cache()
     return {"ok": True}
 
 
@@ -1825,6 +2262,7 @@ async def update_model(mid: str, body: ModelIn, _=Depends(get_admin)):
 async def delete_model(mid: str, _=Depends(get_admin)):
     await db.car_variants.delete_many({"model_id": mid})
     await db.car_models.delete_one({"id": mid})
+    invalidate_catalog_cache()
     return {"ok": True}
 
 
@@ -1844,6 +2282,7 @@ async def create_variant(body: VariantIn, _=Depends(get_admin)):
         "notes": body.notes or "",
     }
     await db.car_variants.insert_one(doc)
+    invalidate_catalog_cache()
     return clean(doc)
 
 
@@ -1868,12 +2307,14 @@ async def update_variant(vid: str, body: VariantIn, _=Depends(get_admin)):
     )
     if res.matched_count == 0:
         raise HTTPException(404, "Not found")
+    invalidate_catalog_cache()
     return {"ok": True}
 
 
 @api_router.delete("/admin/catalog/variants/{vid}")
 async def delete_variant(vid: str, _=Depends(get_admin)):
     await db.car_variants.delete_one({"id": vid})
+    invalidate_catalog_cache()
     return {"ok": True}
 
 
@@ -2140,54 +2581,57 @@ async def bulk_import_products(file: UploadFile = File(...), _=Depends(get_admin
 
 
 # ============ File Upload (Emergent Object Storage) ============
-def init_storage():
+async def init_storage():
     global storage_key
     if storage_key:
         return storage_key
-    resp = requests.post(
-        f"{STORAGE_URL}/init", json={"emergent_key": EMERGENT_LLM_KEY}, timeout=30
-    )
-    resp.raise_for_status()
-    storage_key = resp.json()["storage_key"]
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(
+            f"{STORAGE_URL}/init", json={"emergent_key": EMERGENT_LLM_KEY}, timeout=30
+        )
+        resp.raise_for_status()
+        storage_key = resp.json()["storage_key"]
     return storage_key
 
 
-def put_object(path: str, data: bytes, content_type: str) -> dict:
-    key = init_storage()
-    resp = requests.put(
-        f"{STORAGE_URL}/objects/{path}",
-        headers={"X-Storage-Key": key, "Content-Type": content_type},
-        data=data,
-        timeout=120,
-    )
-    if resp.status_code == 403:
-        # refresh key once and retry
-        global storage_key
-        storage_key = None
-        key = init_storage()
-        resp = requests.put(
+async def put_object(path: str, data: bytes, content_type: str) -> dict:
+    key = await init_storage()
+    async with httpx.AsyncClient() as client:
+        resp = await client.put(
             f"{STORAGE_URL}/objects/{path}",
             headers={"X-Storage-Key": key, "Content-Type": content_type},
-            data=data,
+            content=data,
             timeout=120,
         )
-    resp.raise_for_status()
+        if resp.status_code == 403:
+            # refresh key once and retry
+            global storage_key
+            storage_key = None
+            key = await init_storage()
+            resp = await client.put(
+                f"{STORAGE_URL}/objects/{path}",
+                headers={"X-Storage-Key": key, "Content-Type": content_type},
+                content=data,
+                timeout=120,
+            )
+        resp.raise_for_status()
     return resp.json()
 
 
-def get_object(path: str):
-    key = init_storage()
-    resp = requests.get(
-        f"{STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": key}, timeout=60
-    )
-    if resp.status_code == 403:
-        global storage_key
-        storage_key = None
-        key = init_storage()
-        resp = requests.get(
+async def get_object(path: str):
+    key = await init_storage()
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
             f"{STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": key}, timeout=60
         )
-    resp.raise_for_status()
+        if resp.status_code == 403:
+            global storage_key
+            storage_key = None
+            key = await init_storage()
+            resp = await client.get(
+                f"{STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": key}, timeout=60
+            )
+        resp.raise_for_status()
     return resp.content, resp.headers.get("Content-Type", "application/octet-stream")
 
 
@@ -2195,20 +2639,70 @@ ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 MAX_UPLOAD_BYTES = 5 * 1024 * 1024  # 5MB
 
 
+def detect_image_content_type(data: bytes) -> Optional[str]:
+    if len(data) >= 3 and data[:3] == b"\xff\xd8\xff":
+        return "image/jpeg"
+    if len(data) >= 8 and data[:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png"
+    if len(data) >= 6 and data[:6] in (b"GIF87a", b"GIF89a"):
+        return "image/gif"
+    if len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    return None
+
+
+def sanitize_image_bytes(data: bytes, content_type: str) -> bytes:
+    # Re-encode image server-side to strip metadata and normalize payload.
+    fmt = {
+        "image/jpeg": "JPEG",
+        "image/png": "PNG",
+        "image/webp": "WEBP",
+        "image/gif": "GIF",
+    }.get(content_type)
+    if not fmt:
+        raise HTTPException(400, "Unsupported image format")
+
+    try:
+        with Image.open(io.BytesIO(data)) as img:
+            out = io.BytesIO()
+            if fmt == "JPEG" and img.mode not in ("RGB", "L"):
+                img = img.convert("RGB")
+            img.save(out, format=fmt)
+            return out.getvalue()
+    except (UnidentifiedImageError, OSError):
+        raise HTTPException(400, "Invalid image file")
+
+
 @api_router.post("/admin/upload")
 async def upload_image(file: UploadFile = File(...), user=Depends(get_admin)):
-    if file.content_type not in ALLOWED_IMAGE_TYPES:
-        raise HTTPException(400, "Only JPG/PNG/WEBP/GIF allowed")
     data = await file.read()
     if len(data) > MAX_UPLOAD_BYTES:
         raise HTTPException(400, "Max file size is 5MB")
+
+    detected_type = detect_image_content_type(data)
+    if detected_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(400, "Only JPG/PNG/WEBP/GIF allowed")
+
+    # Guard against trust-based MIME spoofing from client headers.
+    if file.content_type and file.content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(400, "Only JPG/PNG/WEBP/GIF allowed")
+
+    safe_data = sanitize_image_bytes(data, detected_type)
+    if len(safe_data) > MAX_UPLOAD_BYTES:
+        raise HTTPException(400, "Max file size is 5MB")
+
     filename = file.filename or ""
-    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "bin"
+    ext = {
+        "image/jpeg": "jpg",
+        "image/png": "png",
+        "image/webp": "webp",
+        "image/gif": "gif",
+    }[detected_type]
     file_id = str(uuid.uuid4())
     path = f"{APP_NAME}/products/{file_id}.{ext}"
     result: dict = {}
     try:
-        result = put_object(path, data, file.content_type)
+        result = await put_object(path, safe_data, detected_type)
     except Exception as e:
         logger.error(f"Upload failed: {e}")
         raise HTTPException(500, "Upload failed")
@@ -2216,9 +2710,9 @@ async def upload_image(file: UploadFile = File(...), user=Depends(get_admin)):
         {
             "id": file_id,
             "storage_path": result["path"],
-            "original_filename": file.filename,
-            "content_type": file.content_type,
-            "size": len(data),
+            "original_filename": filename,
+            "content_type": detected_type,
+            "size": len(safe_data),
             "uploaded_by": user["uid"],
             "is_deleted": False,
             "created_at": datetime.now(timezone.utc).isoformat(),
@@ -2226,7 +2720,7 @@ async def upload_image(file: UploadFile = File(...), user=Depends(get_admin)):
     )
     # Public URL via our backend
     public_url = f"/api/files/{result['path']}"
-    return {"url": public_url, "path": result["path"], "size": len(data)}
+    return {"url": public_url, "path": result["path"], "size": len(safe_data)}
 
 
 @api_router.get("/files/{path:path}")
@@ -2239,7 +2733,7 @@ async def serve_file(path: str):
     data: bytes = b""
     ct: str = "application/octet-stream"
     try:
-        data, ct = get_object(path)
+        data, ct = await get_object(path)
     except Exception as e:
         logger.error(f"File fetch failed: {e}")
         raise HTTPException(500, "File fetch failed")
@@ -2351,10 +2845,6 @@ async def create_order(
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.orders.insert_one(order_doc)
-    if coupon_data:
-        await db.coupons.update_one(
-            {"code": coupon_data["code"]}, {"$inc": {"used_count": 1}}
-        )
 
     # Fire admin notification only; customer payment confirmation email is sent after the order is paid.
     try:
@@ -2392,35 +2882,50 @@ async def create_order(
     }
 
 
+async def mark_order_paid_once(
+    order_id: str,
+    payment_id: Optional[str],
+    webhook_event: Optional[str] = None,
+) -> bool:
+    paid_at = datetime.now(timezone.utc).isoformat()
+    set_doc: dict[str, Any] = {
+        "status": "paid",
+        "paid_at": paid_at,
+    }
+    if payment_id:
+        set_doc["razorpay_payment_id"] = payment_id
+    if webhook_event:
+        set_doc["webhook_event"] = webhook_event
+    res = await db.orders.update_one(
+        {"id": order_id, "status": {"$ne": "paid"}}, {"$set": set_doc}
+    )
+    return res.modified_count == 1
+
+
+async def apply_post_payment_effects(order: dict[str, Any]):
+    for it in order["items"]:
+        await db.products.update_one(
+            {"id": it["product_id"]}, {"$inc": {"stock": -it["quantity"]}}
+        )
+    asyncio.create_task(
+        check_and_send_low_stock_alert([it["product_id"] for it in order["items"]])
+    )
+    coupon = order.get("coupon") or {}
+    if coupon.get("code"):
+        await db.coupons.update_one({"code": coupon["code"]}, {"$inc": {"used_count": 1}})
+
+
 @api_router.post("/orders/verify")
 async def verify_payment(req: VerifyPaymentReq):
     order = await db.orders.find_one({"id": req.order_id}, {"_id": 0})
     if not order:
         raise HTTPException(404, "Order not found")
 
-    async def decrement_stock():
-        for it in order["items"]:
-            await db.products.update_one(
-                {"id": it["product_id"]}, {"$inc": {"stock": -it["quantity"]}}
-            )
-        # Low-stock alert after decrement (non-blocking, debounced)
-        asyncio.create_task(
-            check_and_send_low_stock_alert([it["product_id"] for it in order["items"]])
-        )
-
     if MOCK_PAYMENT or order.get("mock"):
-        if order.get("status") != "paid":
-            await decrement_stock()
-        await db.orders.update_one(
-            {"id": req.order_id},
-            {
-                "$set": {
-                    "status": "paid",
-                    "razorpay_payment_id": f"mock_pay_{uuid.uuid4().hex[:12]}",
-                    "paid_at": datetime.now(timezone.utc).isoformat(),
-                }
-            },
-        )
+        mock_payment_id = f"mock_pay_{uuid.uuid4().hex[:12]}"
+        transitioned = await mark_order_paid_once(req.order_id, mock_payment_id)
+        if transitioned:
+            await apply_post_payment_effects(order)
         updated = await db.orders.find_one({"id": req.order_id}, {"_id": 0})
         if updated:
             await trigger_shiprocket(updated)
@@ -2439,22 +2944,14 @@ async def verify_payment(req: VerifyPaymentReq):
         await db.orders.update_one({"id": req.order_id}, {"$set": {"status": "failed"}})
         raise HTTPException(400, "Invalid signature")
 
-    if order.get("status") != "paid":
-        await decrement_stock()
-    await db.orders.update_one(
-        {"id": req.order_id},
-        {
-            "$set": {
-                "status": "paid",
-                "razorpay_payment_id": req.razorpay_payment_id,
-                "paid_at": datetime.now(timezone.utc).isoformat(),
-            }
-        },
-    )
+    transitioned = await mark_order_paid_once(req.order_id, req.razorpay_payment_id)
+    if transitioned:
+        await apply_post_payment_effects(order)
     updated = await db.orders.find_one({"id": req.order_id}, {"_id": 0})
     if updated:
         await trigger_shiprocket(updated)
-        asyncio.create_task(send_payment_confirmation_email(updated))
+        if transitioned:
+            asyncio.create_task(send_payment_confirmation_email(updated))
     return {"ok": True, "status": "paid", "order_id": req.order_id}
 
 
@@ -2505,36 +3002,15 @@ async def razorpay_webhook(
     if not order:
         return {"ok": True, "handled": False, "reason": "order not found"}
 
-    # Idempotent
-    if order.get("status") == "paid" and event_type in (
-        "payment.captured",
-        "payment.authorized",
-    ):
-        return {"ok": True, "handled": True, "already_paid": True}
-
     if event_type in ("payment.captured", "payment.authorized", "order.paid"):
-        for it in order["items"]:
-            await db.products.update_one(
-                {"id": it["product_id"]}, {"$inc": {"stock": -it["quantity"]}}
-            )
-        asyncio.create_task(
-            check_and_send_low_stock_alert([it["product_id"] for it in order["items"]])
-        )
-        await db.orders.update_one(
-            {"id": order["id"]},
-            {
-                "$set": {
-                    "status": "paid",
-                    "razorpay_payment_id": rzp_payment_id,
-                    "paid_at": datetime.now(timezone.utc).isoformat(),
-                    "webhook_event": event_type,
-                }
-            },
-        )
+        transitioned = await mark_order_paid_once(order["id"], rzp_payment_id, event_type)
+        if transitioned:
+            await apply_post_payment_effects(order)
         updated = await db.orders.find_one({"id": order["id"]}, {"_id": 0})
         if updated:
             await trigger_shiprocket(updated)
-            asyncio.create_task(send_payment_confirmation_email(updated))
+            if transitioned:
+                asyncio.create_task(send_payment_confirmation_email(updated))
     elif event_type == "payment.failed":
         await db.orders.update_one(
             {"id": order["id"]},
@@ -2585,11 +3061,33 @@ async def update_order_status(oid: str, body: OrderStatusUpdate, _=Depends(get_a
 
 
 @api_router.get("/orders/{oid}")
-async def get_order(oid: str):
+async def get_order(
+    oid: str,
+    access_token: Optional[str] = None,
+    creds: Optional[HTTPAuthorizationCredentials] = Depends(security),
+):
     o = await db.orders.find_one({"id": oid}, {"_id": 0})
     if not o:
         raise HTTPException(404, "Not found")
-    return o
+
+    # Authenticated owner/admin access for account-linked orders.
+    if creds:
+        try:
+            payload = jwt.decode(creds.credentials, JWT_SECRET, algorithms=["HS256"])
+            if payload.get("role") == "admin" or o.get("user_id") == payload.get("uid"):
+                return o
+        except jwt.PyJWTError:
+            raise HTTPException(401, "Invalid token")
+
+    # Guest order access with token returns full details.
+    if o.get("is_guest") and access_token and validate_guest_order_token(access_token, oid):
+        return o
+
+    # Public guest lookup returns only redacted, non-PII order fields.
+    if o.get("is_guest"):
+        return redact_order_for_guest(o)
+
+    raise HTTPException(403, "You are not allowed to access this order")
 
 
 @api_router.get("/my/orders")
@@ -2610,63 +3108,78 @@ class TrackOrderReq(BaseModel):
 
 
 @api_router.post("/orders/track")
-async def track_order(req: TrackOrderReq):
-    if not req.order_id and not req.email and not req.phone:
-        raise HTTPException(400, "Please provide an order ID, email, or phone number")
-    query: dict[str, Any] = {}
-    if req.order_id:
-        query["id"] = req.order_id.strip()
-    if req.email:
-        query["address.email"] = {
-            "$regex": f"^{re.escape(req.email.strip())}$",
-            "$options": "i",
-        }
-    if req.phone:
-        # Match phone ignoring spaces / dashes / leading + or 91 — keep last 10 digits
-        phone = "".join(ch for ch in req.phone if ch.isdigit())[-10:]
-        if phone:
-            query["address.phone"] = {"$regex": re.escape(phone)}
-    orders: list[dict[str, Any]] = await db.orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(50)
-    if not orders:
+async def track_order(req: TrackOrderReq, request: Request):
+    ip = request.client.host if request.client else "unknown"
+    enforce_rate_limit(f"track:ip:{ip}", limit=240, window_seconds=300)
+
+    order_id = (req.order_id or "").strip()
+    has_email = bool((req.email or "").strip())
+    phone_last10 = normalize_phone_last10(req.phone)
+
+    if not order_id or (not has_email and not phone_last10):
+        raise HTTPException(400, "Provide order_id and either email or phone")
+
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
         raise HTTPException(
             404, "No orders found matching those details. Please check and try again."
         )
+
+    if has_email:
+        req_email = (req.email or "").strip().lower()
+        order_email = str(order.get("address", {}).get("email", "")).strip().lower()
+        if req_email != order_email:
+            raise HTTPException(404, "No orders found matching those details")
+
+    if phone_last10:
+        order_phone = normalize_phone_last10(order.get("address", {}).get("phone", ""))
+        if not order_phone or phone_last10 != order_phone:
+            raise HTTPException(404, "No orders found matching those details")
+
     # Best-effort: refresh shiprocket tracking for in-flight orders so AWB/courier are up-to-date
-    for o in orders:
-        sr = o.get("shiprocket") or {}
-        if (
-            o.get("status") in ("paid", "shipped", "processing")
-            and sr
-            and not sr.get("error")
-            and not sr.get("skipped")
-        ):
-            # Refresh only if last refresh is older than 10 minutes
-            last = o.get("shiprocket_refreshed_at")
-            stale = True
-            if last:
-                try:
-                    stale = (
-                        datetime.now(timezone.utc)
-                        - datetime.fromisoformat(last.replace("Z", "+00:00"))
-                    ).total_seconds() > 600
-                except Exception:
-                    stale = True
-            if stale:
-                fresh = await shiprocket_refresh_tracking(o)
-                if (
-                    isinstance(fresh, dict)
-                    and not fresh.get("error")
-                    and not fresh.get("skipped")
-                ):
-                    o["shiprocket"] = fresh
-    return orders
+    sr = order.get("shiprocket") or {}
+    if (
+        order.get("status") in ("paid", "shipped", "processing")
+        and sr
+        and not sr.get("error")
+        and not sr.get("skipped")
+    ):
+        # Refresh only if last refresh is older than 10 minutes
+        last = order.get("shiprocket_refreshed_at")
+        stale = True
+        if last:
+            try:
+                stale = (
+                    datetime.now(timezone.utc)
+                    - datetime.fromisoformat(last.replace("Z", "+00:00"))
+                ).total_seconds() > 600
+            except Exception:
+                stale = True
+        if stale:
+            fresh = await shiprocket_refresh_tracking(order)
+            if (
+                isinstance(fresh, dict)
+                and not fresh.get("error")
+                and not fresh.get("skipped")
+            ):
+                order["shiprocket"] = fresh
+
+    redacted = redact_order_for_guest(order)
+    redacted["access_token"] = make_guest_order_token(order["id"])
+    return redacted
 
 
 @api_router.post("/orders/{oid}/refresh-shiprocket")
-async def refresh_shiprocket_endpoint(oid: str):
+async def refresh_shiprocket_endpoint(
+    oid: str, user=Depends(get_current_user)
+):
     o = await db.orders.find_one({"id": oid}, {"_id": 0})
     if not o:
         raise HTTPException(404, "Order not found")
+
+    if user.get("role") != "admin" and o.get("user_id") != user.get("uid"):
+        raise HTTPException(403, "You are not allowed to refresh this order")
+
     sr = await shiprocket_refresh_tracking(o)
     return {"ok": True, "shiprocket": sr}
 
@@ -2707,7 +3220,12 @@ class ContactReq(BaseModel):
 
 
 @api_router.post("/contact")
-async def contact(req: ContactReq):
+async def contact(req: ContactReq, request: Request):
+    ip = request.client.host if request.client else "unknown"
+    email = req.email.strip().lower()
+    enforce_rate_limit(f"contact:ip:{ip}", limit=60, window_seconds=600)
+    enforce_rate_limit(f"contact:email:{email}", limit=12, window_seconds=3600)
+
     doc = {
         "id": str(uuid.uuid4()),
         **req.model_dump(),
@@ -2814,6 +3332,16 @@ async def seo_sitemap():
         content=xml,
         media_type="application/xml; charset=utf-8",
         headers={"Cache-Control": "public, max-age=3600"},  # 1h CDN/browser cache
+    )
+
+
+@app.get("/sitemap.xml")
+async def root_sitemap():
+    xml = await build_sitemap_xml()
+    return Response(
+        content=xml,
+        media_type="application/xml; charset=utf-8",
+        headers={"Cache-Control": "public, max-age=3600"},
     )
 
 
@@ -2933,6 +3461,25 @@ async def admin_regenerate_sitemap(_=Depends(get_admin)):
 
 @api_router.get("/seo/robots.txt")
 async def seo_robots_txt():
+    base = (FRONTEND_URL or "").rstrip("/") or "https://cardost.in"
+    body = (
+        "User-agent: *\n"
+        "Allow: /\n"
+        "Disallow: /admin\n"
+        "Disallow: /admin/\n"
+        "Disallow: /checkout\n"
+        "Disallow: /cart\n"
+        "Disallow: /my-orders\n"
+        "Disallow: /order/\n"
+        "Disallow: /api/\n"
+        "\n"
+        f"Sitemap: {base}/sitemap.xml\n"
+    )
+    return Response(content=body, media_type="text/plain; charset=utf-8")
+
+
+@app.get("/robots.txt")
+async def root_robots_txt():
     base = (FRONTEND_URL or "").rstrip("/") or "https://cardost.in"
     body = (
         "User-agent: *\n"
@@ -3158,7 +3705,7 @@ SEED_PRODUCTS = [
 async def startup_event():
     # Init object storage
     try:
-        init_storage()
+        await init_storage()
         logger.info("Storage initialized")
     except Exception as e:
         logger.warning(f"Storage init failed (uploads may not work): {e}")
@@ -3176,7 +3723,14 @@ async def startup_event():
         if legacy:
             await db.users.update_one(
                 {"id": legacy["id"]},
-                {"$set": {"email": ADMIN_EMAIL}},
+                {
+                    "$set": {
+                        "email": ADMIN_EMAIL,
+                        "must_change_password": check_pw(
+                            ADMIN_PASSWORD, legacy.get("password", "")
+                        ),
+                    }
+                },
             )
             logger.info(
                 f"[seed] migrated legacy admin {legacy.get('email')} → {ADMIN_EMAIL} "
@@ -3191,6 +3745,7 @@ async def startup_event():
                     "phone": "",
                     "password": hash_pw(ADMIN_PASSWORD),
                     "role": "admin",
+                    "must_change_password": True,
                     "created_at": datetime.now(timezone.utc).isoformat(),
                 }
             )
@@ -3514,10 +4069,22 @@ async def startup_event():
 
 app.include_router(api_router)
 
+
+@app.get("/api/health")
+async def health_check():
+    return {"ok": True, "status": "healthy"}
+
+cors_origins_raw = os.environ.get("CORS_ORIGINS", "").strip()
+if not cors_origins_raw:
+    raise RuntimeError("CORS_ORIGINS must be explicitly set")
+cors_origins = [o.strip() for o in cors_origins_raw.split(",") if o.strip()]
+if not cors_origins or "*" in cors_origins:
+    raise RuntimeError("CORS_ORIGINS must be an explicit allowlist (no '*')")
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
+    allow_origins=cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )

@@ -13,6 +13,13 @@ BASE_URL = os.environ.get(
 ).rstrip("/")
 API = f"{BASE_URL}/api"
 
+# Helper to extract items from paginated or non-paginated responses
+def get_items(response_data):
+    """Extract items from paginated response or return as-is if not paginated"""
+    if isinstance(response_data, dict) and "items" in response_data:
+        return response_data["items"]
+    return response_data
+
 # Test credentials (seeded admin) — overridable via env, see /app/memory/test_credentials.md
 ADMIN_EMAIL = os.environ.get("TEST_ADMIN_EMAIL", "admin@cardost.in")
 ADMIN_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD", "Admin@123")
@@ -78,7 +85,7 @@ def user_headers(user_token):
 def first_product(session):
     r = session.get(f"{API}/products")
     assert r.status_code == 200
-    items = r.json()
+    items = get_items(r.json())
     assert len(items) >= 1
     return items[0]
 
@@ -88,7 +95,7 @@ class TestProducts:
     def test_list_all(self, session):
         r = session.get(f"{API}/products")
         assert r.status_code == 200
-        data = r.json()
+        data = get_items(r.json())
         assert isinstance(data, list)
         assert len(data) >= 16, f"Expected at least 16 seeded products, got {len(data)}"
         # validate shape
@@ -99,21 +106,21 @@ class TestProducts:
     def test_list_featured(self, session):
         r = session.get(f"{API}/products", params={"featured": "true"})
         assert r.status_code == 200
-        items = r.json()
+        items = get_items(r.json())
         assert len(items) > 0
         assert all(p["featured"] is True for p in items)
 
     def test_list_by_category(self, session):
         r = session.get(f"{API}/products", params={"category": "android-stereos"})
         assert r.status_code == 200
-        items = r.json()
+        items = get_items(r.json())
         assert len(items) > 0
         assert all(p["category"] == "android-stereos" for p in items)
 
     def test_search_q(self, session):
         r = session.get(f"{API}/products", params={"q": "Android"})
         assert r.status_code == 200
-        items = r.json()
+        items = get_items(r.json())
         assert len(items) > 0
         assert all("android" in p["name"].lower() for p in items)
 
@@ -394,6 +401,44 @@ class TestAdminCRUD:
 
         r6 = session.get(f"{API}/products/{pid}")
         assert r6.status_code == 404
+
+    def test_unpublished_visibility_admin_only(self, session, admin_headers):
+        payload = {
+            "name": "TEST_Unpublished_Product",
+            "description": "Hidden from public listings",
+            "price": 1111.0,
+            "category": "accessories",
+            "brand": "TEST",
+            "image": "https://example.com/u.jpg",
+            "stock": 7,
+            "rating": 4.0,
+            "featured": False,
+            "is_published": False,
+        }
+        created = session.post(f"{API}/admin/products", headers=admin_headers, json=payload)
+        assert created.status_code == 200, created.text
+        pid = created.json()["id"]
+
+        try:
+            public_detail = session.get(f"{API}/products/{pid}")
+            assert public_detail.status_code == 404
+
+            public_list = session.get(f"{API}/products")
+            assert public_list.status_code == 200
+            public_items = get_items(public_list.json())
+            public_ids = {p["id"] for p in public_items}
+            assert pid not in public_ids
+
+            admin_list = session.get(
+                f"{API}/admin/products",
+                headers=admin_headers,
+                params={"is_published": "false", "limit": 100},
+            )
+            assert admin_list.status_code == 200
+            admin_ids = {p["id"] for p in get_items(admin_list.json())}
+            assert pid in admin_ids
+        finally:
+            session.delete(f"{API}/admin/products/{pid}", headers=admin_headers)
 
 
 # ---------------- contact ----------------

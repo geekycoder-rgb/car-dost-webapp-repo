@@ -69,7 +69,8 @@ export default function Shop() {
     const filterParams = { category, q: q || undefined, car_brand: carBrand || undefined, car_model: carModel || undefined, year: year || undefined };
     api.get("/products/filter", { params: filterParams })
       .then((r) => {
-        let list = [...r.data];
+        // Handle both paginated and non-paginated responses
+        let list = r.data.items || r.data;
         if (sort === "low") list.sort((a, b) => a.price - b.price);
         else if (sort === "high") list.sort((a, b) => b.price - a.price);
         else if (sort === "rating") list.sort((a, b) => b.rating - a.rating);

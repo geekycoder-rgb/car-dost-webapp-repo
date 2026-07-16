@@ -3,11 +3,17 @@ import axios from "axios";
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 export const API = `${BACKEND_URL}/api`;
 
-export const api = axios.create({ baseURL: API });
+export const api = axios.create({ 
+  baseURL: API,
+  withCredentials: true, // Send cookies with every request
+});
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("cardost_token");
-  if (token) config.headers.Authorization = `Bearer ${token}`;
+  // Add CSRF token from localStorage if available (for state-changing requests)
+  const csrfToken = localStorage.getItem("csrf_token");
+  if (csrfToken && ["post", "put", "patch", "delete"].includes(config.method)) {
+    config.headers["X-CSRF-Token"] = csrfToken;
+  }
   return config;
 });
 

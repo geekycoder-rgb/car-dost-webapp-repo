@@ -22,6 +22,13 @@ BASE_URL = (
 ADMIN_EMAIL = "admin@cardost.in"
 ADMIN_PASS = "Admin@123"
 
+# Helper to extract items from paginated or non-paginated responses
+def get_items(response_data):
+    """Extract items from paginated response or return as-is if not paginated"""
+    if isinstance(response_data, dict) and "items" in response_data:
+        return response_data["items"]
+    return response_data
+
 # Product with one real approved 5-star review (from review_request context)
 PRODUCT_WITH_REVIEW_ID = "fb7ad847-b945-4df8-96ee-964e3cb0b77b"
 
@@ -49,7 +56,7 @@ class TestReviewCountField:
     def test_products_list_includes_review_count(self):
         r = requests.get(f"{BASE_URL}/api/products", timeout=20)
         assert r.status_code == 200
-        items = r.json()
+        items = get_items(r.json())
         assert isinstance(items, list) and len(items) > 0
         for p in items:
             assert "review_count" in p, f"product missing review_count: {p.get('id')}"
@@ -81,7 +88,7 @@ class TestReviewCountField:
     def test_majority_of_products_have_zero_reviews(self):
         """Sanity check: per agent context 18/19 products have review_count==0."""
         r = requests.get(f"{BASE_URL}/api/products", timeout=20)
-        items = r.json()
+        items = get_items(r.json())
         zero_count = sum(1 for p in items if p.get("review_count", 0) == 0)
         assert zero_count >= len(items) - 2, (
             f"expected ≥{len(items) - 2} zero-review products, found {zero_count}/{len(items)}"
@@ -92,7 +99,7 @@ class TestReviewCountField:
 class TestReviewSubmissionUpdatesCounters:
     def test_post_review_updates_rating_and_count(self):
         # Pick a product with 0 reviews for clean delta math
-        all_prods = requests.get(f"{BASE_URL}/api/products", timeout=20).json()
+        all_prods = get_items(requests.get(f"{BASE_URL}/api/products", timeout=20).json())
         target = next(
             (
                 p
@@ -129,7 +136,7 @@ class TestReviewSubmissionUpdatesCounters:
         )
 
         # also reflected in /products list endpoint
-        list_after = requests.get(f"{BASE_URL}/api/products", timeout=20).json()
+        list_after = get_items(requests.get(f"{BASE_URL}/api/products", timeout=20).json())
         target_in_list = next(p for p in list_after if p["id"] == pid)
         assert target_in_list["review_count"] == 1
 
@@ -157,7 +164,8 @@ class TestVehicleTaggingFilterBridge:
     filter dropdowns now surface it."""
 
     @pytest.fixture(scope="class")
-    def hyundai_creta_v1_variant(self):
+    @classmethod
+    def hyundai_creta_v1_variant(cls):
         tree = requests.get(f"{BASE_URL}/api/catalog/tree", timeout=20).json()
         # tree shape: [{id,name,models:[{id,name,variants:[{id,name,start_year,end_year}]}]}]
         hyundai = next((m for m in tree if m["name"].lower() == "hyundai"), None)
@@ -180,7 +188,8 @@ class TestVehicleTaggingFilterBridge:
         return {"make_id": hyundai["id"], "model_id": creta["id"], "variant": v}
 
     @pytest.fixture(scope="class")
-    def tagged_product(self, admin_headers, hyundai_creta_v1_variant):
+    @classmethod
+    def tagged_product(cls, admin_headers, hyundai_creta_v1_variant):
         variant_id = hyundai_creta_v1_variant["variant"]["id"]
         payload = {
             "name": "TEST_BridgeProduct_CretaV1",
@@ -221,7 +230,7 @@ class TestVehicleTaggingFilterBridge:
             timeout=20,
         )
         assert r.status_code == 200
-        ids = [p["id"] for p in r.json()]
+        ids = {p["id"] for p in get_items(r.json())}
         assert tagged_product["id"] in ids, (
             f"Hyundai filter missed bridged product. got {ids[:8]}"
         )
@@ -231,7 +240,7 @@ class TestVehicleTaggingFilterBridge:
             f"{BASE_URL}/api/products/filter", params={"car_model": "Creta"}, timeout=20
         )
         assert r.status_code == 200
-        ids = [p["id"] for p in r.json()]
+        ids = [p["id"] for p in get_items(r.json())]
         assert tagged_product["id"] in ids, "Creta model filter missed bridged product"
 
     def test_filter_by_year_2018_returns_product(self, tagged_product):
@@ -239,7 +248,7 @@ class TestVehicleTaggingFilterBridge:
             f"{BASE_URL}/api/products/filter", params={"year": 2018}, timeout=20
         )
         assert r.status_code == 200
-        ids = [p["id"] for p in r.json()]
+        ids = [p["id"] for p in get_items(r.json())]
         assert tagged_product["id"] in ids, (
             "year=2018 filter missed bridged product (variant covers 2015-2020)"
         )
@@ -249,7 +258,7 @@ class TestVehicleTaggingFilterBridge:
             f"{BASE_URL}/api/products/filter", params={"year": 2030}, timeout=20
         )
         assert r.status_code == 200
-        ids = [p["id"] for p in r.json()]
+        ids = [p["id"] for p in get_items(r.json())]
         assert tagged_product["id"] not in ids, (
             "year=2030 must NOT surface a 2015-2020 variant product"
         )
@@ -261,7 +270,7 @@ class TestVehicleTaggingFilterBridge:
             timeout=20,
         )
         assert r.status_code == 200
-        ids = [p["id"] for p in r.json()]
+        ids = [p["id"] for p in get_items(r.json())]
         assert tagged_product["id"] in ids, (
             "combined Hyundai+Creta+2018 missed bridged product"
         )
@@ -302,7 +311,7 @@ class TestVehicleTaggingFilterBridge:
                     f"{BASE_URL}/api/products/filter", params=params, timeout=20
                 )
                 assert rr.status_code == 200
-                ids = [p["id"] for p in rr.json()]
+                ids = [p["id"] for p in get_items(rr.json())]
                 assert uid in ids, f"Universal product missing for filter {params}"
         finally:
             requests.delete(
@@ -317,8 +326,8 @@ class TestAdminUploadEndpoint:
     def test_upload_small_png_returns_url(self, admin_headers):
         # 1x1 transparent PNG
         png_bytes = (
-            b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4"
-            b"\x89\x00\x00\x00\rIDATx\x9cc\xfc\xcf\xc0P\x0f\x00\x05\x01\x01\x02p\xb0%9\x00\x00\x00\x00IEND\xaeB`\x82"
+            b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x04\x00\x00\x00\xb5\x1c\x0c\x02"
+            b"\x00\x00\x00\x0bIDATx\xdac\xfc\xff\x1f\x00\x03\x03\x02\x00\xef^J_\x00\x00\x00\x00IEND\xaeB`\x82"
         )
         files = {"file": ("test_pixel.png", io.BytesIO(png_bytes), "image/png")}
         r = requests.post(

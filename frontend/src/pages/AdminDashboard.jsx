@@ -47,7 +47,7 @@ export default function AdminDashboard() {
 
   const loadAll = () => {
     api.get("/admin/stats").then((r) => setStats(r.data)).catch(() => {});
-    api.get("/products").then((r) => setProducts(r.data));
+    api.get("/admin/products", { params: { limit: 100 } }).then((r) => setProducts(r.data.items || r.data));
     api.get("/admin/orders").then((r) => setOrders(r.data)).catch(() => {});
     api.get("/categories").then((r) => setCats(r.data));
     api.get("/catalog/car-brands").then((r) => setCarBrands(r.data));

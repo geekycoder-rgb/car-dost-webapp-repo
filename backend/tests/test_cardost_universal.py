@@ -15,6 +15,13 @@ API = f"{BASE_URL}/api"
 ADMIN_EMAIL = os.environ.get("TEST_ADMIN_EMAIL", "admin@cardost.in")
 ADMIN_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD", "Admin@123")
 
+# Helper to extract items from paginated or non-paginated responses
+def get_items(response_data):
+    """Extract items from paginated response or return as-is if not paginated"""
+    if isinstance(response_data, dict) and "items" in response_data:
+        return response_data["items"]
+    return response_data
+
 
 @pytest.fixture(scope="module")
 def session():
@@ -80,13 +87,13 @@ class TestProductFilterUniversal:
     def test_filter_no_args_returns_published(self, session):
         r = session.get(f"{API}/products/filter")
         assert r.status_code == 200, r.text
-        items = r.json()
+        items = get_items(r.json())
         assert isinstance(items, list) and len(items) >= 1
 
     def test_filter_by_brand_includes_universal(self, session, universal_product):
         r = session.get(f"{API}/products/filter", params={"car_brand": "Maruti Suzuki"})
         assert r.status_code == 200, r.text
-        ids = [p["id"] for p in r.json()]
+        ids = [p["id"] for p in get_items(r.json())]
         assert universal_product["id"] in ids, (
             "Universal product missing from brand filter"
         )
@@ -94,7 +101,7 @@ class TestProductFilterUniversal:
     def test_filter_by_year_includes_universal(self, session, universal_product):
         r = session.get(f"{API}/products/filter", params={"year": 2020})
         assert r.status_code == 200, r.text
-        ids = [p["id"] for p in r.json()]
+        ids = [p["id"] for p in get_items(r.json())]
         assert universal_product["id"] in ids, (
             "Universal product missing from year filter"
         )
@@ -102,7 +109,7 @@ class TestProductFilterUniversal:
     def test_filter_by_model_includes_universal(self, session, universal_product):
         r = session.get(f"{API}/products/filter", params={"car_model": "Swift"})
         assert r.status_code == 200, r.text
-        ids = [p["id"] for p in r.json()]
+        ids = [p["id"] for p in get_items(r.json())]
         assert universal_product["id"] in ids
 
     def test_filter_route_does_not_collide_with_pid(self, session):
@@ -255,7 +262,9 @@ class TestReviewsModeration:
     def test_admin_list_reviews(self, session, admin_headers):
         r = session.get(f"{API}/admin/reviews", headers=admin_headers)
         assert r.status_code == 200
-        assert isinstance(r.json(), list)
+        data = r.json()
+        items = get_items(data)
+        assert isinstance(items, list)
 
     def test_review_toggle_and_delete(self, session, admin_headers, universal_product):
         pid = universal_product["id"]

@@ -19,6 +19,13 @@ BASE_URL = os.environ.get(
 ).rstrip("/")
 API = f"{BASE_URL}/api"
 
+# Helper to extract items from paginated or non-paginated responses
+def get_items(response_data):
+    """Extract items from paginated response or return as-is if not paginated"""
+    if isinstance(response_data, dict) and "items" in response_data:
+        return response_data["items"]
+    return response_data
+
 ADMIN_EMAIL = os.environ.get("TEST_ADMIN_EMAIL", "admin@cardost.in")
 ADMIN_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD", "Admin@123")
 TEST_USER_PASSWORD = os.environ.get("TEST_USER_PASSWORD", "Test@12345")
@@ -233,7 +240,7 @@ class TestProductsRead:
     def test_products_list_has_at_least_19(self, session):
         r = session.get(f"{API}/products")
         assert r.status_code == 200
-        items = r.json()
+        items = get_items(r.json())
         assert isinstance(items, list)
         assert len(items) >= 19, f"expected ≥19 products, got {len(items)}"
 
@@ -243,7 +250,7 @@ class TestProductsRead:
 
     def test_product_detail_200_for_real_id(self, session):
         r = session.get(f"{API}/products")
-        pid = r.json()[0]["id"]
+        pid = get_items(r.json())[0]["id"]
         r2 = session.get(f"{API}/products/{pid}")
         assert r2.status_code == 200
         assert r2.json()["id"] == pid
@@ -386,7 +393,7 @@ class TestCSVRoundtrip:
         assert body.get("created", 0) == 1, body
         assert body.get("updated", 0) == 0, body
         # cleanup: find by slug and delete
-        lst = requests.get(f"{API}/products").json()
+        lst = get_items(requests.get(f"{API}/products").json())
         match = [p for p in lst if p.get("seo_slug") == slug]
         if match:
             requests.delete(

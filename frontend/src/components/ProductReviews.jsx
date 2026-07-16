@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,8 +13,12 @@ export default function ProductReviews({ productId }) {
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({ name: "", rating: 5, title: "", comment: "" });
 
-  const load = () => api.get(`/products/${productId}/reviews`).then((r) => setReviews(r.data));
-  useEffect(() => { if (productId) load(); }, [productId]);
+  const load = useCallback(() => {
+    return api.get(`/products/${productId}/reviews`).then((r) => setReviews(r.data));
+  }, [productId]);
+  useEffect(() => {
+    if (productId) load();
+  }, [productId, load]);
 
   const submit = async (e) => {
     e.preventDefault();

@@ -9,6 +9,13 @@ BASE_URL = os.environ.get(
 ).rstrip("/")
 API = f"{BASE_URL}/api"
 
+# Helper to extract items from paginated or non-paginated responses
+def get_items(response_data):
+    """Extract items from paginated response or return as-is if not paginated"""
+    if isinstance(response_data, dict) and "items" in response_data:
+        return response_data["items"]
+    return response_data
+
 # Test credentials (seeded admin) — overridable via env
 ADMIN_EMAIL = os.environ.get("TEST_ADMIN_EMAIL", "admin@cardost.in")
 ADMIN_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD", "Admin@123")
@@ -273,7 +280,7 @@ class TestProductCompatibility:
             timeout=15,
         )
         assert r.status_code == 200
-        ids = {p["id"] for p in r.json()}
+        ids = {p["id"] for p in get_items(r.json())}
         assert compat_product["id"] in ids, "compat product missing"
         assert universal_product["id"] in ids, (
             "universal product missing (should appear for any variant)"
@@ -287,7 +294,7 @@ class TestProductCompatibility:
             params={"variant_id": sample_variant_ids["other_variant_id"]},
             timeout=15,
         )
-        ids = {p["id"] for p in r.json()}
+        ids = {p["id"] for p in get_items(r.json())}
         assert compat_product["id"] not in ids
         assert universal_product["id"] in ids
 
@@ -299,7 +306,7 @@ class TestProductCompatibility:
             params={"model_id": sample_variant_ids["model_id"]},
             timeout=15,
         )
-        ids = {p["id"] for p in r.json()}
+        ids = {p["id"] for p in get_items(r.json())}
         assert compat_product["id"] in ids
         assert universal_product["id"] in ids
 
@@ -311,7 +318,7 @@ class TestProductCompatibility:
             params={"model_id": sample_variant_ids["other_model_id"]},
             timeout=15,
         )
-        ids = {p["id"] for p in r.json()}
+        ids = {p["id"] for p in get_items(r.json())}
         assert compat_product["id"] not in ids
 
     def test_filter_by_make_id(
@@ -322,7 +329,7 @@ class TestProductCompatibility:
             params={"make_id": sample_variant_ids["make_id"]},
             timeout=15,
         )
-        ids = {p["id"] for p in r.json()}
+        ids = {p["id"] for p in get_items(r.json())}
         assert compat_product["id"] in ids
         assert universal_product["id"] in ids
 
@@ -334,7 +341,7 @@ class TestProductCompatibility:
             params={"make_id": sample_variant_ids["other_make_id"]},
             timeout=15,
         )
-        ids = {p["id"] for p in r.json()}
+        ids = {p["id"] for p in get_items(r.json())}
         assert compat_product["id"] not in ids
 
     def test_legacy_filter_still_works(self, admin_headers):
@@ -357,19 +364,19 @@ class TestProductCompatibility:
             r = requests.get(
                 f"{API}/products/filter", params={"car_brand": "Hyundai"}, timeout=15
             )
-            ids = {p["id"] for p in r.json()}
+            ids = {p["id"] for p in get_items(r.json())}
             assert pid in ids
 
             r = requests.get(
                 f"{API}/products/filter", params={"car_model": "Creta"}, timeout=15
             )
-            ids = {p["id"] for p in r.json()}
+            ids = {p["id"] for p in get_items(r.json())}
             assert pid in ids
 
             r = requests.get(
                 f"{API}/products/filter", params={"year": 2018}, timeout=15
             )
-            ids = {p["id"] for p in r.json()}
+            ids = {p["id"] for p in get_items(r.json())}
             assert pid in ids
         finally:
             requests.delete(
