@@ -19,6 +19,7 @@ import io
 import time
 import pytest
 import requests
+from tests.admin_auth_helper import get_admin_token
 
 BASE_URL = os.environ.get(
     "REACT_APP_BACKEND_URL", "https://stereo-connect-2.preview.emergentagent.com"
@@ -38,15 +39,10 @@ LEGACY_HOSTS = [
 # ---------- fixtures ----------
 @pytest.fixture(scope="module")
 def admin_token():
-    r = requests.post(
-        f"{BASE_URL}/api/auth/login",
-        json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD},
-        timeout=15,
-    )
-    if r.status_code != 200:
-        pytest.skip(f"Admin login failed ({r.status_code}): {r.text[:200]}")
-    j = r.json()
-    return j.get("token") or j.get("access_token")
+    try:
+        return get_admin_token(requests, f"{BASE_URL}/api", ADMIN_EMAIL, ADMIN_PASSWORD)
+    except AssertionError as exc:
+        pytest.skip(str(exc)[:200])
 
 
 @pytest.fixture(scope="module")

@@ -8,6 +8,7 @@ import os
 import uuid
 import pytest
 import requests
+from tests.admin_auth_helper import get_admin_headers
 
 BASE_URL = os.environ["REACT_APP_BACKEND_URL"].rstrip("/")
 API = f"{BASE_URL}/api"
@@ -32,12 +33,7 @@ def session():
 
 @pytest.fixture(scope="module")
 def admin_headers(session):
-    r = session.post(
-        f"{API}/auth/login", json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD}
-    )
-    assert r.status_code == 200, r.text
-    tok = r.json()["token"]
-    return {"Authorization": f"Bearer {tok}", "Content-Type": "application/json"}
+    return get_admin_headers(session, API, ADMIN_EMAIL, ADMIN_PASSWORD)
 
 
 @pytest.fixture(scope="module")

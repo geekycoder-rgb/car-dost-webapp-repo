@@ -13,6 +13,7 @@ import csv
 import uuid
 import pytest
 import requests
+from tests.admin_auth_helper import get_admin_token
 
 BASE_URL = os.environ.get(
     "REACT_APP_BACKEND_URL", "https://stereo-connect-2.preview.emergentagent.com"
@@ -55,13 +56,7 @@ def session():
 
 @pytest.fixture(scope="session")
 def admin_token(session):
-    r = session.post(
-        f"{API}/auth/login",
-        json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD},
-        timeout=15,
-    )
-    assert r.status_code == 200, f"admin login failed: {r.text}"
-    return r.json()["token"]
+    return get_admin_token(session, API, ADMIN_EMAIL, ADMIN_PASSWORD)
 
 
 @pytest.fixture(scope="session")
@@ -75,18 +70,17 @@ def admin_headers(admin_token):
 # ---------------- 1. JWT / get_current_user paths ----------------
 class TestAuthPaths:
     def test_admin_login_returns_admin_role_and_token(self, session):
-        r = session.post(
-            f"{API}/auth/login", json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD}
+        token = get_admin_token(session, API, ADMIN_EMAIL, ADMIN_PASSWORD)
+        assert isinstance(token, str) and len(token) > 20
+
+        r = session.get(
+            f"{API}/auth/me",
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
         )
         assert r.status_code == 200, r.text
         data = r.json()
-        assert (
-            "token" in data
-            and isinstance(data["token"], str)
-            and len(data["token"]) > 20
-        )
-        assert data["user"]["role"] == "admin"
-        assert data["user"]["email"] == ADMIN_EMAIL
+        assert data["role"] == "admin"
+        assert data["email"] == ADMIN_EMAIL
 
     def test_me_with_admin_token_returns_admin_profile(self, session, admin_headers):
         r = session.get(f"{API}/auth/me", headers=admin_headers)

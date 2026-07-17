@@ -68,6 +68,7 @@ db = client[os.environ["DB_NAME"]]
 JWT_SECRET = os.environ["JWT_SECRET"]
 ADMIN_EMAIL = os.environ["ADMIN_EMAIL"]
 ADMIN_PASSWORD = os.environ["ADMIN_PASSWORD"]
+LEGACY_ADMIN_EMAILS = ["admin@cardost.com"]
 RAZORPAY_KEY_ID = os.environ["RAZORPAY_KEY_ID"]
 RAZORPAY_KEY_SECRET = os.environ["RAZORPAY_KEY_SECRET"]
 MOCK_PAYMENT = os.environ.get("MOCK_PAYMENT", "true").lower() == "true"
@@ -471,6 +472,33 @@ def clean(doc):
     return doc
 
 
+async def find_canonical_admin_for_login() -> Optional[dict[str, Any]]:
+    admin = await db.users.find_one({"email": ADMIN_EMAIL, "role": "admin"})
+    if admin:
+        return admin
+
+    legacy = await db.users.find_one(
+        {"email": {"$in": LEGACY_ADMIN_EMAILS}, "role": "admin"}
+    )
+    if not legacy:
+        return None
+
+    await db.users.update_one(
+        {"id": legacy["id"]},
+        {"$set": {"email": ADMIN_EMAIL}},
+    )
+    legacy["email"] = ADMIN_EMAIL
+    return legacy
+
+
+def admin_requires_bootstrap_password_rotation(user: dict[str, Any]) -> bool:
+    return bool(
+        user.get("role") == "admin"
+        and user.get("email") == ADMIN_EMAIL
+        and check_pw(ADMIN_PASSWORD, user.get("password", ""))
+    )
+
+
 # ============ Auth ============
 @api_router.post("/auth/signup")
 async def signup(req: SignupReq):
@@ -529,9 +557,32 @@ async def login(req: LoginReq, request: Request):
     enforce_rate_limit(f"login:ip:{ip}", limit=300, window_seconds=300)
     enforce_rate_limit(f"login:email:{email}", limit=80, window_seconds=300)
 
-    user = await db.users.find_one({"email": {"$in": [email, req.email]}})
+    if email in LEGACY_ADMIN_EMAILS:
+        legacy_admin = await db.users.find_one({"email": email, "role": "admin"})
+        if legacy_admin:
+            await db.users.update_one(
+                {"id": legacy_admin["id"]},
+                {"$set": {"email": ADMIN_EMAIL}},
+            )
+        raise HTTPException(401, "Invalid credentials")
+
+    if email == ADMIN_EMAIL.lower():
+        user = await find_canonical_admin_for_login()
+    else:
+        user = await db.users.find_one({"email": {"$in": [email, req.email]}})
+
     if not user or not check_pw(req.password, user["password"]):
         raise HTTPException(401, "Invalid credentials")
+
+    if admin_requires_bootstrap_password_rotation(user) and not user.get(
+        "must_change_password", False
+    ):
+        await db.users.update_one(
+            {"id": user["id"]},
+            {"$set": {"must_change_password": True}, "$unset": {"password_changed_at": ""}},
+        )
+        user["must_change_password"] = True
+
     if user.get("role") == "admin" and user.get("must_change_password", False):
         raise HTTPException(
             403,
@@ -585,14 +636,25 @@ async def admin_first_login_password_change(
 ):
     ip = request.client.host if request.client else "unknown"
     email = req.email.strip().lower()
+    if email != ADMIN_EMAIL.lower():
+        raise HTTPException(401, "Invalid credentials")
     enforce_rate_limit(f"admin-first-password-change:ip:{ip}", limit=40, window_seconds=300)
     enforce_rate_limit(
         f"admin-first-password-change:email:{email}", limit=20, window_seconds=300
     )
 
-    user = await db.users.find_one({"email": email, "role": "admin"})
+    user = await find_canonical_admin_for_login()
     if not user or not check_pw(req.current_password, user.get("password", "")):
         raise HTTPException(401, "Invalid credentials")
+    if admin_requires_bootstrap_password_rotation(user) and not user.get(
+        "must_change_password", False
+    ):
+        await db.users.update_one(
+            {"id": user["id"]},
+            {"$set": {"must_change_password": True}, "$unset": {"password_changed_at": ""}},
+        )
+        user["must_change_password"] = True
+
     if not user.get("must_change_password", False):
         raise HTTPException(400, "First-login password change is not required")
     if req.new_password == req.current_password:
@@ -3716,7 +3778,6 @@ async def startup_event():
     #   3. Else → fresh seed with ADMIN_PASSWORD.
     admin = await db.users.find_one({"email": ADMIN_EMAIL})
     if not admin:
-        LEGACY_ADMIN_EMAILS = ["admin@cardost.com"]
         legacy = await db.users.find_one(
             {"email": {"$in": LEGACY_ADMIN_EMAILS}, "role": "admin"}
         )
@@ -3762,6 +3823,14 @@ async def startup_event():
         logger.info(
             f"[seed] removed duplicate legacy admin {legacy_dup.get('email')} "
             f"(canonical {ADMIN_EMAIL} kept)"
+        )
+
+    canonical_admin = await db.users.find_one({"email": ADMIN_EMAIL, "role": "admin"})
+    if canonical_admin:
+        must_change_password = admin_requires_bootstrap_password_rotation(canonical_admin)
+        await db.users.update_one(
+            {"id": canonical_admin["id"]},
+            {"$set": {"must_change_password": must_change_password}},
         )
 
     # Seed default categories if empty

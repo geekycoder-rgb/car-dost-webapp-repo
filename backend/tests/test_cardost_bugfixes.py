@@ -14,6 +14,7 @@ import io
 import uuid
 import pytest
 import requests
+from tests.admin_auth_helper import get_admin_token
 
 BASE_URL = (
     os.environ.get("REACT_APP_BACKEND_URL")
@@ -35,15 +36,7 @@ PRODUCT_WITH_REVIEW_ID = "fb7ad847-b945-4df8-96ee-964e3cb0b77b"
 
 @pytest.fixture(scope="session")
 def admin_token():
-    r = requests.post(
-        f"{BASE_URL}/api/auth/login",
-        json={"email": ADMIN_EMAIL, "password": ADMIN_PASS},
-        timeout=20,
-    )
-    assert r.status_code == 200, f"admin login failed: {r.status_code} {r.text}"
-    tok = r.json().get("token") or r.json().get("access_token")
-    assert tok, f"no token in admin login response: {r.json()}"
-    return tok
+    return get_admin_token(requests, f"{BASE_URL}/api", ADMIN_EMAIL, ADMIN_PASS)
 
 
 @pytest.fixture(scope="session")
@@ -141,12 +134,7 @@ class TestReviewSubmissionUpdatesCounters:
         assert target_in_list["review_count"] == 1
 
         # cleanup: delete review via admin
-        r = requests.post(
-            f"{BASE_URL}/api/auth/login",
-            json={"email": ADMIN_EMAIL, "password": ADMIN_PASS},
-            timeout=20,
-        )
-        tok = r.json().get("token") or r.json().get("access_token")
+        tok = get_admin_token(requests, f"{BASE_URL}/api", ADMIN_EMAIL, ADMIN_PASS)
         d = requests.delete(
             f"{BASE_URL}/api/admin/reviews/{new_review_id}",
             headers={"Authorization": f"Bearer {tok}"},

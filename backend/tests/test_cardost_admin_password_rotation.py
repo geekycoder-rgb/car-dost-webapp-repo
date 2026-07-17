@@ -60,7 +60,7 @@ def test_admin_first_login_password_rotation_flow():
             {"id": admin["id"]},
             {
                 "$set": {
-                    "must_change_password": True,
+                    "must_change_password": False,
                 },
                 "$unset": {"password_changed_at": ""},
             },
@@ -75,6 +75,9 @@ def test_admin_first_login_password_rotation_flow():
         blocked_detail = blocked_login.json().get("detail")
         assert isinstance(blocked_detail, dict)
         assert blocked_detail.get("code") == "PASSWORD_CHANGE_REQUIRED"
+
+        admin_after_block = users.find_one({"id": admin["id"]})
+        assert admin_after_block.get("must_change_password") is True
 
         change = requests.post(
             f"{API}/auth/admin/first-login-password-change",
@@ -116,4 +119,39 @@ def test_admin_first_login_password_rotation_flow():
             restore_update["$unset"] = {"password_changed_at": ""}
 
         users.update_one({"id": admin["id"]}, restore_update)
+        client.close()
+
+
+@pytest.mark.skipif(not MONGO_URL or not DB_NAME, reason="MONGO_URL/DB_NAME required")
+def test_legacy_admin_email_is_rejected():
+    client = MongoClient(MONGO_URL)
+    users = client[DB_NAME].users
+
+    canonical_admin = users.find_one({"email": ADMIN_EMAIL, "role": "admin"})
+    assert canonical_admin, f"admin user not found for {ADMIN_EMAIL}"
+
+    legacy_admin = {
+        "id": str(uuid.uuid4()),
+        "name": "Legacy Admin",
+        "email": "admin@cardost.com",
+        "phone": "",
+        "password": canonical_admin["password"],
+        "role": "admin",
+        "must_change_password": False,
+        "created_at": canonical_admin.get("created_at", ""),
+    }
+
+    try:
+        users.insert_one(legacy_admin)
+        r = requests.post(
+            f"{API}/auth/login",
+            json={"email": "admin@cardost.com", "password": ADMIN_PASSWORD},
+            timeout=20,
+        )
+        assert r.status_code == 401, r.text
+
+        migrated_legacy = users.find_one({"id": legacy_admin["id"]})
+        assert migrated_legacy is None or migrated_legacy.get("email") == ADMIN_EMAIL
+    finally:
+        users.delete_one({"id": legacy_admin["id"]})
         client.close()

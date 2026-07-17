@@ -7,6 +7,7 @@ import os
 import time
 import pytest
 import requests
+from tests.admin_auth_helper import get_admin_token
 
 BASE_URL = os.environ.get(
     "REACT_APP_BACKEND_URL", "https://stereo-connect-2.preview.emergentagent.com"
@@ -19,16 +20,7 @@ TEST_SLUG = f"test-seo-cat-{int(time.time())}"
 
 @pytest.fixture(scope="module")
 def admin_token():
-    r = requests.post(
-        f"{BASE_URL}/api/auth/login",
-        json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD},
-        timeout=15,
-    )
-    assert r.status_code == 200, f"admin login failed: {r.status_code} {r.text}"
-    data = r.json()
-    token = data.get("token") or data.get("access_token")
-    assert token, f"no token in login response: {data}"
-    return token
+    return get_admin_token(requests, f"{BASE_URL}/api", ADMIN_EMAIL, ADMIN_PASSWORD)
 
 
 @pytest.fixture(scope="module")

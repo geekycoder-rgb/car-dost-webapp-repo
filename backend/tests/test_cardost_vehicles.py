@@ -3,6 +3,7 @@
 import os
 import pytest
 import requests
+from tests.admin_auth_helper import get_admin_token
 
 BASE_URL = os.environ.get(
     "REACT_APP_BACKEND_URL", "https://stereo-connect-2.preview.emergentagent.com"
@@ -35,13 +36,7 @@ EXPECTED_MAKES = {
 
 @pytest.fixture(scope="session")
 def admin_token():
-    r = requests.post(
-        f"{API}/auth/login",
-        json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD},
-        timeout=15,
-    )
-    assert r.status_code == 200, r.text
-    return r.json()["token"]
+    return get_admin_token(requests, API, ADMIN_EMAIL, ADMIN_PASSWORD)
 
 
 @pytest.fixture(scope="session")

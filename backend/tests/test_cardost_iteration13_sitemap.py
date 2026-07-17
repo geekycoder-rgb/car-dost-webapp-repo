@@ -18,6 +18,7 @@ import uuid
 import xml.etree.ElementTree as ET
 
 import pytest
+from tests.admin_auth_helper import get_admin_token
 import requests
 
 BASE_URL = os.environ.get(
@@ -43,15 +44,7 @@ def _first_two_nonblank(xml_body: str):
 
 @pytest.fixture(scope="module")
 def admin_token():
-    r = requests.post(
-        f"{BASE_URL}/api/auth/login",
-        json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD},
-        timeout=15,
-    )
-    assert r.status_code == 200, f"admin login failed: {r.status_code} {r.text}"
-    tok = r.json().get("token") or r.json().get("access_token")
-    assert tok, f"no token in login response: {r.json()}"
-    return tok
+    return get_admin_token(requests, f"{BASE_URL}/api", ADMIN_EMAIL, ADMIN_PASSWORD)
 
 
 @pytest.fixture(scope="module")
