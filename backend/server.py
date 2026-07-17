@@ -4145,8 +4145,20 @@ async def health_check():
 
 cors_origins_raw = os.environ.get("CORS_ORIGINS", "").strip()
 if not cors_origins_raw:
-    raise RuntimeError("CORS_ORIGINS must be explicitly set")
-cors_origins = [o.strip() for o in cors_origins_raw.split(",") if o.strip()]
+    # Fall back to FRONTEND_URL (already required earlier); add the www variant if
+    # we're on a bare apex domain so both work out of the box.
+    fallback = [FRONTEND_URL.rstrip("/")]
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(FRONTEND_URL)
+        host = parsed.hostname or ""
+        if host and not host.startswith("www."):
+            fallback.append(f"{parsed.scheme}://www.{host}")
+    except Exception:
+        pass
+    cors_origins = fallback
+else:
+    cors_origins = [o.strip() for o in cors_origins_raw.split(",") if o.strip()]
 if not cors_origins or "*" in cors_origins:
     raise RuntimeError("CORS_ORIGINS must be an explicit allowlist (no '*')")
 
