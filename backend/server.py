@@ -870,6 +870,7 @@ async def get_settings_doc():
         logger.info(
             f"[settings] auto-migrated legacy SMTP host → {new_host}:587 (username/password preserved)"
         )
+    s.pop("_id", None)  # strip ObjectId if insert_one mutated the dict above
     return s
 
 
@@ -2201,8 +2202,6 @@ class VariantIn(BaseModel):
 
 
 def _slugify(s: str) -> str:
-    import re
-
     return re.sub(r"[^a-z0-9]+", "-", s.lower()).strip("-")
 
 
