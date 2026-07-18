@@ -4143,23 +4143,34 @@ async def health_check():
     return {"ok": True, "status": "healthy"}
 
 cors_origins_raw = os.environ.get("CORS_ORIGINS", "").strip()
-if not cors_origins_raw:
+
+
+def _default_cors_allowlist() -> list[str]:
     # Fall back to FRONTEND_URL (already required earlier); add the www variant if
     # we're on a bare apex domain so both work out of the box.
     fallback = [FRONTEND_URL.rstrip("/")]
     try:
         from urllib.parse import urlparse
+
         parsed = urlparse(FRONTEND_URL)
         host = parsed.hostname or ""
         if host and not host.startswith("www."):
             fallback.append(f"{parsed.scheme}://www.{host}")
     except Exception:
         pass
-    cors_origins = fallback
+    return fallback
+
+
+if not cors_origins_raw:
+    cors_origins = _default_cors_allowlist()
 else:
-    cors_origins = [o.strip() for o in cors_origins_raw.split(",") if o.strip()]
-if not cors_origins or "*" in cors_origins:
-    raise RuntimeError("CORS_ORIGINS must be an explicit allowlist (no '*')")
+    parsed_origins = [o.strip() for o in cors_origins_raw.split(",") if o.strip()]
+    if "*" in parsed_origins:
+        logger.warning(
+            "CORS_ORIGINS contains wildcard '*'; ignoring wildcard and falling back to explicit FRONTEND_URL allowlist"
+        )
+        parsed_origins = [o for o in parsed_origins if o != "*"]
+    cors_origins = parsed_origins or _default_cors_allowlist()
 
 app.add_middleware(
     CORSMiddleware,
